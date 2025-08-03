@@ -97,7 +97,7 @@ export function FactureForm({ facture, onSuccess }: FactureFormProps) {
       const cleanData = {
         numero: data.numero,
         fournisseur_id: data.fournisseur_id,
-        propriete_id: data.propriete_id || null,
+        propriete_id: data.propriete_id === "none" ? null : data.propriete_id || null,
         date_facture: data.date_facture,
         montant_total: data.montant_total,
         description: data.description || null,
@@ -112,7 +112,7 @@ export function FactureForm({ facture, onSuccess }: FactureFormProps) {
           .update({
             numero: cleanData.numero,
             fournisseur_id: cleanData.fournisseur_id,
-            propriete_id: cleanData.propriete_id,
+            propriete_id: data.propriete_id === "none" ? null : data.propriete_id || null,
             date_facture: cleanData.date_facture,
             montant_total: cleanData.montant_total,
             description: cleanData.description,
@@ -219,7 +219,7 @@ export function FactureForm({ facture, onSuccess }: FactureFormProps) {
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="">Aucune propriété</SelectItem>
+                    <SelectItem value="none">Aucune propriété</SelectItem>
                     {proprietes.map((propriete) => (
                       <SelectItem key={propriete.id} value={propriete.id}>
                         {propriete.nom}
