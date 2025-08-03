@@ -50,7 +50,7 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
       const { data, error } = await supabase
         .from("proprietes")
         .select("id, nom, adresse")
-        .eq("usage", "Souscription")
+        .eq("usage", "Bail")
         .eq("statut", "Libre")
         .order("nom");
       if (error) throw error;
