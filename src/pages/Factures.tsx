@@ -219,6 +219,49 @@ export default function Factures() {
         </select>
       </div>
 
+      {/* Statistics cards */}
+      <div className="grid gap-4 md:grid-cols-3 mb-6">
+        <div className="bg-card p-6 rounded-lg border">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground">Total factures</p>
+              <p className="text-2xl font-bold">{factures.length}</p>
+            </div>
+            <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
+              <Plus className="h-6 w-6 text-primary" />
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-card p-6 rounded-lg border">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground">Montant total</p>
+              <p className="text-2xl font-bold">
+                {formatCurrency(factures.reduce((sum, f) => sum + (f.montant_total || 0), 0))}
+              </p>
+            </div>
+            <div className="w-12 h-12 bg-green-500/10 rounded-full flex items-center justify-center">
+              <CreditCard className="h-6 w-6 text-green-500" />
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-card p-6 rounded-lg border">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground">Solde impayé</p>
+              <p className="text-2xl font-bold text-destructive">
+                {formatCurrency(factures.reduce((sum, f) => sum + (f.solde || 0), 0))}
+              </p>
+            </div>
+            <div className="w-12 h-12 bg-destructive/10 rounded-full flex items-center justify-center">
+              <Receipt className="h-6 w-6 text-destructive" />
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Invoices table */}
       <div className="border rounded-lg">
         <Table>
@@ -281,7 +324,11 @@ export default function Factures() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => deleteMutation.mutate(facture.id)}
+                        onClick={() => {
+                          if (confirm("Êtes-vous sûr de vouloir supprimer cette facture ?")) {
+                            deleteMutation.mutate(facture.id);
+                          }
+                        }}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>

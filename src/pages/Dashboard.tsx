@@ -189,7 +189,11 @@ export default function Dashboard() {
                     <div className="ml-3">
                       <p className="text-sm font-medium">{facture.numero}</p>
                       <p className="text-xs text-muted-foreground">
-                        {facture.fournisseurs?.nom} - {facture.montant_total}€
+                        {facture.fournisseurs?.nom} - {new Intl.NumberFormat('fr-FR', {
+                          style: 'currency',
+                          currency: 'XOF',
+                          minimumFractionDigits: 0,
+                        }).format(facture.montant_total)}
                       </p>
                     </div>
                   </div>
