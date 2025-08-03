@@ -44,62 +44,82 @@ interface PropertyDetailsDialogProps {
 export function PropertyDetailsDialog({ propriete }: PropertyDetailsDialogProps) {
   const [open, setOpen] = useState(false);
 
-  // Récupérer les détails complets de la propriété avec location/souscription active
+  // Récupérer les détails selon l'usage de la propriété
   const { data: propertyDetails, isLoading } = useQuery({
-    queryKey: ["property-details", propriete.id],
+    queryKey: ["property-details", propriete.id, propriete.usage],
     queryFn: async () => {
-      // Location active
-      const { data: activeLocation } = await supabase
-        .from("locations")
-        .select(`
-          *,
-          client:clients(*)
-        `)
-        .eq("propriete_id", propriete.id)
-        .eq("statut", "active")
-        .single();
+      let activeLocation = null;
+      let activeSubscription = null;
+      let locationPayments = [];
+      let subscriptionPayments = [];
+      let receipts = [];
 
-      // Souscription active
-      const { data: activeSubscription } = await supabase
-        .from("souscriptions")
-        .select(`
-          *,
-          client:clients(*)
-        `)
-        .eq("propriete_id", propriete.id)
-        .eq("statut", "active")
-        .single();
+      if (propriete.usage === "Location") {
+        // Location active
+        const { data } = await supabase
+          .from("locations")
+          .select(`
+            *,
+            client:clients(*)
+          `)
+          .eq("propriete_id", propriete.id)
+          .eq("statut", "active")
+          .single();
+        activeLocation = data;
 
-      // Paiements de location
-      const { data: locationPayments } = await supabase
-        .from("paiements_locations")
-        .select("*")
-        .eq("location_id", activeLocation?.id || "")
-        .order("date_paiement", { ascending: false });
+        // Paiements de location
+        if (activeLocation) {
+          const { data: payments } = await supabase
+            .from("paiements_locations")
+            .select("*")
+            .eq("location_id", activeLocation.id)
+            .order("date_paiement", { ascending: false });
+          locationPayments = payments || [];
+        }
+      } else if (propriete.usage === "Bail") {
+        // Souscription active
+        const { data } = await supabase
+          .from("souscriptions")
+          .select(`
+            *,
+            client:clients(*)
+          `)
+          .eq("propriete_id", propriete.id)
+          .eq("statut", "active")
+          .single();
+        activeSubscription = data;
 
-      // Paiements de souscription
-      const { data: subscriptionPayments } = await supabase
-        .from("paiements_souscriptions")
-        .select("*")
-        .eq("souscription_id", activeSubscription?.id || "")
-        .order("date_paiement", { ascending: false });
+        // Paiements de souscription
+        if (activeSubscription) {
+          const { data: payments } = await supabase
+            .from("paiements_souscriptions")
+            .select("*")
+            .eq("souscription_id", activeSubscription.id)
+            .order("date_paiement", { ascending: false });
+          subscriptionPayments = payments || [];
+        }
+      }
 
-      // Reçus générés
-      const { data: receipts } = await supabase
-        .from("recus")
-        .select(`
-          *,
-          client:clients(nom, prenom)
-        `)
-        .or(`reference_id.eq.${activeLocation?.id || ""},reference_id.eq.${activeSubscription?.id || ""}`)
-        .order("date_generation", { ascending: false });
+      // Reçus générés (pour l'usage actuel)
+      const referenceId = activeLocation?.id || activeSubscription?.id;
+      if (referenceId) {
+        const { data } = await supabase
+          .from("recus")
+          .select(`
+            *,
+            client:clients(nom, prenom)
+          `)
+          .eq("reference_id", referenceId)
+          .order("date_generation", { ascending: false });
+        receipts = data || [];
+      }
 
       return {
         activeLocation,
         activeSubscription,
-        locationPayments: locationPayments || [],
-        subscriptionPayments: subscriptionPayments || [],
-        receipts: receipts || [],
+        locationPayments,
+        subscriptionPayments,
+        receipts,
       };
     },
     enabled: open,
@@ -143,11 +163,17 @@ export function PropertyDetailsDialog({ propriete }: PropertyDetailsDialogProps)
         </DialogHeader>
 
         <Tabs defaultValue="general" className="w-full">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className={`grid w-full ${propriete.usage === "Location" ? "grid-cols-4" : "grid-cols-4"}`}>
             <TabsTrigger value="general">Général</TabsTrigger>
-            <TabsTrigger value="location">Location</TabsTrigger>
-            <TabsTrigger value="souscription">Souscription</TabsTrigger>
-            <TabsTrigger value="paiements">Paiements</TabsTrigger>
+            {propriete.usage === "Location" && (
+              <TabsTrigger value="location">Location</TabsTrigger>
+            )}
+            {propriete.usage === "Bail" && (
+              <TabsTrigger value="souscription">Souscription</TabsTrigger>
+            )}
+            <TabsTrigger value="paiements">
+              {propriete.usage === "Location" ? "Paiements location" : "Paiements souscription"}
+            </TabsTrigger>
             <TabsTrigger value="recus">Reçus</TabsTrigger>
           </TabsList>
 
@@ -216,7 +242,8 @@ export function PropertyDetailsDialog({ propriete }: PropertyDetailsDialogProps)
             </Card>
           </TabsContent>
 
-          <TabsContent value="location" className="space-y-4">
+          {propriete.usage === "Location" && (
+            <TabsContent value="location" className="space-y-4">
             {isLoading ? (
               <div>Chargement...</div>
             ) : propertyDetails?.activeLocation ? (
@@ -269,9 +296,11 @@ export function PropertyDetailsDialog({ propriete }: PropertyDetailsDialogProps)
                 </CardContent>
               </Card>
             )}
-          </TabsContent>
+            </TabsContent>
+          )}
 
-          <TabsContent value="souscription" className="space-y-4">
+          {propriete.usage === "Bail" && (
+            <TabsContent value="souscription" className="space-y-4">
             {isLoading ? (
               <div>Chargement...</div>
             ) : propertyDetails?.activeSubscription ? (
@@ -323,14 +352,15 @@ export function PropertyDetailsDialog({ propriete }: PropertyDetailsDialogProps)
                 </CardContent>
               </Card>
             )}
-          </TabsContent>
+            </TabsContent>
+          )}
 
           <TabsContent value="paiements" className="space-y-4">
             {isLoading ? (
               <div>Chargement...</div>
             ) : (
               <div className="space-y-4">
-                {propertyDetails?.locationPayments && propertyDetails.locationPayments.length > 0 && (
+                {propriete.usage === "Location" && propertyDetails?.locationPayments && propertyDetails.locationPayments.length > 0 && (
                   <Card>
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
@@ -359,7 +389,7 @@ export function PropertyDetailsDialog({ propriete }: PropertyDetailsDialogProps)
                   </Card>
                 )}
 
-                {propertyDetails?.subscriptionPayments && propertyDetails.subscriptionPayments.length > 0 && (
+                {propriete.usage === "Bail" && propertyDetails?.subscriptionPayments && propertyDetails.subscriptionPayments.length > 0 && (
                   <Card>
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
@@ -388,10 +418,13 @@ export function PropertyDetailsDialog({ propriete }: PropertyDetailsDialogProps)
                   </Card>
                 )}
 
-                {(!propertyDetails?.locationPayments?.length && !propertyDetails?.subscriptionPayments?.length) && (
+                {((propriete.usage === "Location" && !propertyDetails?.locationPayments?.length) || 
+                  (propriete.usage === "Bail" && !propertyDetails?.subscriptionPayments?.length)) && (
                   <Card>
                     <CardContent className="text-center py-8">
-                      <p className="text-muted-foreground">Aucun paiement enregistré pour cette propriété</p>
+                      <p className="text-muted-foreground">
+                        Aucun paiement {propriete.usage === "Location" ? "de location" : "de souscription"} enregistré pour cette propriété
+                      </p>
                     </CardContent>
                   </Card>
                 )}
