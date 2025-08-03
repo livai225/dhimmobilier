@@ -21,7 +21,8 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
   const [formData, setFormData] = useState({
     client_id: "",
     propriete_id: "",
-    prix_total: "",
+    montant_souscris: "",
+    montant_droit_terre_mensuel: "",
     apport_initial: "",
     montant_mensuel: "",
     nombre_mois: "",
@@ -49,7 +50,7 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
     queryFn: async () => {
       const { data, error } = await supabase
         .from("proprietes")
-        .select("id, nom, adresse")
+        .select("id, nom, adresse, montant_bail, droit_terre")
         .eq("usage", "Bail")
         .eq("statut", "Libre")
         .order("nom");
@@ -58,12 +59,31 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
     },
   });
 
+  // Function to handle property selection and auto-fill
+  const handlePropertyChange = (proprieteId: string) => {
+    const selectedPropriete = proprietes?.find(p => p.id === proprieteId);
+    if (selectedPropriete) {
+      setFormData({
+        ...formData,
+        propriete_id: proprieteId,
+        montant_souscris: selectedPropriete.montant_bail?.toString() || "",
+        montant_droit_terre_mensuel: selectedPropriete.droit_terre?.toString() || ""
+      });
+    } else {
+      setFormData({
+        ...formData,
+        propriete_id: proprieteId
+      });
+    }
+  };
+
   useEffect(() => {
     if (souscription) {
       setFormData({
         client_id: souscription.client_id || "",
         propriete_id: souscription.propriete_id || "",
-        prix_total: souscription.prix_total?.toString() || "",
+        montant_souscris: souscription.montant_souscris?.toString() || souscription.prix_total?.toString() || "",
+        montant_droit_terre_mensuel: souscription.montant_droit_terre_mensuel?.toString() || "",
         apport_initial: souscription.apport_initial?.toString() || "",
         montant_mensuel: souscription.montant_mensuel?.toString() || "",
         nombre_mois: souscription.nombre_mois?.toString() || "",
@@ -82,13 +102,23 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
     try {
       const data = {
         ...formData,
-        prix_total: parseFloat(formData.prix_total),
+        montant_souscris: parseFloat(formData.montant_souscris),
+        prix_total: parseFloat(formData.montant_souscris), // Keep for backward compatibility
+        montant_droit_terre_mensuel: parseFloat(formData.montant_droit_terre_mensuel) || 0,
         apport_initial: parseFloat(formData.apport_initial) || 0,
         montant_mensuel: parseFloat(formData.montant_mensuel) || 0,
         nombre_mois: parseInt(formData.nombre_mois) || 0,
         periode_finition_mois: parseInt(formData.periode_finition_mois),
-        solde_restant: parseFloat(formData.prix_total) - (parseFloat(formData.apport_initial) || 0)
+        solde_restant: parseFloat(formData.montant_souscris) - (parseFloat(formData.apport_initial) || 0)
       };
+
+      // Update property status to "Occupé" when creating a new subscription
+      if (!souscription && formData.propriete_id) {
+        await supabase
+          .from("proprietes")
+          .update({ statut: "Occupé" })
+          .eq("id", formData.propriete_id);
+      }
 
       let result;
       if (souscription) {
@@ -148,7 +178,7 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
 
             <div>
               <Label htmlFor="propriete_id">Propriété *</Label>
-              <Select value={formData.propriete_id} onValueChange={(value) => setFormData({...formData, propriete_id: value})}>
+              <Select value={formData.propriete_id} onValueChange={handlePropertyChange}>
                 <SelectTrigger>
                   <SelectValue placeholder="Sélectionner une propriété" />
                 </SelectTrigger>
@@ -190,25 +220,41 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="prix_total">Prix total (FCFA) *</Label>
+              <Label htmlFor="montant_souscris">Montant souscris (FCFA) *</Label>
               <Input
-                id="prix_total"
+                id="montant_souscris"
                 type="number"
-                value={formData.prix_total}
-                onChange={(e) => setFormData({...formData, prix_total: e.target.value})}
+                value={formData.montant_souscris}
+                onChange={(e) => setFormData({...formData, montant_souscris: e.target.value})}
                 required
+                readOnly={!!formData.propriete_id}
+                className={formData.propriete_id ? "bg-muted cursor-not-allowed" : ""}
+                placeholder="Sélectionnez une propriété"
               />
             </div>
 
             <div>
-              <Label htmlFor="apport_initial">Apport initial (FCFA)</Label>
+              <Label htmlFor="montant_droit_terre_mensuel">Droit de terre mensuel (FCFA)</Label>
               <Input
-                id="apport_initial"
+                id="montant_droit_terre_mensuel"
                 type="number"
-                value={formData.apport_initial}
-                onChange={(e) => setFormData({...formData, apport_initial: e.target.value})}
+                value={formData.montant_droit_terre_mensuel}
+                onChange={(e) => setFormData({...formData, montant_droit_terre_mensuel: e.target.value})}
+                readOnly={!!formData.propriete_id}
+                className={formData.propriete_id ? "bg-muted cursor-not-allowed" : ""}
+                placeholder="Sélectionnez une propriété"
               />
             </div>
+          </div>
+
+          <div>
+            <Label htmlFor="apport_initial">Apport initial (FCFA)</Label>
+            <Input
+              id="apport_initial"
+              type="number"
+              value={formData.apport_initial}
+              onChange={(e) => setFormData({...formData, apport_initial: e.target.value})}
+            />
           </div>
 
           {formData.type_souscription === "classique" && (

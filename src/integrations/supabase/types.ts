@@ -547,6 +547,7 @@ export type Database = {
           id: string
           montant_droit_terre_mensuel: number | null
           montant_mensuel: number
+          montant_souscris: number | null
           nombre_mois: number
           periode_finition_mois: number | null
           phase_actuelle: string
@@ -568,6 +569,7 @@ export type Database = {
           id?: string
           montant_droit_terre_mensuel?: number | null
           montant_mensuel: number
+          montant_souscris?: number | null
           nombre_mois: number
           periode_finition_mois?: number | null
           phase_actuelle?: string
@@ -589,6 +591,7 @@ export type Database = {
           id?: string
           montant_droit_terre_mensuel?: number | null
           montant_mensuel?: number
+          montant_souscris?: number | null
           nombre_mois?: number
           periode_finition_mois?: number | null
           phase_actuelle?: string
