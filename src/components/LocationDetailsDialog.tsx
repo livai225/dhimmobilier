@@ -101,8 +101,25 @@ export function LocationDetailsDialog({ location, onClose, onUpdate }: LocationD
 
   const calculateProgress = () => {
     const totalPaye = paiements?.reduce((sum, p) => sum + Number(p.montant), 0) || 0;
-    const totalDu = location.loyer_mensuel * 12; // Assuming yearly calculation
-    return Math.min((totalPaye / totalDu) * 100, 100);
+    
+    // Calculer la dette attendue selon l'année de location
+    const dateDebut = new Date(location.date_debut);
+    const now = new Date();
+    const anneesEcoules = Math.floor((now.getTime() - dateDebut.getTime()) / (1000 * 60 * 60 * 24 * 365.25));
+    const moisDansAnneeCourante = Math.floor((now.getTime() - dateDebut.getTime()) / (1000 * 60 * 60 * 24 * 30.44)) % 12;
+    
+    let detteAttendue = 0;
+    if (anneesEcoules === 0) {
+      // Première année: 10 mois de loyer (2 mois payés d'avance)
+      detteAttendue = location.loyer_mensuel * Math.min(10, moisDansAnneeCourante + 1);
+    } else {
+      // Années suivantes: années complètes × 12 + 10 mois première année + mois année courante
+      detteAttendue = (anneesEcoules * location.loyer_mensuel * 12) + 
+                      (location.loyer_mensuel * 10) + 
+                      (moisDansAnneeCourante * location.loyer_mensuel);
+    }
+    
+    return detteAttendue > 0 ? Math.min((totalPaye / detteAttendue) * 100, 100) : 100;
   };
 
   const getStatusBadge = (statut: string) => {
@@ -218,6 +235,9 @@ export function LocationDetailsDialog({ location, onClose, onUpdate }: LocationD
                     location.dette_totale > 0 ? 'text-red-600' : 'text-green-600'
                   }`}>
                     {location.dette_totale?.toLocaleString()} FCFA
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    1ère année: 10 mois (2 mois d'avance payés) • Années suivantes: 12 mois/an
                   </p>
                 </div>
 
