@@ -1,0 +1,322 @@
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { SouscriptionForm } from "@/components/SouscriptionForm";
+import { PaiementDroitTerreDialog } from "@/components/PaiementDroitTerreDialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Plus, Eye, CreditCard, Calendar } from "lucide-react";
+import { toast } from "@/hooks/use-toast";
+import { format } from "date-fns";
+import { fr } from "date-fns/locale";
+
+export default function Souscriptions() {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [phaseFilter, setPhaseFilter] = useState<string>("all");
+  const [selectedSouscription, setSelectedSouscription] = useState<any>(null);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
+
+  const { data: souscriptions, isLoading, refetch } = useQuery({
+    queryKey: ["souscriptions"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("souscriptions")
+        .select(`
+          *,
+          clients(nom, prenom),
+          proprietes(nom, adresse)
+        `)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: baremes } = useQuery({
+    queryKey: ["bareme_droits_terre"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("bareme_droits_terre")
+        .select("*")
+        .order("montant_mensuel");
+
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const generateEcheances = async (souscriptionId: string) => {
+    try {
+      const { error } = await supabase.rpc("generate_echeances_droit_terre", {
+        souscription_uuid: souscriptionId
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Succès",
+        description: "Les échéances de droit de terre ont été générées.",
+      });
+
+      refetch();
+    } catch (error) {
+      console.error("Error generating écheances:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de générer les échéances.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const getPhaseColor = (phase: string) => {
+    switch (phase) {
+      case "souscription":
+        return "bg-blue-500";
+      case "finition":
+        return "bg-orange-500";
+      case "droit_terre":
+        return "bg-green-500";
+      case "termine":
+        return "bg-gray-500";
+      default:
+        return "bg-gray-400";
+    }
+  };
+
+  const getPhaseLabel = (phase: string) => {
+    switch (phase) {
+      case "souscription":
+        return "Souscription";
+      case "finition":
+        return "En finition";
+      case "droit_terre":
+        return "Droit de terre";
+      case "termine":
+        return "Terminé";
+      default:
+        return phase;
+    }
+  };
+
+  const filteredSouscriptions = souscriptions?.filter((sub) => {
+    const matchesSearch = 
+      sub.clients?.nom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      sub.clients?.prenom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      sub.proprietes?.nom?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesPhase = phaseFilter === "all" || sub.phase_actuelle === phaseFilter;
+    
+    return matchesSearch && matchesPhase;
+  });
+
+  if (isLoading) {
+    return <div className="flex justify-center items-center h-64">Chargement...</div>;
+  }
+
+  return (
+    <div className="container mx-auto p-6">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold">Gestion des Souscriptions</h1>
+        <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              Nouvelle souscription
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-4xl">
+            <DialogHeader>
+              <DialogTitle>
+                {selectedSouscription ? "Modifier la souscription" : "Nouvelle souscription"}
+              </DialogTitle>
+            </DialogHeader>
+            <SouscriptionForm
+              souscription={selectedSouscription}
+              onSuccess={() => {
+                setIsFormOpen(false);
+                setSelectedSouscription(null);
+                refetch();
+              }}
+              baremes={baremes || []}
+            />
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* Filters */}
+      <div className="flex gap-4 mb-6">
+        <Input
+          placeholder="Rechercher par client ou propriété..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="max-w-sm"
+        />
+        <Select value={phaseFilter} onValueChange={setPhaseFilter}>
+          <SelectTrigger className="w-48">
+            <SelectValue placeholder="Filtrer par phase" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Toutes les phases</SelectItem>
+            <SelectItem value="souscription">Souscription</SelectItem>
+            <SelectItem value="finition">En finition</SelectItem>
+            <SelectItem value="droit_terre">Droit de terre</SelectItem>
+            <SelectItem value="termine">Terminé</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        {["souscription", "finition", "droit_terre", "termine"].map((phase) => {
+          const count = souscriptions?.filter(s => s.phase_actuelle === phase).length || 0;
+          return (
+            <Card key={phase}>
+              <CardContent className="p-4">
+                <div className="flex items-center space-x-2">
+                  <div className={`w-3 h-3 rounded-full ${getPhaseColor(phase)}`}></div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">{getPhaseLabel(phase)}</p>
+                    <p className="text-2xl font-bold">{count}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* Souscriptions List */}
+      <div className="grid gap-4">
+        {filteredSouscriptions?.map((souscription) => (
+          <Card key={souscription.id}>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-4 mb-2">
+                    <h3 className="text-lg font-semibold">
+                      {souscription.clients?.prenom} {souscription.clients?.nom}
+                    </h3>
+                    <Badge className={getPhaseColor(souscription.phase_actuelle)}>
+                      {getPhaseLabel(souscription.phase_actuelle)}
+                    </Badge>
+                    <Badge variant="outline">
+                      {souscription.type_souscription === "mise_en_garde" ? "Mise en garde" : "Classique"}
+                    </Badge>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div>
+                      <p className="text-muted-foreground">Propriété</p>
+                      <p className="font-medium">{souscription.proprietes?.nom}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Prix total</p>
+                      <p className="font-medium">{souscription.prix_total?.toLocaleString()} FCFA</p>
+                    </div>
+                    {souscription.type_souscription === "mise_en_garde" && (
+                      <>
+                        <div>
+                          <p className="text-muted-foreground">Type de bien</p>
+                          <p className="font-medium">{souscription.type_bien}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Droit de terre</p>
+                          <p className="font-medium">{souscription.montant_droit_terre_mensuel?.toLocaleString()} FCFA/mois</p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {souscription.type_souscription === "mise_en_garde" && souscription.date_fin_finition && (
+                    <div className="mt-4 p-3 bg-muted rounded-lg">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
+                        <div>
+                          <p className="text-muted-foreground">Fin de finition</p>
+                          <p className="font-medium">
+                            {format(new Date(souscription.date_fin_finition), "dd MMMM yyyy", { locale: fr })}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Début droit de terre</p>
+                          <p className="font-medium">
+                            {souscription.date_debut_droit_terre 
+                              ? format(new Date(souscription.date_debut_droit_terre), "dd MMMM yyyy", { locale: fr })
+                              : "À définir"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Période de finition</p>
+                          <p className="font-medium">{souscription.periode_finition_mois} mois</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedSouscription(souscription);
+                      setIsFormOpen(true);
+                    }}
+                  >
+                    <Eye className="mr-2 h-4 w-4" />
+                    Détails
+                  </Button>
+
+                  {souscription.type_souscription === "mise_en_garde" && 
+                   souscription.phase_actuelle === "finition" && 
+                   souscription.date_debut_droit_terre && 
+                   new Date() >= new Date(souscription.date_debut_droit_terre) && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => generateEcheances(souscription.id)}
+                    >
+                      <Calendar className="mr-2 h-4 w-4" />
+                      Générer échéances
+                    </Button>
+                  )}
+
+                  {souscription.phase_actuelle === "droit_terre" && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedSouscription(souscription);
+                        setIsPaymentDialogOpen(true);
+                      }}
+                    >
+                      <CreditCard className="mr-2 h-4 w-4" />
+                      Paiement
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Payment Dialog */}
+      <PaiementDroitTerreDialog
+        open={isPaymentDialogOpen}
+        onOpenChange={setIsPaymentDialogOpen}
+        souscription={selectedSouscription}
+        onSuccess={() => {
+          setIsPaymentDialogOpen(false);
+          refetch();
+        }}
+      />
+    </div>
+  );
+}

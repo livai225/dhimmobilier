@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      bareme_droits_terre: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          montant_mensuel: number
+          type_bien: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          montant_mensuel: number
+          type_bien: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          montant_mensuel?: number
+          type_bien?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       clients: {
         Row: {
           adresse: string | null
@@ -58,6 +85,45 @@ export type Database = {
           telephone_principal?: string | null
           telephone_secondaire_1?: string | null
           telephone_secondaire_2?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      echeances_droit_terre: {
+        Row: {
+          created_at: string
+          date_echeance: string
+          date_paiement: string | null
+          id: string
+          montant: number
+          montant_paye: number | null
+          numero_echeance: number
+          souscription_id: string
+          statut: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          date_echeance: string
+          date_paiement?: string | null
+          id?: string
+          montant: number
+          montant_paye?: number | null
+          numero_echeance: number
+          souscription_id: string
+          statut?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          date_echeance?: string
+          date_paiement?: string | null
+          id?: string
+          montant?: number
+          montant_paye?: number | null
+          numero_echeance?: number
+          souscription_id?: string
+          statut?: string
           updated_at?: string
         }
         Relationships: []
@@ -476,13 +542,20 @@ export type Database = {
           client_id: string
           created_at: string
           date_debut: string
+          date_debut_droit_terre: string | null
+          date_fin_finition: string | null
           id: string
+          montant_droit_terre_mensuel: number | null
           montant_mensuel: number
           nombre_mois: number
+          periode_finition_mois: number | null
+          phase_actuelle: string
           prix_total: number
           propriete_id: string
           solde_restant: number
           statut: string
+          type_bien: string | null
+          type_souscription: string
           updated_at: string
         }
         Insert: {
@@ -490,13 +563,20 @@ export type Database = {
           client_id: string
           created_at?: string
           date_debut: string
+          date_debut_droit_terre?: string | null
+          date_fin_finition?: string | null
           id?: string
+          montant_droit_terre_mensuel?: number | null
           montant_mensuel: number
           nombre_mois: number
+          periode_finition_mois?: number | null
+          phase_actuelle?: string
           prix_total: number
           propriete_id: string
           solde_restant: number
           statut?: string
+          type_bien?: string | null
+          type_souscription?: string
           updated_at?: string
         }
         Update: {
@@ -504,13 +584,20 @@ export type Database = {
           client_id?: string
           created_at?: string
           date_debut?: string
+          date_debut_droit_terre?: string | null
+          date_fin_finition?: string | null
           id?: string
+          montant_droit_terre_mensuel?: number | null
           montant_mensuel?: number
           nombre_mois?: number
+          periode_finition_mois?: number | null
+          phase_actuelle?: string
           prix_total?: number
           propriete_id?: string
           solde_restant?: number
           statut?: string
+          type_bien?: string | null
+          type_souscription?: string
           updated_at?: string
         }
         Relationships: [
@@ -556,6 +643,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      generate_echeances_droit_terre: {
+        Args: { souscription_uuid: string }
+        Returns: undefined
+      }
       generate_facture_number: {
         Args: Record<PropertyKey, never>
         Returns: string
