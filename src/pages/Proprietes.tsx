@@ -303,16 +303,21 @@ export default function Proprietes() {
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="prix_achat" className="text-right">
-                    Prix d'achat (€)
+                    Prix d'achat (FCFA)
                   </Label>
-                  <Input
-                    id="prix_achat"
-                    type="number"
-                    step="0.01"
-                    value={formData.prix_achat}
-                    onChange={(e) => setFormData({ ...formData, prix_achat: e.target.value })}
-                    className="col-span-3"
-                  />
+                  <div className="col-span-3 relative">
+                    <Input
+                      id="prix_achat"
+                      type="number"
+                      step="0.01"
+                      value={formData.prix_achat}
+                      onChange={(e) => setFormData({ ...formData, prix_achat: e.target.value })}
+                      className="pr-12"
+                    />
+                    <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground text-sm">
+                      FCFA
+                    </span>
+                  </div>
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="statut" className="text-right">
@@ -365,45 +370,60 @@ export default function Proprietes() {
                 {formData.usage === "Location" && (
                   <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="loyer_mensuel" className="text-right">
-                      Loyer mensuel (€)
+                      Loyer mensuel (FCFA)
                     </Label>
-                    <Input
-                      id="loyer_mensuel"
-                      type="number"
-                      step="0.01"
-                      value={formData.loyer_mensuel}
-                      onChange={(e) => setFormData({ ...formData, loyer_mensuel: e.target.value })}
-                      className="col-span-3"
-                    />
+                    <div className="col-span-3 relative">
+                      <Input
+                        id="loyer_mensuel"
+                        type="number"
+                        step="0.01"
+                        value={formData.loyer_mensuel}
+                        onChange={(e) => setFormData({ ...formData, loyer_mensuel: e.target.value })}
+                        className="pr-12"
+                      />
+                      <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground text-sm">
+                        FCFA
+                      </span>
+                    </div>
                   </div>
                 )}
                 {formData.usage === "Bail" && (
                   <>
                     <div className="grid grid-cols-4 items-center gap-4">
                       <Label htmlFor="montant_bail" className="text-right">
-                        Montant du bail (€)
+                        Montant du bail (FCFA)
                       </Label>
-                      <Input
-                        id="montant_bail"
-                        type="number"
-                        step="0.01"
-                        value={formData.montant_bail}
-                        onChange={(e) => setFormData({ ...formData, montant_bail: e.target.value })}
-                        className="col-span-3"
-                      />
+                      <div className="col-span-3 relative">
+                        <Input
+                          id="montant_bail"
+                          type="number"
+                          step="0.01"
+                          value={formData.montant_bail}
+                          onChange={(e) => setFormData({ ...formData, montant_bail: e.target.value })}
+                          className="pr-12"
+                        />
+                        <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground text-sm">
+                          FCFA
+                        </span>
+                      </div>
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
                       <Label htmlFor="droit_terre" className="text-right">
-                        Droit de terre (€)
+                        Droit de terre (FCFA)
                       </Label>
-                      <Input
-                        id="droit_terre"
-                        type="number"
-                        step="0.01"
-                        value={formData.droit_terre}
-                        onChange={(e) => setFormData({ ...formData, droit_terre: e.target.value })}
-                        className="col-span-3"
-                      />
+                      <div className="col-span-3 relative">
+                        <Input
+                          id="droit_terre"
+                          type="number"
+                          step="0.01"
+                          value={formData.droit_terre}
+                          onChange={(e) => setFormData({ ...formData, droit_terre: e.target.value })}
+                          className="pr-12"
+                        />
+                        <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground text-sm">
+                          FCFA
+                        </span>
+                      </div>
                     </div>
                   </>
                 )}
@@ -491,9 +511,9 @@ export default function Proprietes() {
                     </TableCell>
                     <TableCell>
                       {propriete.usage === 'Location' && propriete.loyer_mensuel 
-                        ? `${propriete.loyer_mensuel}€/mois`
+                        ? `${propriete.loyer_mensuel} FCFA/mois`
                         : propriete.usage === 'Bail' && (propriete.montant_bail || propriete.droit_terre)
-                        ? `${propriete.montant_bail || 0}€ + ${propriete.droit_terre || 0}€ (terre)`
+                        ? `${propriete.montant_bail || 0} FCFA + ${propriete.droit_terre || 0} FCFA (terre)`
                         : "-"
                       }
                     </TableCell>
