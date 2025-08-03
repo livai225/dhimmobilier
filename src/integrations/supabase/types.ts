@@ -127,6 +127,10 @@ export type Database = {
           email: string | null
           id: string
           nom: string
+          note_performance: number | null
+          numero_tva: string | null
+          secteur_id: string | null
+          site_web: string | null
           telephone: string | null
           updated_at: string
         }
@@ -137,6 +141,10 @@ export type Database = {
           email?: string | null
           id?: string
           nom: string
+          note_performance?: number | null
+          numero_tva?: string | null
+          secteur_id?: string | null
+          site_web?: string | null
           telephone?: string | null
           updated_at?: string
         }
@@ -147,10 +155,22 @@ export type Database = {
           email?: string | null
           id?: string
           nom?: string
+          note_performance?: number | null
+          numero_tva?: string | null
+          secteur_id?: string | null
+          site_web?: string | null
           telephone?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fournisseurs_secteur_id_fkey"
+            columns: ["secteur_id"]
+            isOneToOne: false
+            referencedRelation: "secteurs_activite"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       locations: {
         Row: {
@@ -429,6 +449,27 @@ export type Database = {
           },
         ]
       }
+      secteurs_activite: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          nom: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          nom: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          nom?: string
+        }
+        Relationships: []
+      }
       souscriptions: {
         Row: {
           apport_initial: number
@@ -515,7 +556,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      generate_facture_number: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never
