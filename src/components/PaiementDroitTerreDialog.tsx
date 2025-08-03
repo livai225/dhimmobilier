@@ -14,6 +14,7 @@ import { toast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { CreditCard, FileText, Calendar } from "lucide-react";
+import { ReceiptGenerator } from "@/utils/receiptGenerator";
 
 interface PaiementDroitTerreDialogProps {
   open: boolean;
@@ -84,7 +85,7 @@ export function PaiementDroitTerreDialog({ open, onOpenChange, souscription, onS
 
     try {
       // Record the payment
-      const { error: paymentError } = await supabase
+      const { data: payment, error: paymentError } = await supabase
         .from("paiements_locations")
         .insert({
           location_id: souscription.id,
@@ -92,7 +93,9 @@ export function PaiementDroitTerreDialog({ open, onOpenChange, souscription, onS
           date_paiement: formData.date_paiement,
           mode_paiement: formData.mode_paiement,
           reference: formData.reference
-        });
+        })
+        .select()
+        .single();
 
       if (paymentError) throw paymentError;
 
@@ -111,9 +114,21 @@ export function PaiementDroitTerreDialog({ open, onOpenChange, souscription, onS
         if (echeanceError) throw echeanceError;
       }
 
+      // Generate receipt for land rights payment
+      const selectedEcheance = echeances?.find(e => e.numero_echeance.toString() === formData.numero_echeance);
+      const receipt = await ReceiptGenerator.createReceipt({
+        clientId: souscription.client_id,
+        referenceId: payment.id,
+        typeOperation: "droit_terre",
+        montantTotal: parseFloat(formData.montant),
+        periodeDebut: selectedEcheance?.date_echeance,
+        periodeFin: selectedEcheance?.date_echeance,
+        datePaiement: formData.date_paiement
+      });
+
       toast({
         title: "Succès",
-        description: "Paiement enregistré avec succès",
+        description: `Paiement enregistré avec succès. Reçu généré: ${receipt.numero}`,
       });
 
       // Reset form

@@ -40,6 +40,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
+import { ReceiptGenerator } from "@/utils/receiptGenerator";
 
 const paiementSchema = z.object({
   montant: z.number().min(0.01, "Le montant doit être supérieur à 0"),
@@ -97,7 +98,7 @@ export function PaiementFactureDialog({
   // Create payment mutation
   const mutation = useMutation({
     mutationFn: async (data: PaiementFormData) => {
-      const { error } = await supabase
+      const { data: payment, error } = await supabase
         .from("paiements_factures")
         .insert({
           facture_id: facture.id,
@@ -105,17 +106,30 @@ export function PaiementFactureDialog({
           date_paiement: data.date_paiement,
           mode_paiement: data.mode_paiement || null,
           reference: data.reference || null,
-        });
+        })
+        .select()
+        .single();
       
       if (error) throw error;
+
+      // Generate receipt for invoice payment
+      const receipt = await ReceiptGenerator.createReceipt({
+        clientId: facture.fournisseur_id, // Using fournisseur as "client" for receipt
+        referenceId: payment.id,
+        typeOperation: "paiement_facture",
+        montantTotal: data.montant,
+        datePaiement: data.date_paiement
+      });
+
+      return { payment, receipt };
     },
-    onSuccess: () => {
+    onSuccess: ({ receipt }) => {
       queryClient.invalidateQueries({ queryKey: ["factures"] });
       queryClient.invalidateQueries({ queryKey: ["paiements"] });
       form.reset();
       toast({
         title: "Succès",
-        description: "Paiement enregistré avec succès",
+        description: `Paiement enregistré avec succès. Reçu généré: ${receipt.numero}`,
       });
       onSuccess();
     },

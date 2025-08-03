@@ -10,6 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { ReceiptGenerator } from "@/utils/receiptGenerator";
 
 interface SouscriptionFormProps {
   souscription?: any;
@@ -118,6 +119,8 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
       }
 
       let result;
+      let receipt = null;
+      
       if (souscription) {
         result = await supabase
           .from("souscriptions")
@@ -126,14 +129,34 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
       } else {
         result = await supabase
           .from("souscriptions")
-          .insert(data);
+          .insert(data)
+          .select()
+          .single();
+        
+        // Generate receipt for initial payment if apport_initial > 0
+        if (data.apport_initial > 0 && result.data) {
+          receipt = await ReceiptGenerator.createReceipt({
+            clientId: data.client_id,
+            referenceId: result.data.id,
+            typeOperation: "apport_souscription",
+            montantTotal: data.apport_initial,
+            periodeDebut: data.date_debut,
+            datePaiement: data.date_debut
+          });
+        }
       }
 
       if (result.error) throw result.error;
 
+      const message = souscription 
+        ? "Souscription modifiée avec succès" 
+        : receipt 
+          ? `Souscription créée avec succès. Reçu d'apport généré: ${receipt.numero}`
+          : "Souscription créée avec succès";
+
       toast({
         title: "Succès",
-        description: souscription ? "Souscription modifiée avec succès" : "Souscription créée avec succès",
+        description: message,
       });
 
       onSuccess();
