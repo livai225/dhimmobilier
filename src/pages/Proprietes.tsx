@@ -72,12 +72,16 @@ export default function Proprietes() {
     },
   });
 
-  const { data: typesProprietes } = useQuery({
+  const { data: typesProprietes = [] } = useQuery({
     queryKey: ['types-proprietes'],
     queryFn: async () => {
       const { data, error } = await supabase.from('types_proprietes').select('*').order('nom');
-      if (error) throw error;
-      return data;
+      if (error) {
+        console.error('Erreur lors du chargement des types:', error);
+        throw error;
+      }
+      console.log('Types propriétés chargés:', data);
+      return data || [];
     },
   });
 
