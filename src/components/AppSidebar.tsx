@@ -17,6 +17,7 @@ import {
   FileText, 
   UserCheck, 
   Home,
+  Receipt,
   Settings
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
@@ -56,6 +57,11 @@ const menuItems = [
     title: "Locations",
     url: "/locations",
     icon: Home,
+  },
+  {
+    title: "Reçus",
+    url: "/recus",
+    icon: Receipt,
   },
 ];
 

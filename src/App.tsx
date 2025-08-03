@@ -11,6 +11,7 @@ import Fournisseurs from "./pages/Fournisseurs";
 import Factures from "./pages/Factures";
 import Souscriptions from "./pages/Souscriptions";
 import Locations from "./pages/Locations";
+import Recus from "./pages/Recus";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -29,6 +30,7 @@ const App = () => (
           <Route path="/factures" element={<Layout><Factures /></Layout>} />
           <Route path="/souscriptions" element={<Layout><Souscriptions /></Layout>} />
           <Route path="/locations" element={<Layout><Locations /></Layout>} />
+          <Route path="/recus" element={<Layout><Recus /></Layout>} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
