@@ -203,25 +203,6 @@ export default function Souscriptions() {
         </Select>
       </div>
 
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        {["souscription", "finition", "droit_terre", "termine"].map((phase) => {
-          const count = souscriptions?.filter(s => s.phase_actuelle === phase).length || 0;
-          return (
-            <Card key={phase}>
-              <CardContent className="p-4">
-                <div className="flex items-center space-x-2">
-                  <div className={`w-3 h-3 rounded-full ${getPhaseColor(phase)}`}></div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">{getPhaseLabel(phase)}</p>
-                    <p className="text-2xl font-bold">{count}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
 
       {/* Souscriptions List */}
       <div className="grid gap-4">
