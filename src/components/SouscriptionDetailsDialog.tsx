@@ -299,14 +299,14 @@ export function SouscriptionDetailsDialog({
                         </p>
                       </div>
                     )}
-                    {souscription.date_debut_droit_terre && (
-                      <div>
-                        <p className="text-muted-foreground">Début droit de terre</p>
-                        <p className="font-medium">
-                          {format(new Date(souscription.date_debut_droit_terre), "dd MMMM yyyy", { locale: fr })}
-                        </p>
-                      </div>
-                    )}
+                    <div>
+                      <p className="text-muted-foreground">Début droit de terre</p>
+                      <p className="font-medium">
+                        {souscription.date_debut_droit_terre 
+                          ? format(new Date(souscription.date_debut_droit_terre), "dd MMMM yyyy", { locale: fr })
+                          : "Après la fin des travaux de finition"}
+                      </p>
+                    </div>
                   </div>
                 </CardContent>
               </Card>

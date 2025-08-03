@@ -10,7 +10,7 @@ import { SouscriptionForm } from "@/components/SouscriptionForm";
 import { SouscriptionDetailsDialog } from "@/components/SouscriptionDetailsDialog";
 import { PaiementDroitTerreDialog } from "@/components/PaiementDroitTerreDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Eye, CreditCard, Calendar } from "lucide-react";
+import { Plus, Eye, CreditCard, Calendar, Trash2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -72,6 +72,35 @@ export default function Souscriptions() {
       toast({
         title: "Erreur",
         description: "Impossible de générer les échéances.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const deleteSouscription = async (souscriptionId: string) => {
+    if (!confirm("Êtes-vous sûr de vouloir supprimer cette souscription ?")) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("souscriptions")
+        .delete()
+        .eq("id", souscriptionId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Succès",
+        description: "La souscription a été supprimée.",
+      });
+
+      refetch();
+    } catch (error) {
+      console.error("Error deleting souscription:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de supprimer la souscription.",
         variant: "destructive",
       });
     }
@@ -302,6 +331,15 @@ export default function Souscriptions() {
                       Paiement
                     </Button>
                   )}
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => deleteSouscription(souscription.id)}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Supprimer
+                  </Button>
                 </div>
               </div>
             </CardContent>
