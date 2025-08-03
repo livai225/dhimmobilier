@@ -19,6 +19,12 @@ interface Propriete {
   type_id?: string;
   surface?: number;
   prix_achat?: number;
+  statut?: string;
+  zone?: string;
+  usage?: string;
+  loyer_mensuel?: number;
+  montant_bail?: number;
+  droit_terre?: number;
 }
 
 interface TypePropriete {
@@ -36,6 +42,12 @@ export default function Proprietes() {
     type_id: "",
     surface: "",
     prix_achat: "",
+    statut: "Libre",
+    zone: "",
+    usage: "Location",
+    loyer_mensuel: "",
+    montant_bail: "",
+    droit_terre: "",
   });
 
   const { toast } = useToast();
@@ -72,10 +84,17 @@ export default function Proprietes() {
   const createPropriete = useMutation({
     mutationFn: async (proprieteData: typeof formData) => {
       const processedData = {
-        ...proprieteData,
+        nom: proprieteData.nom,
+        adresse: proprieteData.adresse || null,
         surface: proprieteData.surface ? parseFloat(proprieteData.surface) : null,
         prix_achat: proprieteData.prix_achat ? parseFloat(proprieteData.prix_achat) : null,
         type_id: proprieteData.type_id || null,
+        statut: proprieteData.statut,
+        zone: proprieteData.zone || null,
+        usage: proprieteData.usage,
+        loyer_mensuel: proprieteData.loyer_mensuel ? parseFloat(proprieteData.loyer_mensuel) : 0,
+        montant_bail: proprieteData.montant_bail ? parseFloat(proprieteData.montant_bail) : 0,
+        droit_terre: proprieteData.droit_terre ? parseFloat(proprieteData.droit_terre) : 0,
       };
       const { data, error } = await supabase.from('proprietes').insert([processedData]).select();
       if (error) throw error;
@@ -100,13 +119,19 @@ export default function Proprietes() {
   });
 
   const updatePropriete = useMutation({
-    mutationFn: async ({ id, nom, adresse, type_id, surface, prix_achat }: { id: string } & typeof formData) => {
+    mutationFn: async ({ id, ...proprieteData }: { id: string } & typeof formData) => {
       const processedData = {
-        nom,
-        adresse,
-        surface: surface ? parseFloat(surface) : null,
-        prix_achat: prix_achat ? parseFloat(prix_achat) : null,
-        type_id: type_id || null,
+        nom: proprieteData.nom,
+        adresse: proprieteData.adresse || null,
+        surface: proprieteData.surface ? parseFloat(proprieteData.surface) : null,
+        prix_achat: proprieteData.prix_achat ? parseFloat(proprieteData.prix_achat) : null,
+        type_id: proprieteData.type_id || null,
+        statut: proprieteData.statut,
+        zone: proprieteData.zone || null,
+        usage: proprieteData.usage,
+        loyer_mensuel: proprieteData.loyer_mensuel ? parseFloat(proprieteData.loyer_mensuel) : 0,
+        montant_bail: proprieteData.montant_bail ? parseFloat(proprieteData.montant_bail) : 0,
+        droit_terre: proprieteData.droit_terre ? parseFloat(proprieteData.droit_terre) : 0,
       };
       const { data, error } = await supabase.from('proprietes').update(processedData).eq('id', id).select();
       if (error) throw error;
@@ -159,6 +184,12 @@ export default function Proprietes() {
       type_id: "",
       surface: "",
       prix_achat: "",
+      statut: "Libre",
+      zone: "",
+      usage: "Location",
+      loyer_mensuel: "",
+      montant_bail: "",
+      droit_terre: "",
     });
   };
 
@@ -179,6 +210,12 @@ export default function Proprietes() {
       type_id: propriete.type_id || "",
       surface: propriete.surface?.toString() || "",
       prix_achat: propriete.prix_achat?.toString() || "",
+      statut: propriete.statut || "Libre",
+      zone: propriete.zone || "",
+      usage: propriete.usage || "Location",
+      loyer_mensuel: propriete.loyer_mensuel?.toString() || "",
+      montant_bail: propriete.montant_bail?.toString() || "",
+      droit_terre: propriete.droit_terre?.toString() || "",
     });
     setIsDialogOpen(true);
   };
@@ -278,6 +315,99 @@ export default function Proprietes() {
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="statut" className="text-right">
+                    Statut *
+                  </Label>
+                  <Select
+                    value={formData.statut}
+                    onValueChange={(value) => setFormData({ ...formData, statut: value })}
+                  >
+                    <SelectTrigger className="col-span-3">
+                      <SelectValue placeholder="Sélectionner un statut" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Libre">Libre</SelectItem>
+                      <SelectItem value="Occupé">Occupé</SelectItem>
+                      <SelectItem value="En travaux">En travaux</SelectItem>
+                      <SelectItem value="En vente">En vente</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="zone" className="text-right">
+                    Zone
+                  </Label>
+                  <Input
+                    id="zone"
+                    value={formData.zone}
+                    onChange={(e) => setFormData({ ...formData, zone: e.target.value })}
+                    className="col-span-3"
+                    placeholder="Ex: Centre-ville, Banlieue..."
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="usage" className="text-right">
+                    Usage *
+                  </Label>
+                  <Select
+                    value={formData.usage}
+                    onValueChange={(value) => setFormData({ ...formData, usage: value })}
+                  >
+                    <SelectTrigger className="col-span-3">
+                      <SelectValue placeholder="Sélectionner un usage" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Location">Location</SelectItem>
+                      <SelectItem value="Bail">Bail</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {formData.usage === "Location" && (
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="loyer_mensuel" className="text-right">
+                      Loyer mensuel (€)
+                    </Label>
+                    <Input
+                      id="loyer_mensuel"
+                      type="number"
+                      step="0.01"
+                      value={formData.loyer_mensuel}
+                      onChange={(e) => setFormData({ ...formData, loyer_mensuel: e.target.value })}
+                      className="col-span-3"
+                    />
+                  </div>
+                )}
+                {formData.usage === "Bail" && (
+                  <>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="montant_bail" className="text-right">
+                        Montant du bail (€)
+                      </Label>
+                      <Input
+                        id="montant_bail"
+                        type="number"
+                        step="0.01"
+                        value={formData.montant_bail}
+                        onChange={(e) => setFormData({ ...formData, montant_bail: e.target.value })}
+                        className="col-span-3"
+                      />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="droit_terre" className="text-right">
+                        Droit de terre (€)
+                      </Label>
+                      <Input
+                        id="droit_terre"
+                        type="number"
+                        step="0.01"
+                        value={formData.droit_terre}
+                        onChange={(e) => setFormData({ ...formData, droit_terre: e.target.value })}
+                        className="col-span-3"
+                      />
+                    </div>
+                  </>
+                )}
+                <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="adresse" className="text-right">
                     Adresse
                   </Label>
@@ -326,8 +456,11 @@ export default function Proprietes() {
                 <TableRow>
                   <TableHead>Nom</TableHead>
                   <TableHead>Type</TableHead>
+                  <TableHead>Statut</TableHead>
+                  <TableHead>Zone</TableHead>
+                  <TableHead>Usage</TableHead>
+                  <TableHead>Tarif</TableHead>
                   <TableHead>Surface</TableHead>
-                  <TableHead>Prix d'achat</TableHead>
                   <TableHead>Adresse</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
@@ -336,10 +469,36 @@ export default function Proprietes() {
                 {proprietes?.map((propriete) => (
                   <TableRow key={propriete.id}>
                     <TableCell className="font-medium">{propriete.nom}</TableCell>
-                    <TableCell>{propriete.types_proprietes?.nom}</TableCell>
+                    <TableCell>{propriete.types_proprietes?.nom || "-"}</TableCell>
+                    <TableCell>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        propriete.statut === 'Libre' ? 'bg-green-100 text-green-800' :
+                        propriete.statut === 'Occupé' ? 'bg-blue-100 text-blue-800' :
+                        propriete.statut === 'En travaux' ? 'bg-orange-100 text-orange-800' :
+                        propriete.statut === 'En vente' ? 'bg-purple-100 text-purple-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {propriete.statut || 'Libre'}
+                      </span>
+                    </TableCell>
+                    <TableCell>{propriete.zone || "-"}</TableCell>
+                    <TableCell>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        propriete.usage === 'Location' ? 'bg-blue-100 text-blue-800' : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {propriete.usage || 'Location'}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      {propriete.usage === 'Location' && propriete.loyer_mensuel 
+                        ? `${propriete.loyer_mensuel}€/mois`
+                        : propriete.usage === 'Bail' && (propriete.montant_bail || propriete.droit_terre)
+                        ? `${propriete.montant_bail || 0}€ + ${propriete.droit_terre || 0}€ (terre)`
+                        : "-"
+                      }
+                    </TableCell>
                     <TableCell>{propriete.surface ? `${propriete.surface} m²` : "-"}</TableCell>
-                    <TableCell>{propriete.prix_achat ? `${propriete.prix_achat}€` : "-"}</TableCell>
-                    <TableCell className="max-w-xs truncate">{propriete.adresse}</TableCell>
+                    <TableCell className="max-w-xs truncate">{propriete.adresse || "-"}</TableCell>
                     <TableCell>
                       <div className="flex gap-2">
                         <Button

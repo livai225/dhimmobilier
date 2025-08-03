@@ -327,32 +327,50 @@ export type Database = {
         Row: {
           adresse: string | null
           created_at: string
+          droit_terre: number | null
           id: string
+          loyer_mensuel: number | null
+          montant_bail: number | null
           nom: string
           prix_achat: number | null
+          statut: string | null
           surface: number | null
           type_id: string | null
           updated_at: string
+          usage: string | null
+          zone: string | null
         }
         Insert: {
           adresse?: string | null
           created_at?: string
+          droit_terre?: number | null
           id?: string
+          loyer_mensuel?: number | null
+          montant_bail?: number | null
           nom: string
           prix_achat?: number | null
+          statut?: string | null
           surface?: number | null
           type_id?: string | null
           updated_at?: string
+          usage?: string | null
+          zone?: string | null
         }
         Update: {
           adresse?: string | null
           created_at?: string
+          droit_terre?: number | null
           id?: string
+          loyer_mensuel?: number | null
+          montant_bail?: number | null
           nom?: string
           prix_achat?: number | null
+          statut?: string | null
           surface?: number | null
           type_id?: string | null
           updated_at?: string
+          usage?: string | null
+          zone?: string | null
         }
         Relationships: [
           {
