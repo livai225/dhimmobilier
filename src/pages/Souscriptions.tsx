@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { SouscriptionForm } from "@/components/SouscriptionForm";
+import { SouscriptionDetailsDialog } from "@/components/SouscriptionDetailsDialog";
 import { PaiementDroitTerreDialog } from "@/components/PaiementDroitTerreDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, Eye, CreditCard, Calendar } from "lucide-react";
@@ -19,6 +20,7 @@ export default function Souscriptions() {
   const [phaseFilter, setPhaseFilter] = useState<string>("all");
   const [selectedSouscription, setSelectedSouscription] = useState<any>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
 
   const { data: souscriptions, isLoading, refetch } = useQuery({
@@ -266,7 +268,7 @@ export default function Souscriptions() {
                     size="sm"
                     onClick={() => {
                       setSelectedSouscription(souscription);
-                      setIsFormOpen(true);
+                      setIsDetailsOpen(true);
                     }}
                   >
                     <Eye className="mr-2 h-4 w-4" />
@@ -306,6 +308,21 @@ export default function Souscriptions() {
           </Card>
         ))}
       </div>
+
+      {/* Details Dialog */}
+      <SouscriptionDetailsDialog
+        open={isDetailsOpen}
+        onOpenChange={setIsDetailsOpen}
+        souscription={selectedSouscription}
+        onEdit={() => {
+          setIsDetailsOpen(false);
+          setIsFormOpen(true);
+        }}
+        onNewPayment={() => {
+          setIsDetailsOpen(false);
+          setIsPaymentDialogOpen(true);
+        }}
+      />
 
       {/* Payment Dialog */}
       <PaiementDroitTerreDialog

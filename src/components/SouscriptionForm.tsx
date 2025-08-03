@@ -24,8 +24,6 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
     montant_souscris: "",
     montant_droit_terre_mensuel: "",
     apport_initial: "",
-    montant_mensuel: "",
-    nombre_mois: "",
     date_debut: "",
     type_souscription: "classique",
     periode_finition_mois: "9",
@@ -85,8 +83,6 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
         montant_souscris: souscription.montant_souscris?.toString() || souscription.prix_total?.toString() || "",
         montant_droit_terre_mensuel: souscription.montant_droit_terre_mensuel?.toString() || "",
         apport_initial: souscription.apport_initial?.toString() || "",
-        montant_mensuel: souscription.montant_mensuel?.toString() || "",
-        nombre_mois: souscription.nombre_mois?.toString() || "",
         date_debut: souscription.date_debut || "",
         type_souscription: souscription.type_souscription || "classique",
         periode_finition_mois: souscription.periode_finition_mois?.toString() || "9",
@@ -106,10 +102,11 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
         prix_total: parseFloat(formData.montant_souscris), // Keep for backward compatibility
         montant_droit_terre_mensuel: parseFloat(formData.montant_droit_terre_mensuel) || 0,
         apport_initial: parseFloat(formData.apport_initial) || 0,
-        montant_mensuel: parseFloat(formData.montant_mensuel) || 0,
-        nombre_mois: parseInt(formData.nombre_mois) || 0,
         periode_finition_mois: parseInt(formData.periode_finition_mois),
-        solde_restant: parseFloat(formData.montant_souscris) - (parseFloat(formData.apport_initial) || 0)
+        solde_restant: parseFloat(formData.montant_souscris) - (parseFloat(formData.apport_initial) || 0),
+        // Add these for compatibility - they will be null/0 for new submissions
+        montant_mensuel: 0,
+        nombre_mois: 0
       };
 
       // Update property status to "Occupé" when creating a new subscription
@@ -257,29 +254,6 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
             />
           </div>
 
-          {formData.type_souscription === "classique" && (
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="montant_mensuel">Montant mensuel (FCFA)</Label>
-                <Input
-                  id="montant_mensuel"
-                  type="number"
-                  value={formData.montant_mensuel}
-                  onChange={(e) => setFormData({...formData, montant_mensuel: e.target.value})}
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="nombre_mois">Nombre de mois</Label>
-                <Input
-                  id="nombre_mois"
-                  type="number"
-                  value={formData.nombre_mois}
-                  onChange={(e) => setFormData({...formData, nombre_mois: e.target.value})}
-                />
-              </div>
-            </div>
-          )}
 
           <div>
             <Label htmlFor="date_debut">Date de début *</Label>
