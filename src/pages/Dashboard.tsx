@@ -132,7 +132,7 @@ export default function Dashboard() {
                     </div>
                     <div className="ml-3">
                       <p className="text-sm font-medium">{client.nom} {client.prenom}</p>
-                      <p className="text-xs text-muted-foreground">{client.telephone}</p>
+                      <p className="text-xs text-muted-foreground">{client.telephone_principal || "-"}</p>
                     </div>
                   </div>
                 ))

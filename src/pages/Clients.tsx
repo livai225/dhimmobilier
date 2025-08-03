@@ -6,40 +6,92 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, Edit, Trash2, Users } from "lucide-react";
+import { Plus, Edit, Trash2, Users, Phone, Mail, MapPin, AlertTriangle, Search, TrendingUp, Activity, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface Client {
   id: string;
   nom: string;
   prenom?: string;
-  telephone?: string;
+  telephone_principal?: string;
+  telephone_secondaire_1?: string;
+  telephone_secondaire_2?: string;
   email?: string;
   adresse?: string;
+  contact_urgence_nom?: string;
+  contact_urgence_telephone?: string;
+  contact_urgence_relation?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export default function Clients() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [formData, setFormData] = useState({
     nom: "",
     prenom: "",
-    telephone: "",
+    telephone_principal: "",
+    telephone_secondaire_1: "",
+    telephone_secondaire_2: "",
     email: "",
     adresse: "",
+    contact_urgence_nom: "",
+    contact_urgence_telephone: "",
+    contact_urgence_relation: "",
   });
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // Fetch clients
   const { data: clients, isLoading } = useQuery({
     queryKey: ['clients'],
     queryFn: async () => {
       const { data, error } = await supabase.from('clients').select('*').order('nom');
       if (error) throw error;
       return data;
+    },
+  });
+
+  // Fetch client statistics
+  const { data: stats } = useQuery({
+    queryKey: ['client-stats'],
+    queryFn: async () => {
+      const [
+        { count: totalClients },
+        { data: recentClients },
+        { data: locations },
+        { data: souscriptions }
+      ] = await Promise.all([
+        supabase.from('clients').select('*', { count: 'exact', head: true }),
+        supabase.from('clients').select('*').order('created_at', { ascending: false }).limit(5),
+        supabase.from('locations').select('client_id').eq('statut', 'active'),
+        supabase.from('souscriptions').select('client_id').eq('statut', 'active')
+      ]);
+
+      const activeRentals = locations?.length || 0;
+      const activeSubscriptions = souscriptions?.length || 0;
+      const thisMonth = new Date();
+      thisMonth.setDate(1);
+      const newClientsThisMonth = recentClients?.filter(client => 
+        new Date(client.created_at) >= thisMonth
+      ).length || 0;
+
+      return {
+        totalClients: totalClients || 0,
+        newClientsThisMonth,
+        activeRentals,
+        activeSubscriptions,
+        recentClients: recentClients || []
+      };
     },
   });
 
@@ -51,6 +103,7 @@ export default function Clients() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clients'] });
+      queryClient.invalidateQueries({ queryKey: ['client-stats'] });
       setIsDialogOpen(false);
       resetForm();
       toast({
@@ -68,13 +121,14 @@ export default function Clients() {
   });
 
   const updateClient = useMutation({
-    mutationFn: async ({ id, ...clientData }: Client) => {
+    mutationFn: async ({ id, ...clientData }: any) => {
       const { data, error } = await supabase.from('clients').update(clientData).eq('id', id).select();
       if (error) throw error;
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clients'] });
+      queryClient.invalidateQueries({ queryKey: ['client-stats'] });
       setIsDialogOpen(false);
       resetForm();
       setEditingClient(null);
@@ -99,6 +153,7 @@ export default function Clients() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clients'] });
+      queryClient.invalidateQueries({ queryKey: ['client-stats'] });
       toast({
         title: "Client supprimé",
         description: "Le client a été supprimé avec succès.",
@@ -117,9 +172,14 @@ export default function Clients() {
     setFormData({
       nom: "",
       prenom: "",
-      telephone: "",
+      telephone_principal: "",
+      telephone_secondaire_1: "",
+      telephone_secondaire_2: "",
       email: "",
       adresse: "",
+      contact_urgence_nom: "",
+      contact_urgence_telephone: "",
+      contact_urgence_relation: "",
     });
   };
 
@@ -137,9 +197,14 @@ export default function Clients() {
     setFormData({
       nom: client.nom,
       prenom: client.prenom || "",
-      telephone: client.telephone || "",
+      telephone_principal: client.telephone_principal || "",
+      telephone_secondaire_1: client.telephone_secondaire_1 || "",
+      telephone_secondaire_2: client.telephone_secondaire_2 || "",
       email: client.email || "",
       adresse: client.adresse || "",
+      contact_urgence_nom: client.contact_urgence_nom || "",
+      contact_urgence_telephone: client.contact_urgence_telephone || "",
+      contact_urgence_relation: client.contact_urgence_relation || "",
     });
     setIsDialogOpen(true);
   };
@@ -150,8 +215,21 @@ export default function Clients() {
     }
   };
 
+  const filteredClients = clients?.filter(client =>
+    client.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    client.prenom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    client.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    client.telephone_principal?.includes(searchTerm)
+  ) || [];
+
+  const formatPhone = (phone?: string) => {
+    if (!phone) return "-";
+    return phone;
+  };
+
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Clients</h2>
@@ -166,7 +244,7 @@ export default function Clients() {
               Nouveau client
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
+          <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
                 {editingClient ? "Modifier le client" : "Nouveau client"}
@@ -179,66 +257,111 @@ export default function Clients() {
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit}>
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="nom" className="text-right">
-                    Nom *
-                  </Label>
-                  <Input
-                    id="nom"
-                    value={formData.nom}
-                    onChange={(e) => setFormData({ ...formData, nom: e.target.value })}
-                    className="col-span-3"
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="prenom" className="text-right">
-                    Prénom
-                  </Label>
-                  <Input
-                    id="prenom"
-                    value={formData.prenom}
-                    onChange={(e) => setFormData({ ...formData, prenom: e.target.value })}
-                    className="col-span-3"
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="telephone" className="text-right">
-                    Téléphone
-                  </Label>
-                  <Input
-                    id="telephone"
-                    value={formData.telephone}
-                    onChange={(e) => setFormData({ ...formData, telephone: e.target.value })}
-                    className="col-span-3"
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="email" className="text-right">
-                    Email
-                  </Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="col-span-3"
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="adresse" className="text-right">
-                    Adresse
-                  </Label>
-                  <Textarea
-                    id="adresse"
-                    value={formData.adresse}
-                    onChange={(e) => setFormData({ ...formData, adresse: e.target.value })}
-                    className="col-span-3"
-                  />
-                </div>
-              </div>
-              <DialogFooter>
+              <Tabs defaultValue="basic" className="w-full">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="basic">Informations de base</TabsTrigger>
+                  <TabsTrigger value="contact">Contact d'urgence</TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="basic" className="space-y-4">
+                  <div className="grid gap-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="nom">Nom *</Label>
+                        <Input
+                          id="nom"
+                          value={formData.nom}
+                          onChange={(e) => setFormData({ ...formData, nom: e.target.value })}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="prenom">Prénom</Label>
+                        <Input
+                          id="prenom"
+                          value={formData.prenom}
+                          onChange={(e) => setFormData({ ...formData, prenom: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="email">Email</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        value={formData.email}
+                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label>Numéros de téléphone</Label>
+                      <div className="space-y-2">
+                        <Input
+                          placeholder="Téléphone principal"
+                          value={formData.telephone_principal}
+                          onChange={(e) => setFormData({ ...formData, telephone_principal: e.target.value })}
+                        />
+                        <Input
+                          placeholder="Téléphone secondaire 1"
+                          value={formData.telephone_secondaire_1}
+                          onChange={(e) => setFormData({ ...formData, telephone_secondaire_1: e.target.value })}
+                        />
+                        <Input
+                          placeholder="Téléphone secondaire 2"
+                          value={formData.telephone_secondaire_2}
+                          onChange={(e) => setFormData({ ...formData, telephone_secondaire_2: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="adresse">Adresse</Label>
+                      <Textarea
+                        id="adresse"
+                        value={formData.adresse}
+                        onChange={(e) => setFormData({ ...formData, adresse: e.target.value })}
+                        rows={3}
+                      />
+                    </div>
+                  </div>
+                </TabsContent>
+                
+                <TabsContent value="contact" className="space-y-4">
+                  <div className="grid gap-4">
+                    <div>
+                      <Label htmlFor="contact_urgence_nom">Nom du contact d'urgence</Label>
+                      <Input
+                        id="contact_urgence_nom"
+                        value={formData.contact_urgence_nom}
+                        onChange={(e) => setFormData({ ...formData, contact_urgence_nom: e.target.value })}
+                      />
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="contact_urgence_telephone">Téléphone du contact d'urgence</Label>
+                      <Input
+                        id="contact_urgence_telephone"
+                        value={formData.contact_urgence_telephone}
+                        onChange={(e) => setFormData({ ...formData, contact_urgence_telephone: e.target.value })}
+                      />
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="contact_urgence_relation">Relation</Label>
+                      <Input
+                        id="contact_urgence_relation"
+                        placeholder="Ex: Époux/Épouse, Fils/Fille, Ami..."
+                        value={formData.contact_urgence_relation}
+                        onChange={(e) => setFormData({ ...formData, contact_urgence_relation: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                </TabsContent>
+              </Tabs>
+              
+              <DialogFooter className="mt-6">
                 <Button type="submit" disabled={createClient.isPending || updateClient.isPending}>
                   {editingClient ? "Modifier" : "Créer"}
                 </Button>
@@ -248,6 +371,157 @@ export default function Clients() {
         </Dialog>
       </div>
 
+      {/* Dashboard Statistics */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Clients</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats?.totalClients || 0}</div>
+            <p className="text-xs text-muted-foreground">
+              {stats?.newClientsThisMonth || 0} nouveaux ce mois
+            </p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Locations Actives</CardTitle>
+            <Activity className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats?.activeRentals || 0}</div>
+            <p className="text-xs text-muted-foreground">
+              Contrats en cours
+            </p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Souscriptions</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats?.activeSubscriptions || 0}</div>
+            <p className="text-xs text-muted-foreground">
+              Actives
+            </p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Croissance</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">+{stats?.newClientsThisMonth || 0}</div>
+            <p className="text-xs text-muted-foreground">
+              Ce mois-ci
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Search Bar */}
+      <div className="flex items-center space-x-2">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Rechercher un client..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-8"
+          />
+        </div>
+      </div>
+
+      {/* Client Details Dialog */}
+      <Dialog open={!!selectedClient} onOpenChange={() => setSelectedClient(null)}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Eye className="h-5 w-5" />
+              Détails du client
+            </DialogTitle>
+          </DialogHeader>
+          {selectedClient && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <h4 className="font-semibold">Nom complet</h4>
+                  <p>{selectedClient.nom} {selectedClient.prenom}</p>
+                </div>
+                <div>
+                  <h4 className="font-semibold">Email</h4>
+                  <p>{selectedClient.email || "-"}</p>
+                </div>
+              </div>
+              
+              <Separator />
+              
+              <div>
+                <h4 className="font-semibold mb-2">Numéros de téléphone</h4>
+                <div className="space-y-1">
+                  {selectedClient.telephone_principal && (
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-4 w-4" />
+                      <span className="text-sm">Principal: {selectedClient.telephone_principal}</span>
+                    </div>
+                  )}
+                  {selectedClient.telephone_secondaire_1 && (
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-4 w-4" />
+                      <span className="text-sm">Secondaire 1: {selectedClient.telephone_secondaire_1}</span>
+                    </div>
+                  )}
+                  {selectedClient.telephone_secondaire_2 && (
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-4 w-4" />
+                      <span className="text-sm">Secondaire 2: {selectedClient.telephone_secondaire_2}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              {selectedClient.contact_urgence_nom && (
+                <>
+                  <Separator />
+                  <div>
+                    <h4 className="font-semibold mb-2 flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4" />
+                      Contact d'urgence
+                    </h4>
+                    <div className="space-y-1">
+                      <p><strong>Nom:</strong> {selectedClient.contact_urgence_nom}</p>
+                      <p><strong>Téléphone:</strong> {selectedClient.contact_urgence_telephone}</p>
+                      <p><strong>Relation:</strong> {selectedClient.contact_urgence_relation}</p>
+                    </div>
+                  </div>
+                </>
+              )}
+              
+              {selectedClient.adresse && (
+                <>
+                  <Separator />
+                  <div>
+                    <h4 className="font-semibold mb-2 flex items-center gap-2">
+                      <MapPin className="h-4 w-4" />
+                      Adresse
+                    </h4>
+                    <p>{selectedClient.adresse}</p>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Clients Table */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -255,18 +529,24 @@ export default function Clients() {
             Liste des clients
           </CardTitle>
           <CardDescription>
-            {clients?.length || 0} client{(clients?.length || 0) !== 1 ? 's' : ''} enregistré{(clients?.length || 0) !== 1 ? 's' : ''}
+            {filteredClients.length} client{filteredClients.length !== 1 ? 's' : ''} 
+            {searchTerm && ` trouvé${filteredClients.length !== 1 ? 's' : ''} pour "${searchTerm}"`}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
             <p>Chargement...</p>
-          ) : clients?.length === 0 ? (
+          ) : filteredClients.length === 0 ? (
             <div className="text-center py-10">
               <Users className="mx-auto h-12 w-12 text-muted-foreground" />
-              <h3 className="mt-2 text-sm font-semibold">Aucun client</h3>
+              <h3 className="mt-2 text-sm font-semibold">
+                {searchTerm ? "Aucun client trouvé" : "Aucun client"}
+              </h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                Commencez par créer votre premier client.
+                {searchTerm 
+                  ? "Essayez avec d'autres termes de recherche."
+                  : "Commencez par créer votre premier client."
+                }
               </p>
             </div>
           ) : (
@@ -274,21 +554,74 @@ export default function Clients() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Nom</TableHead>
-                  <TableHead>Prénom</TableHead>
-                  <TableHead>Téléphone</TableHead>
-                  <TableHead>Email</TableHead>
+                  <TableHead>Contact</TableHead>
+                  <TableHead>Téléphones</TableHead>
+                  <TableHead>Urgence</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {clients?.map((client) => (
+                {filteredClients.map((client) => (
                   <TableRow key={client.id}>
-                    <TableCell className="font-medium">{client.nom}</TableCell>
-                    <TableCell>{client.prenom}</TableCell>
-                    <TableCell>{client.telephone}</TableCell>
-                    <TableCell>{client.email}</TableCell>
+                    <TableCell>
+                      <div>
+                        <div className="font-medium">{client.nom} {client.prenom}</div>
+                        {client.adresse && (
+                          <div className="text-sm text-muted-foreground flex items-center gap-1">
+                            <MapPin className="h-3 w-3" />
+                            {client.adresse.substring(0, 30)}...
+                          </div>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
+                        {client.email && (
+                          <div className="flex items-center gap-1 text-sm">
+                            <Mail className="h-3 w-3" />
+                            {client.email}
+                          </div>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
+                        {client.telephone_principal && (
+                          <div className="flex items-center gap-1 text-sm">
+                            <Phone className="h-3 w-3" />
+                            {formatPhone(client.telephone_principal)}
+                            <Badge variant="outline" className="ml-1 text-xs">Principal</Badge>
+                          </div>
+                        )}
+                        {client.telephone_secondaire_1 && (
+                          <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                            <Phone className="h-3 w-3" />
+                            {formatPhone(client.telephone_secondaire_1)}
+                          </div>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {client.contact_urgence_nom ? (
+                        <div className="flex items-center gap-1">
+                          <AlertTriangle className="h-4 w-4 text-orange-500" />
+                          <Badge variant="secondary" className="text-xs">
+                            {client.contact_urgence_nom}
+                          </Badge>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSelectedClient(client)}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
                         <Button
                           variant="outline"
                           size="sm"
