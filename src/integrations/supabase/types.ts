@@ -14,7 +14,469 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      clients: {
+        Row: {
+          adresse: string | null
+          created_at: string
+          email: string | null
+          id: string
+          nom: string
+          prenom: string | null
+          telephone: string | null
+          updated_at: string
+        }
+        Insert: {
+          adresse?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          nom: string
+          prenom?: string | null
+          telephone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          adresse?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          nom?: string
+          prenom?: string | null
+          telephone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      factures_fournisseurs: {
+        Row: {
+          created_at: string
+          date_facture: string
+          description: string | null
+          fournisseur_id: string
+          id: string
+          montant_paye: number
+          montant_total: number
+          numero: string
+          propriete_id: string | null
+          solde: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          date_facture: string
+          description?: string | null
+          fournisseur_id: string
+          id?: string
+          montant_paye?: number
+          montant_total?: number
+          numero: string
+          propriete_id?: string | null
+          solde?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          date_facture?: string
+          description?: string | null
+          fournisseur_id?: string
+          id?: string
+          montant_paye?: number
+          montant_total?: number
+          numero?: string
+          propriete_id?: string | null
+          solde?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "factures_fournisseurs_fournisseur_id_fkey"
+            columns: ["fournisseur_id"]
+            isOneToOne: false
+            referencedRelation: "fournisseurs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "factures_fournisseurs_propriete_id_fkey"
+            columns: ["propriete_id"]
+            isOneToOne: false
+            referencedRelation: "proprietes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fournisseurs: {
+        Row: {
+          adresse: string | null
+          contact: string | null
+          created_at: string
+          email: string | null
+          id: string
+          nom: string
+          telephone: string | null
+          updated_at: string
+        }
+        Insert: {
+          adresse?: string | null
+          contact?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          nom: string
+          telephone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          adresse?: string | null
+          contact?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          nom?: string
+          telephone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      locations: {
+        Row: {
+          caution: number
+          client_id: string
+          created_at: string
+          date_debut: string
+          date_fin: string | null
+          dette_totale: number
+          id: string
+          loyer_mensuel: number
+          propriete_id: string
+          statut: string
+          updated_at: string
+        }
+        Insert: {
+          caution?: number
+          client_id: string
+          created_at?: string
+          date_debut: string
+          date_fin?: string | null
+          dette_totale?: number
+          id?: string
+          loyer_mensuel: number
+          propriete_id: string
+          statut?: string
+          updated_at?: string
+        }
+        Update: {
+          caution?: number
+          client_id?: string
+          created_at?: string
+          date_debut?: string
+          date_fin?: string | null
+          dette_totale?: number
+          id?: string
+          loyer_mensuel?: number
+          propriete_id?: string
+          statut?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "locations_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "locations_propriete_id_fkey"
+            columns: ["propriete_id"]
+            isOneToOne: false
+            referencedRelation: "proprietes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      paiements_factures: {
+        Row: {
+          created_at: string
+          date_paiement: string
+          facture_id: string
+          id: string
+          mode_paiement: string | null
+          montant: number
+          reference: string | null
+        }
+        Insert: {
+          created_at?: string
+          date_paiement: string
+          facture_id: string
+          id?: string
+          mode_paiement?: string | null
+          montant: number
+          reference?: string | null
+        }
+        Update: {
+          created_at?: string
+          date_paiement?: string
+          facture_id?: string
+          id?: string
+          mode_paiement?: string | null
+          montant?: number
+          reference?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paiements_factures_facture_id_fkey"
+            columns: ["facture_id"]
+            isOneToOne: false
+            referencedRelation: "factures_fournisseurs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      paiements_locations: {
+        Row: {
+          created_at: string
+          date_paiement: string
+          id: string
+          location_id: string
+          mode_paiement: string | null
+          montant: number
+          reference: string | null
+        }
+        Insert: {
+          created_at?: string
+          date_paiement: string
+          id?: string
+          location_id: string
+          mode_paiement?: string | null
+          montant: number
+          reference?: string | null
+        }
+        Update: {
+          created_at?: string
+          date_paiement?: string
+          id?: string
+          location_id?: string
+          mode_paiement?: string | null
+          montant?: number
+          reference?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paiements_locations_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      paiements_souscriptions: {
+        Row: {
+          created_at: string
+          date_paiement: string
+          id: string
+          mode_paiement: string | null
+          montant: number
+          reference: string | null
+          souscription_id: string
+        }
+        Insert: {
+          created_at?: string
+          date_paiement: string
+          id?: string
+          mode_paiement?: string | null
+          montant: number
+          reference?: string | null
+          souscription_id: string
+        }
+        Update: {
+          created_at?: string
+          date_paiement?: string
+          id?: string
+          mode_paiement?: string | null
+          montant?: number
+          reference?: string | null
+          souscription_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paiements_souscriptions_souscription_id_fkey"
+            columns: ["souscription_id"]
+            isOneToOne: false
+            referencedRelation: "souscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      proprietes: {
+        Row: {
+          adresse: string | null
+          created_at: string
+          id: string
+          nom: string
+          prix_achat: number | null
+          surface: number | null
+          type_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          adresse?: string | null
+          created_at?: string
+          id?: string
+          nom: string
+          prix_achat?: number | null
+          surface?: number | null
+          type_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          adresse?: string | null
+          created_at?: string
+          id?: string
+          nom?: string
+          prix_achat?: number | null
+          surface?: number | null
+          type_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proprietes_type_id_fkey"
+            columns: ["type_id"]
+            isOneToOne: false
+            referencedRelation: "types_proprietes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recus: {
+        Row: {
+          client_id: string
+          created_at: string
+          date_generation: string
+          id: string
+          montant_total: number
+          numero: string
+          periode_debut: string | null
+          periode_fin: string | null
+          reference_id: string
+          type_operation: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          date_generation?: string
+          id?: string
+          montant_total: number
+          numero: string
+          periode_debut?: string | null
+          periode_fin?: string | null
+          reference_id: string
+          type_operation: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          date_generation?: string
+          id?: string
+          montant_total?: number
+          numero?: string
+          periode_debut?: string | null
+          periode_fin?: string | null
+          reference_id?: string
+          type_operation?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recus_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      souscriptions: {
+        Row: {
+          apport_initial: number
+          client_id: string
+          created_at: string
+          date_debut: string
+          id: string
+          montant_mensuel: number
+          nombre_mois: number
+          prix_total: number
+          propriete_id: string
+          solde_restant: number
+          statut: string
+          updated_at: string
+        }
+        Insert: {
+          apport_initial?: number
+          client_id: string
+          created_at?: string
+          date_debut: string
+          id?: string
+          montant_mensuel: number
+          nombre_mois: number
+          prix_total: number
+          propriete_id: string
+          solde_restant: number
+          statut?: string
+          updated_at?: string
+        }
+        Update: {
+          apport_initial?: number
+          client_id?: string
+          created_at?: string
+          date_debut?: string
+          id?: string
+          montant_mensuel?: number
+          nombre_mois?: number
+          prix_total?: number
+          propriete_id?: string
+          solde_restant?: number
+          statut?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "souscriptions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "souscriptions_propriete_id_fkey"
+            columns: ["propriete_id"]
+            isOneToOne: false
+            referencedRelation: "proprietes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      types_proprietes: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          nom: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          nom: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          nom?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
