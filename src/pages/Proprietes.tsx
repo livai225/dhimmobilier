@@ -41,7 +41,7 @@ export default function Proprietes() {
     adresse: "",
     type_id: "",
     surface: "",
-    prix_achat: "",
+    prix_achat: "", // Gardé pour l'édition uniquement
     statut: "Libre",
     zone: "",
     usage: "Location",
@@ -91,7 +91,7 @@ export default function Proprietes() {
         nom: proprieteData.nom,
         adresse: proprieteData.adresse || null,
         surface: proprieteData.surface ? parseFloat(proprieteData.surface) : null,
-        prix_achat: proprieteData.prix_achat ? parseFloat(proprieteData.prix_achat) : null,
+        // prix_achat retiré pour la création
         type_id: proprieteData.type_id || null,
         statut: proprieteData.statut,
         zone: proprieteData.zone || null,
@@ -305,24 +305,27 @@ export default function Proprietes() {
                     className="col-span-3"
                   />
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="prix_achat" className="text-right">
-                    Prix d'achat (FCFA)
-                  </Label>
-                  <div className="col-span-3 relative">
-                    <Input
-                      id="prix_achat"
-                      type="number"
-                      step="0.01"
-                      value={formData.prix_achat}
-                      onChange={(e) => setFormData({ ...formData, prix_achat: e.target.value })}
-                      className="pr-12"
-                    />
-                    <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground text-sm">
-                      FCFA
-                    </span>
+                {/* Prix d'achat - affiché uniquement en mode édition */}
+                {editingPropriete && (
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="prix_achat" className="text-right">
+                      Prix d'achat (FCFA)
+                    </Label>
+                    <div className="col-span-3 relative">
+                      <Input
+                        id="prix_achat"
+                        type="number"
+                        step="0.01"
+                        value={formData.prix_achat}
+                        onChange={(e) => setFormData({ ...formData, prix_achat: e.target.value })}
+                        className="pr-12"
+                      />
+                      <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground text-sm">
+                        FCFA
+                      </span>
+                    </div>
                   </div>
-                </div>
+                )}
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="statut" className="text-right">
                     Statut *
