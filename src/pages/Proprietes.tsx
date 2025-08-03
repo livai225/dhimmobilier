@@ -11,6 +11,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Plus, Edit, Trash2, Building } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { PropertyDetailsDialog } from "@/components/PropertyDetailsDialog";
 
 interface Propriete {
   id: string;
@@ -528,6 +529,7 @@ export default function Proprietes() {
                     <TableCell className="max-w-xs truncate">{propriete.adresse || "-"}</TableCell>
                     <TableCell>
                       <div className="flex gap-2">
+                        <PropertyDetailsDialog propriete={propriete} />
                         <Button
                           variant="outline"
                           size="sm"
