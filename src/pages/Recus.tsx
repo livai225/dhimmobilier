@@ -14,8 +14,8 @@ import { supabase } from "@/integrations/supabase/client";
 
 export default function Recus() {
   const [filters, setFilters] = useState({
-    type_operation: "",
-    client_id: "",
+    type_operation: "all",
+    client_id: "all",
     search: "",
   });
   
@@ -149,7 +149,7 @@ export default function Recus() {
                 <SelectValue placeholder="Type d'opération" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Tous les types</SelectItem>
+                <SelectItem value="all">Tous les types</SelectItem>
                 {Object.entries(operationTypes).map(([key, { label }]) => (
                   <SelectItem key={key} value={key}>{label}</SelectItem>
                 ))}
@@ -164,7 +164,7 @@ export default function Recus() {
                 <SelectValue placeholder="Client" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Tous les clients</SelectItem>
+                <SelectItem value="all">Tous les clients</SelectItem>
                 {clients?.map((client) => (
                   <SelectItem key={client.id} value={client.id}>
                     {client.nom} {client.prenom}
@@ -175,7 +175,7 @@ export default function Recus() {
 
             <Button 
               variant="outline" 
-              onClick={() => setFilters({ type_operation: "", client_id: "", search: "" })}
+              onClick={() => setFilters({ type_operation: "all", client_id: "all", search: "" })}
             >
               Réinitialiser
             </Button>

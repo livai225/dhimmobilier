@@ -37,11 +37,11 @@ export const useReceipts = (filters?: {
         `)
         .order("date_generation", { ascending: false });
 
-      if (filters?.type_operation) {
+      if (filters?.type_operation && filters.type_operation !== "all") {
         query = query.eq("type_operation", filters.type_operation);
       }
 
-      if (filters?.client_id) {
+      if (filters?.client_id && filters.client_id !== "all") {
         query = query.eq("client_id", filters.client_id);
       }
 
