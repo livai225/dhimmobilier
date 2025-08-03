@@ -241,12 +241,16 @@ export type Database = {
       locations: {
         Row: {
           caution: number
+          caution_totale: number | null
           client_id: string
           created_at: string
           date_debut: string
           date_fin: string | null
           dette_totale: number
+          frais_agence_1_mois: number | null
+          garantie_2_mois: number | null
           id: string
+          loyer_avance_2_mois: number | null
           loyer_mensuel: number
           propriete_id: string
           statut: string
@@ -254,12 +258,16 @@ export type Database = {
         }
         Insert: {
           caution?: number
+          caution_totale?: number | null
           client_id: string
           created_at?: string
           date_debut: string
           date_fin?: string | null
           dette_totale?: number
+          frais_agence_1_mois?: number | null
+          garantie_2_mois?: number | null
           id?: string
+          loyer_avance_2_mois?: number | null
           loyer_mensuel: number
           propriete_id: string
           statut?: string
@@ -267,12 +275,16 @@ export type Database = {
         }
         Update: {
           caution?: number
+          caution_totale?: number | null
           client_id?: string
           created_at?: string
           date_debut?: string
           date_fin?: string | null
           dette_totale?: number
+          frais_agence_1_mois?: number | null
+          garantie_2_mois?: number | null
           id?: string
+          loyer_avance_2_mois?: number | null
           loyer_mensuel?: number
           propriete_id?: string
           statut?: string
