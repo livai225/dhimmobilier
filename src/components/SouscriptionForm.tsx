@@ -35,7 +35,7 @@ const souscriptionSchema = z.object({
   montant_droit_terre_mensuel: z.string().optional(),
   apport_initial: z.string().optional(),
   date_debut: z.string().min(1, "La date de début est obligatoire"),
-  type_souscription: z.enum(["classique"]),
+  type_souscription: z.enum(["classique"]).default("classique"),
   periode_finition_mois: z.string().optional(),
   type_bien: z.string().optional(),
   statut: z.string().default("active"),
@@ -62,7 +62,7 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
       montant_droit_terre_mensuel: souscription?.montant_droit_terre_mensuel?.toString() || "",
       apport_initial: souscription?.apport_initial?.toString() || "",
       date_debut: souscription?.date_debut || "",
-      type_souscription: souscription?.type_souscription || "classique",
+      type_souscription: "classique",
       periode_finition_mois: souscription?.periode_finition_mois?.toString() || "9",
       type_bien: souscription?.type_bien || "",
       statut: souscription?.statut || "active",
@@ -262,30 +262,6 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
               />
             </div>
 
-            <FormField
-              control={form.control}
-              name="type_souscription"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>
-                    Type de souscription <span className="text-destructive">*</span>
-                  </FormLabel>
-                  <FormControl>
-                    <RadioGroup 
-                      onValueChange={field.onChange} 
-                      defaultValue={field.value}
-                      className="flex gap-6 mt-2"
-                    >
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="classique" id="classique" />
-                        <label htmlFor="classique">Classique</label>
-                      </div>
-                    </RadioGroup>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
           </CardContent>
         </Card>
 
