@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { SouscriptionForm } from "@/components/SouscriptionForm";
 import { SouscriptionDetailsDialog } from "@/components/SouscriptionDetailsDialog";
-import { PaiementDroitTerreDialog } from "@/components/PaiementDroitTerreDialog";
+import { PaiementSouscriptionEcheanceDialog } from "@/components/PaiementSouscriptionEcheanceDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, Eye, CreditCard, Calendar, Trash2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
@@ -53,7 +53,31 @@ export default function Souscriptions() {
     },
   });
 
-  const generateEcheances = async (souscriptionId: string) => {
+  const generateEcheancesSouscription = async (souscriptionId: string) => {
+    try {
+      const { error } = await supabase.rpc("generate_echeances_souscription", {
+        souscription_uuid: souscriptionId
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Succès",
+        description: "Les échéances de souscription ont été générées.",
+      });
+
+      refetch();
+    } catch (error) {
+      console.error("Error generating échéances souscription:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de générer les échéances de souscription.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const generateEcheancesDroitTerre = async (souscriptionId: string) => {
     try {
       const { error } = await supabase.rpc("generate_echeances_droit_terre", {
         souscription_uuid: souscriptionId
@@ -68,10 +92,10 @@ export default function Souscriptions() {
 
       refetch();
     } catch (error) {
-      console.error("Error generating écheances:", error);
+      console.error("Error generating écheances droit terre:", error);
       toast({
         title: "Erreur",
-        description: "Impossible de générer les échéances.",
+        description: "Impossible de générer les échéances de droit de terre.",
         variant: "destructive",
       });
     }
@@ -285,6 +309,20 @@ export default function Souscriptions() {
                     Détails
                   </Button>
 
+                  {/* Bouton pour générer les échéances de souscription classique */}
+                  {souscription.type_souscription === "classique" && 
+                   souscription.solde_restant > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => generateEcheancesSouscription(souscription.id)}
+                    >
+                      <Calendar className="mr-2 h-4 w-4" />
+                      Générer échéances
+                    </Button>
+                  )}
+
+                  {/* Bouton pour générer les échéances de droit de terre */}
                   {souscription.type_souscription === "mise_en_garde" && 
                    souscription.phase_actuelle === "finition" && 
                    souscription.date_debut_droit_terre && 
@@ -292,14 +330,16 @@ export default function Souscriptions() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => generateEcheances(souscription.id)}
+                      onClick={() => generateEcheancesDroitTerre(souscription.id)}
                     >
                       <Calendar className="mr-2 h-4 w-4" />
-                      Générer échéances
+                      Échéances droit de terre
                     </Button>
                   )}
 
-                  {souscription.phase_actuelle === "droit_terre" && (
+                  {/* Bouton pour paiement d'échéances */}
+                  {((souscription.type_souscription === "classique" && souscription.solde_restant > 0) ||
+                    (souscription.type_souscription === "mise_en_garde" && souscription.phase_actuelle === "droit_terre")) && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -309,7 +349,7 @@ export default function Souscriptions() {
                       }}
                     >
                       <CreditCard className="mr-2 h-4 w-4" />
-                      Paiement
+                      {souscription.type_souscription === "classique" ? "Paiement échéance" : "Paiement droit terre"}
                     </Button>
                   )}
 
@@ -344,7 +384,7 @@ export default function Souscriptions() {
       />
 
       {/* Payment Dialog */}
-      <PaiementDroitTerreDialog
+      <PaiementSouscriptionEcheanceDialog
         open={isPaymentDialogOpen}
         onOpenChange={setIsPaymentDialogOpen}
         souscription={selectedSouscription}

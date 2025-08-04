@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 export interface ReceiptData {
   clientId: string;
   referenceId: string;
-  typeOperation: "caution_location" | "apport_souscription" | "droit_terre" | "paiement_facture" | "location";
+  typeOperation: "caution_location" | "apport_souscription" | "droit_terre" | "paiement_facture" | "location" | "paiement_souscription";
   montantTotal: number;
   periodeDebut?: string;
   periodeFin?: string;
@@ -23,7 +23,8 @@ export class ReceiptGenerator {
       apport_souscription: "REC-SOUS", 
       droit_terre: "REC-DTER",
       paiement_facture: "REC-FACT",
-      location: "REC-LOC"
+      location: "REC-LOC",
+      paiement_souscription: "REC-PAYS"
     };
     
     return `${prefixes[type] || "REC-GEN"}-${year}${month}${day}-${random}`;
@@ -55,5 +56,15 @@ export class ReceiptGenerator {
       console.error("Error creating receipt:", error);
       throw error;
     }
+  }
+
+  static generateSouscriptionPaymentReceipt(receiptData: any, souscription: any) {
+    // For now, just log the receipt data
+    // This method can be extended to generate a PDF or print receipt
+    console.log("Reçu de paiement de souscription:", receiptData);
+    console.log("Données de souscription:", souscription);
+    
+    // TODO: Implement PDF generation or print functionality
+    return receiptData;
   }
 }
