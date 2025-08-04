@@ -314,6 +314,51 @@ export function SouscriptionDetailsDialog({
                 </CardContent>
               </Card>
             )}
+
+            {/* Droit de terre Information */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Calendar className="h-5 w-5" />
+                  Droit de terre
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="p-4 bg-muted/50 rounded-lg">
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Le client devra commencer à payer le droit de terre :
+                  </p>
+                  <p className="font-medium mb-3">
+                    À partir du {souscription.date_debut ? format(new Date(souscription.date_debut), "dd MMMM yyyy", { locale: fr }) : "-"}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Période de paiement : <span className="font-medium">20 ans (240 mois)</span>
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Montant mensuel</p>
+                    <p className="font-bold text-lg">
+                      {(souscription.montant_droit_terre_mensuel || 0).toLocaleString()} FCFA
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total sur 20 ans</p>
+                    <p className="font-bold text-lg">
+                      {((souscription.montant_droit_terre_mensuel || 0) * 240).toLocaleString()} FCFA
+                    </p>
+                  </div>
+                </div>
+
+                {souscription.type_bien && (
+                  <div className="pt-3 border-t">
+                    <p className="text-sm text-muted-foreground">Type de bien</p>
+                    <p className="font-medium">{souscription.type_bien}</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
 
           {/* Right Column - Payment History */}
