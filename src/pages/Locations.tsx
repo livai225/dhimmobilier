@@ -105,15 +105,15 @@ export default function Locations() {
   }
 
   return (
-    <div className="container mx-auto p-6">
-      <div className="flex justify-between items-center mb-6">
+    <div className="container mx-auto p-4 lg:p-6">
+      <div className="flex flex-col space-y-4 lg:flex-row lg:items-center lg:justify-between lg:space-y-0 mb-6">
         <div>
-          <h1 className="text-3xl font-bold">Gestion des Locations</h1>
+          <h1 className="text-2xl md:text-3xl font-bold">Gestion des Locations</h1>
           <p className="text-muted-foreground">
             Gestion des contrats de location avec système de caution 5 mois
           </p>
         </div>
-        <Button onClick={() => setShowLocationForm(true)}>
+        <Button onClick={() => setShowLocationForm(true)} className="w-full sm:w-auto">
           <Plus className="w-4 h-4 mr-2" />
           Nouvelle Location
         </Button>
@@ -163,7 +163,7 @@ export default function Locations() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                 <div>
                   <p className="text-sm font-medium">Locataire</p>
                   <p className="text-sm text-muted-foreground">

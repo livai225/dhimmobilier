@@ -64,10 +64,10 @@ export default function Recus() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="container mx-auto p-4 lg:p-6 space-y-6">
+      <div className="flex flex-col space-y-4 lg:flex-row lg:items-center lg:justify-between lg:space-y-0">
         <div>
-          <h1 className="text-3xl font-bold">Reçus</h1>
+          <h1 className="text-2xl md:text-3xl font-bold">Reçus</h1>
           <p className="text-muted-foreground">
             Gestion et consultation des reçus de paiement
           </p>
@@ -76,7 +76,7 @@ export default function Recus() {
 
       {/* Statistics Cards */}
       {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Reçus</CardTitle>
@@ -134,7 +134,7 @@ export default function Recus() {
           <CardTitle>Filtres</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Input
               placeholder="Rechercher par numéro..."
               value={filters.search}
@@ -176,6 +176,7 @@ export default function Recus() {
             <Button 
               variant="outline" 
               onClick={() => setFilters({ type_operation: "all", client_id: "all", search: "" })}
+              className="w-full sm:w-auto"
             >
               Réinitialiser
             </Button>
@@ -191,8 +192,9 @@ export default function Recus() {
             {receipts?.length || 0} reçu(s) trouvé(s)
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <Table>
+        <CardContent className="overflow-x-auto">
+          <div className="min-w-[700px]">
+            <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Numéro</TableHead>
@@ -240,20 +242,24 @@ export default function Recus() {
                       )}
                     </TableCell>
                     <TableCell>
-                      <div className="flex gap-2">
+                      <div className="flex flex-col sm:flex-row gap-1 sm:gap-2">
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => handleViewDetails(receipt)}
+                          className="w-full sm:w-auto"
                         >
-                          <Eye className="h-4 w-4" />
+                          <Eye className="h-4 w-4 sm:mr-2" />
+                          <span className="hidden sm:inline">Voir</span>
                         </Button>
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => handleDownload(receipt)}
+                          className="w-full sm:w-auto"
                         >
-                          <Download className="h-4 w-4" />
+                          <Download className="h-4 w-4 sm:mr-2" />
+                          <span className="hidden sm:inline">PDF</span>
                         </Button>
                       </div>
                     </TableCell>
@@ -268,7 +274,8 @@ export default function Recus() {
                 </TableRow>
               )}
             </TableBody>
-          </Table>
+            </Table>
+          </div>
         </CardContent>
       </Card>
 

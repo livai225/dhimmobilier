@@ -165,21 +165,21 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col space-y-4 lg:flex-row lg:items-center lg:justify-between lg:space-y-0">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
+          <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Dashboard</h2>
           <p className="text-muted-foreground">
             Vue d'ensemble complète de votre activité immobilière
           </p>
         </div>
         
         {/* Quick Actions */}
-        <div className="flex gap-2">
-          <Button onClick={() => navigate('/souscriptions')} size="sm">
+        <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-2">
+          <Button onClick={() => navigate('/souscriptions')} size="sm" className="w-full sm:w-auto">
             <Plus className="h-4 w-4 mr-2" />
             Souscription
           </Button>
-          <Button onClick={() => navigate('/locations')} variant="outline" size="sm">
+          <Button onClick={() => navigate('/locations')} variant="outline" size="sm" className="w-full sm:w-auto">
             <Home className="h-4 w-4 mr-2" />
             Location
           </Button>
@@ -187,7 +187,7 @@ export default function Dashboard() {
       </div>
 
       {/* Main KPIs */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Chiffre d'affaires</CardTitle>
@@ -250,7 +250,7 @@ export default function Dashboard() {
       </div>
 
       {/* Detailed Statistics */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Clients</CardTitle>
@@ -335,17 +335,17 @@ export default function Dashboard() {
       </div>
 
       {/* Charts Section */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-3">
         {/* Monthly Revenue Trend */}
-        <Card className="col-span-2">
+        <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Évolution des revenus</CardTitle>
             <CardDescription>
               Revenus mensuels par type (derniers 6 mois)
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <ChartContainer config={chartConfig} className="h-[300px]">
+          <CardContent className="px-2 sm:px-6">
+            <ChartContainer config={chartConfig} className="h-[250px] sm:h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={stats?.monthlyRevenue || []}>
                   <CartesianGrid strokeDasharray="3 3" />
@@ -385,8 +385,8 @@ export default function Dashboard() {
               Par type d'activité
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <ChartContainer config={chartConfig} className="h-[300px]">
+          <CardContent className="px-2 sm:px-6">
+            <ChartContainer config={chartConfig} className="h-[250px] sm:h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
@@ -413,7 +413,7 @@ export default function Dashboard() {
       </div>
 
       {/* Recent Activities and Alerts */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {/* Recent Subscriptions */}
         <Card>
           <CardHeader>

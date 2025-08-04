@@ -230,21 +230,21 @@ export default function Clients() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col space-y-4 lg:flex-row lg:items-center lg:justify-between lg:space-y-0">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Clients</h2>
+          <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Clients</h2>
           <p className="text-muted-foreground">
             Gérez vos clients et leurs informations
           </p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button onClick={() => { resetForm(); setEditingClient(null); }}>
+            <Button onClick={() => { resetForm(); setEditingClient(null); }} className="w-full sm:w-auto">
               <Plus className="mr-2 h-4 w-4" />
               Nouveau client
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+          <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto mx-4">
             <DialogHeader>
               <DialogTitle>
                 {editingClient ? "Modifier le client" : "Nouveau client"}
@@ -265,7 +265,7 @@ export default function Clients() {
                 
                 <TabsContent value="basic" className="space-y-4">
                   <div className="grid gap-4">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor="nom">Nom *</Label>
                         <Input
@@ -372,7 +372,7 @@ export default function Clients() {
       </div>
 
       {/* Dashboard Statistics */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Clients</CardTitle>
@@ -441,7 +441,7 @@ export default function Clients() {
 
       {/* Client Details Dialog */}
       <Dialog open={!!selectedClient} onOpenChange={() => setSelectedClient(null)}>
-        <DialogContent className="sm:max-w-[600px]">
+        <DialogContent className="sm:max-w-[600px] mx-4">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Eye className="h-5 w-5" />
@@ -450,7 +450,7 @@ export default function Clients() {
           </DialogHeader>
           {selectedClient && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <h4 className="font-semibold">Nom complet</h4>
                   <p>{selectedClient.nom} {selectedClient.prenom}</p>

@@ -233,16 +233,16 @@ export default function Proprietes() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col space-y-4 lg:flex-row lg:items-center lg:justify-between lg:space-y-0">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Propriétés</h2>
+          <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Propriétés</h2>
           <p className="text-muted-foreground">
             Gérez votre portefeuille immobilier
           </p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button onClick={() => { resetForm(); setEditingPropriete(null); }}>
+            <Button onClick={() => { resetForm(); setEditingPropriete(null); }} className="w-full sm:w-auto">
               <Plus className="mr-2 h-4 w-4" />
               Nouvelle propriété
             </Button>

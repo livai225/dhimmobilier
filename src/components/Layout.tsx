@@ -23,7 +23,7 @@ export function Layout({ children }: LayoutProps) {
             <ThemeToggle />
           </div>
         </div>
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {children}
         </div>
       </main>
