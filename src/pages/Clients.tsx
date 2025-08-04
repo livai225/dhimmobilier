@@ -13,6 +13,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Plus, Edit, Trash2, Users, Phone, Mail, MapPin, AlertTriangle, Search, TrendingUp, Activity, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { ClientForm } from "@/components/ClientForm";
 
 interface Client {
   id: string;
@@ -256,117 +257,16 @@ export default function Clients() {
                 }
               </DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleSubmit}>
-              <Tabs defaultValue="basic" className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="basic">Informations de base</TabsTrigger>
-                  <TabsTrigger value="contact">Contact d'urgence</TabsTrigger>
-                </TabsList>
-                
-                <TabsContent value="basic" className="space-y-4">
-                  <div className="grid gap-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="nom">Nom *</Label>
-                        <Input
-                          id="nom"
-                          value={formData.nom}
-                          onChange={(e) => setFormData({ ...formData, nom: e.target.value })}
-                          required
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="prenom">Prénom</Label>
-                        <Input
-                          id="prenom"
-                          value={formData.prenom}
-                          onChange={(e) => setFormData({ ...formData, prenom: e.target.value })}
-                        />
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <Label htmlFor="email">Email</Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        value={formData.email}
-                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      />
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label>Numéros de téléphone</Label>
-                      <div className="space-y-2">
-                        <Input
-                          placeholder="Téléphone principal"
-                          value={formData.telephone_principal}
-                          onChange={(e) => setFormData({ ...formData, telephone_principal: e.target.value })}
-                        />
-                        <Input
-                          placeholder="Téléphone secondaire 1"
-                          value={formData.telephone_secondaire_1}
-                          onChange={(e) => setFormData({ ...formData, telephone_secondaire_1: e.target.value })}
-                        />
-                        <Input
-                          placeholder="Téléphone secondaire 2"
-                          value={formData.telephone_secondaire_2}
-                          onChange={(e) => setFormData({ ...formData, telephone_secondaire_2: e.target.value })}
-                        />
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <Label htmlFor="adresse">Adresse</Label>
-                      <Textarea
-                        id="adresse"
-                        value={formData.adresse}
-                        onChange={(e) => setFormData({ ...formData, adresse: e.target.value })}
-                        rows={3}
-                      />
-                    </div>
-                  </div>
-                </TabsContent>
-                
-                <TabsContent value="contact" className="space-y-4">
-                  <div className="grid gap-4">
-                    <div>
-                      <Label htmlFor="contact_urgence_nom">Nom du contact d'urgence</Label>
-                      <Input
-                        id="contact_urgence_nom"
-                        value={formData.contact_urgence_nom}
-                        onChange={(e) => setFormData({ ...formData, contact_urgence_nom: e.target.value })}
-                      />
-                    </div>
-                    
-                    <div>
-                      <Label htmlFor="contact_urgence_telephone">Téléphone du contact d'urgence</Label>
-                      <Input
-                        id="contact_urgence_telephone"
-                        value={formData.contact_urgence_telephone}
-                        onChange={(e) => setFormData({ ...formData, contact_urgence_telephone: e.target.value })}
-                      />
-                    </div>
-                    
-                    <div>
-                      <Label htmlFor="contact_urgence_relation">Relation</Label>
-                      <Input
-                        id="contact_urgence_relation"
-                        placeholder="Ex: Époux/Épouse, Fils/Fille, Ami..."
-                        value={formData.contact_urgence_relation}
-                        onChange={(e) => setFormData({ ...formData, contact_urgence_relation: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                </TabsContent>
-              </Tabs>
-              
-              <DialogFooter className="mt-6">
-                <Button type="submit" disabled={createClient.isPending || updateClient.isPending}>
-                  {editingClient ? "Modifier" : "Créer"}
-                </Button>
-              </DialogFooter>
-            </form>
+            <ClientForm 
+              client={editingClient}
+              onSuccess={() => {
+                setIsDialogOpen(false);
+                setEditingClient(null);
+                resetForm();
+                queryClient.invalidateQueries({ queryKey: ['clients'] });
+                queryClient.invalidateQueries({ queryKey: ['client-stats'] });
+              }}
+            />
           </DialogContent>
         </Dialog>
       </div>
