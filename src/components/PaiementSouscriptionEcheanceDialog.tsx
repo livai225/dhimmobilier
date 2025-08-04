@@ -36,6 +36,7 @@ import { fr } from "date-fns/locale";
 import { ReceiptGenerator } from "@/utils/receiptGenerator";
 
 const paiementSchema = z.object({
+  echeance_id: z.string().min(1, "Vous devez sélectionner une échéance"),
   montant: z.string().min(1, "Le montant est requis"),
   date_paiement: z.string().min(1, "La date de paiement est requise"),
   mode_paiement: z.string().optional(),
@@ -63,6 +64,7 @@ export function PaiementSouscriptionEcheanceDialog({
   const form = useForm<PaiementFormData>({
     resolver: zodResolver(paiementSchema),
     defaultValues: {
+      echeance_id: "",
       montant: "",
       date_paiement: new Date().toISOString().split("T")[0],
       mode_paiement: "",
@@ -120,11 +122,20 @@ export function PaiementSouscriptionEcheanceDialog({
     mutationFn: async (data: PaiementFormData) => {
       if (!souscription?.id) throw new Error("Souscription ID manquant");
 
-      // Find the next unpaid installment
-      const nextEcheance = echeances?.find(e => e.statut === "en_attente");
+      // Find the selected installment
+      const selectedEcheance = echeances?.find(e => e.id === data.echeance_id);
       
-      if (!nextEcheance) {
-        throw new Error("Aucune échéance en attente trouvée");
+      if (!selectedEcheance) {
+        throw new Error("Échéance sélectionnée introuvable");
+      }
+
+      const montantPaiement = parseFloat(data.montant);
+      const montantDejaPayé = selectedEcheance.montant_paye || 0;
+      const nouveauMontantPayé = montantDejaPayé + montantPaiement;
+
+      // Verify payment amount doesn't exceed remaining balance
+      if (montantPaiement > souscription.solde_restant) {
+        throw new Error("Le montant ne peut pas dépasser le solde restant de la souscription");
       }
 
       // Create payment in paiements_souscriptions
@@ -132,7 +143,7 @@ export function PaiementSouscriptionEcheanceDialog({
         .from("paiements_souscriptions")
         .insert({
           souscription_id: souscription.id,
-          montant: parseFloat(data.montant),
+          montant: montantPaiement,
           date_paiement: data.date_paiement,
           mode_paiement: data.mode_paiement,
           reference: data.reference,
@@ -142,15 +153,17 @@ export function PaiementSouscriptionEcheanceDialog({
 
       if (paiementError) throw paiementError;
 
-      // Update the installment status
+      // Update the installment with partial or full payment
+      const newStatus = nouveauMontantPayé >= selectedEcheance.montant ? "paye" : "en_attente";
+      
       const { error: updateError } = await supabase
         .from("echeances_souscriptions")
         .update({
-          statut: "paye",
-          montant_paye: parseFloat(data.montant),
-          date_paiement: data.date_paiement,
+          statut: newStatus,
+          montant_paye: nouveauMontantPayé,
+          date_paiement: newStatus === "paye" ? data.date_paiement : selectedEcheance.date_paiement,
         })
-        .eq("id", nextEcheance.id);
+        .eq("id", selectedEcheance.id);
 
       if (updateError) throw updateError;
 
@@ -158,7 +171,7 @@ export function PaiementSouscriptionEcheanceDialog({
       const { error: souscriptionError } = await supabase
         .from("souscriptions")
         .update({
-          solde_restant: Math.max(0, souscription.solde_restant - parseFloat(data.montant)),
+          solde_restant: Math.max(0, souscription.solde_restant - montantPaiement),
         })
         .eq("id", souscription.id);
 
@@ -169,10 +182,10 @@ export function PaiementSouscriptionEcheanceDialog({
         numero: `PAY-${Date.now()}`,
         client_id: souscription.client_id,
         type_operation: "paiement_souscription",
-        montant_total: parseFloat(data.montant),
+        montant_total: montantPaiement,
         reference_id: paiement.id,
-        periode_debut: nextEcheance.date_echeance,
-        periode_fin: nextEcheance.date_echeance,
+        periode_debut: selectedEcheance.date_echeance,
+        periode_fin: selectedEcheance.date_echeance,
       };
 
       const { error: receiptError } = await supabase
@@ -181,7 +194,7 @@ export function PaiementSouscriptionEcheanceDialog({
 
       if (receiptError) throw receiptError;
 
-      return { paiement, receipt: receiptData };
+      return { paiement, receipt: receiptData, echeance: selectedEcheance };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["souscriptions"] });
@@ -213,9 +226,25 @@ export function PaiementSouscriptionEcheanceDialog({
     paiementMutation.mutate(data);
   };
 
-  const prochainEcheance = echeances?.find(e => e.statut === "en_attente");
+  const echeancesDisponibles = echeances?.filter(e => e.statut === "en_attente" || (e.montant_paye || 0) < e.montant) || [];
   const echeancesPayees = echeances?.filter(e => e.statut === "paye").length || 0;
   const totalEcheances = echeances?.length || 0;
+  
+  const selectedEcheanceId = form.watch("echeance_id");
+  const selectedEcheance = echeances?.find(e => e.id === selectedEcheanceId);
+  const montantRestantEcheance = selectedEcheance ? selectedEcheance.montant - (selectedEcheance.montant_paye || 0) : 0;
+
+  // Helper function to get status badge
+  const getStatusBadge = (echeance: any) => {
+    const montantPayé = echeance.montant_paye || 0;
+    if (montantPayé >= echeance.montant) {
+      return <Badge variant="default" className="bg-green-100 text-green-800">Payé</Badge>;
+    } else if (montantPayé > 0) {
+      return <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">Partiel</Badge>;
+    } else {
+      return <Badge variant="outline">En attente</Badge>;
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -291,7 +320,7 @@ export function PaiementSouscriptionEcheanceDialog({
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <CreditCard className="h-5 w-5" />
-                Prochaine échéance
+                Paiement d'échéance
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -309,9 +338,9 @@ export function PaiementSouscriptionEcheanceDialog({
                     {generateEcheancesMutation.isPending ? "Génération..." : "Générer les échéances"}
                   </Button>
                 </div>
-              ) : !prochainEcheance ? (
+              ) : echeancesDisponibles.length === 0 ? (
                 <div className="text-center">
-                  <Badge variant="secondary" className="mb-2">
+                  <Badge variant="default" className="mb-2 bg-green-100 text-green-800">
                     Toutes les échéances sont payées
                   </Badge>
                   <p className="text-sm text-muted-foreground">
@@ -320,27 +349,75 @@ export function PaiementSouscriptionEcheanceDialog({
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="font-medium">Échéance n°:</span>
-                      <p className="text-muted-foreground">{prochainEcheance.numero_echeance}</p>
-                    </div>
-                    <div>
-                      <span className="font-medium">Date d'échéance:</span>
-                      <p className="text-muted-foreground">
-                        {format(new Date(prochainEcheance.date_echeance), "dd MMMM yyyy", { locale: fr })}
-                      </p>
-                    </div>
-                    <div className="col-span-2">
-                      <span className="font-medium">Montant:</span>
-                      <p className="text-muted-foreground">
-                        {prochainEcheance.montant?.toLocaleString()} FCFA
-                      </p>
-                    </div>
-                  </div>
-
                   <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                      <FormField
+                        control={form.control}
+                        name="echeance_id"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Sélectionner l'échéance à payer</FormLabel>
+                            <Select onValueChange={(value) => {
+                              field.onChange(value);
+                              const echeance = echeances?.find(e => e.id === value);
+                              if (echeance) {
+                                const montantRestant = echeance.montant - (echeance.montant_paye || 0);
+                                form.setValue("montant", montantRestant.toString());
+                              }
+                            }} defaultValue={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Choisir une échéance" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {echeancesDisponibles.map((echeance) => {
+                                  const montantPayé = echeance.montant_paye || 0;
+                                  const montantRestant = echeance.montant - montantPayé;
+                                  return (
+                                    <SelectItem key={echeance.id} value={echeance.id}>
+                                      <div className="flex items-center justify-between w-full">
+                                        <span>
+                                          Échéance {echeance.numero_echeance} - {format(new Date(echeance.date_echeance), "dd/MM/yyyy")}
+                                        </span>
+                                        <span className="ml-2 text-xs">
+                                          {montantRestant.toLocaleString()} FCFA restant
+                                        </span>
+                                      </div>
+                                    </SelectItem>
+                                  );
+                                })}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      {selectedEcheance && (
+                        <div className="p-3 bg-muted rounded-lg">
+                          <h4 className="font-medium mb-2">Détails de l'échéance sélectionnée</h4>
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            <div>
+                              <span className="text-muted-foreground">Date:</span>
+                              <p>{format(new Date(selectedEcheance.date_echeance), "dd MMMM yyyy", { locale: fr })}</p>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Montant total:</span>
+                              <p>{selectedEcheance.montant?.toLocaleString()} FCFA</p>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Déjà payé:</span>
+                              <p>{(selectedEcheance.montant_paye || 0).toLocaleString()} FCFA</p>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Restant à payer:</span>
+                              <p className="font-medium">{montantRestantEcheance.toLocaleString()} FCFA</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                       <FormField
                         control={form.control}
                         name="montant"
@@ -354,6 +431,11 @@ export function PaiementSouscriptionEcheanceDialog({
                                 {...field}
                               />
                             </FormControl>
+                            {selectedEcheance && (
+                              <div className="text-xs text-muted-foreground">
+                                Maximum: {montantRestantEcheance.toLocaleString()} FCFA (restant de cette échéance)
+                              </div>
+                            )}
                             <FormMessage />
                           </FormItem>
                         )}
@@ -425,7 +507,7 @@ export function PaiementSouscriptionEcheanceDialog({
                         </Button>
                         <Button
                           type="submit"
-                          disabled={paiementMutation.isPending}
+                          disabled={paiementMutation.isPending || !selectedEcheance}
                           className="flex-1"
                         >
                           {paiementMutation.isPending ? "Traitement..." : "Enregistrer le paiement"}
@@ -450,34 +532,47 @@ export function PaiementSouscriptionEcheanceDialog({
             </CardHeader>
             <CardContent>
               <div className="space-y-2 max-h-60 overflow-y-auto">
-                {echeances.map((echeance) => (
-                  <div
-                    key={echeance.id}
-                    className="flex items-center justify-between p-3 rounded-lg border"
-                  >
-                    <div className="flex items-center gap-3">
-                      <CalendarDays className="h-4 w-4 text-muted-foreground" />
-                      <div>
-                        <p className="font-medium">
-                          Échéance {echeance.numero_echeance}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          {format(new Date(echeance.date_echeance), "dd MMM yyyy", { locale: fr })}
-                        </p>
+                {echeances.map((echeance) => {
+                  const montantPayé = echeance.montant_paye || 0;
+                  const montantRestant = echeance.montant - montantPayé;
+                  
+                  return (
+                    <div
+                      key={echeance.id}
+                      className="flex items-center justify-between p-3 rounded-lg border"
+                    >
+                      <div className="flex items-center gap-3">
+                        <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                        <div>
+                          <p className="font-medium">
+                            Échéance {echeance.numero_echeance}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {format(new Date(echeance.date_echeance), "dd MMM yyyy", { locale: fr })}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 text-right">
+                        <div>
+                          <p className="font-medium text-sm">
+                            {echeance.montant?.toLocaleString()} FCFA
+                          </p>
+                          {montantPayé > 0 && (
+                            <p className="text-xs text-muted-foreground">
+                              Payé: {montantPayé.toLocaleString()} FCFA
+                            </p>
+                          )}
+                          {montantRestant > 0 && echeance.statut !== "paye" && (
+                            <p className="text-xs text-orange-600">
+                              Restant: {montantRestant.toLocaleString()} FCFA
+                            </p>
+                          )}
+                        </div>
+                        {getStatusBadge(echeance)}
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span className="font-medium">
-                        {echeance.montant?.toLocaleString()} FCFA
-                      </span>
-                      <Badge
-                        variant={echeance.statut === "paye" ? "default" : "secondary"}
-                      >
-                        {echeance.statut === "paye" ? "Payé" : "En attente"}
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
