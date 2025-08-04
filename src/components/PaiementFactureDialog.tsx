@@ -172,21 +172,21 @@ export function PaiementFactureDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl">
+      <DialogContent className="max-w-5xl w-[95vw] max-h-[95vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Paiement de facture - {facture.numero}</DialogTitle>
         </DialogHeader>
 
         <Tabs defaultValue="nouveau" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="nouveau">Nouveau paiement</TabsTrigger>
-            <TabsTrigger value="historique">Historique</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-2 h-auto">
+            <TabsTrigger value="nouveau" className="text-xs sm:text-sm">Nouveau paiement</TabsTrigger>
+            <TabsTrigger value="historique" className="text-xs sm:text-sm">Historique</TabsTrigger>
           </TabsList>
 
           <TabsContent value="nouveau" className="space-y-4">
             {/* Invoice info */}
             <div className="bg-muted p-4 rounded-lg">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Fournisseur</p>
                   <p className="font-medium">{facture.fournisseur?.nom}</p>
@@ -211,7 +211,7 @@ export function PaiementFactureDialog({
             {/* Payment form */}
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="montant"
@@ -258,7 +258,7 @@ export function PaiementFactureDialog({
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="mode_paiement"
@@ -299,11 +299,11 @@ export function PaiementFactureDialog({
                   />
                 </div>
 
-                <div className="flex justify-end gap-2 pt-4">
-                  <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                <div className="flex flex-col sm:flex-row justify-end gap-2 pt-4 border-t">
+                  <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="w-full sm:w-auto">
                     Annuler
                   </Button>
-                  <Button type="submit" disabled={mutation.isPending}>
+                  <Button type="submit" disabled={mutation.isPending} className="w-full sm:w-auto">
                     {mutation.isPending ? "Enregistrement..." : "Enregistrer le paiement"}
                   </Button>
                 </div>
@@ -312,34 +312,34 @@ export function PaiementFactureDialog({
           </TabsContent>
 
           <TabsContent value="historique">
-            <div className="border rounded-lg">
+            <div className="border rounded-lg overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Montant</TableHead>
-                    <TableHead>Mode</TableHead>
-                    <TableHead>Référence</TableHead>
+                    <TableHead className="text-xs sm:text-sm">Date</TableHead>
+                    <TableHead className="text-xs sm:text-sm">Montant</TableHead>
+                    <TableHead className="text-xs sm:text-sm hidden sm:table-cell">Mode</TableHead>
+                    <TableHead className="text-xs sm:text-sm hidden sm:table-cell">Référence</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {paiements.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={4} className="text-center py-8 text-muted-foreground text-xs sm:text-sm">
                         Aucun paiement enregistré
                       </TableCell>
                     </TableRow>
                   ) : (
                     paiements.map((paiement) => (
                       <TableRow key={paiement.id}>
-                        <TableCell>
-                          {format(new Date(paiement.date_paiement), "dd/MM/yyyy", { locale: fr })}
+                        <TableCell className="text-xs sm:text-sm">
+                          {format(new Date(paiement.date_paiement), "dd/MM/yy", { locale: fr })}
                         </TableCell>
-                        <TableCell className="font-medium">
+                        <TableCell className="font-medium text-xs sm:text-sm">
                           {formatCurrency(paiement.montant)}
                         </TableCell>
-                        <TableCell>{paiement.mode_paiement || "-"}</TableCell>
-                        <TableCell>{paiement.reference || "-"}</TableCell>
+                        <TableCell className="text-xs sm:text-sm hidden sm:table-cell">{paiement.mode_paiement || "-"}</TableCell>
+                        <TableCell className="text-xs sm:text-sm hidden sm:table-cell">{paiement.reference || "-"}</TableCell>
                       </TableRow>
                     ))
                   )}

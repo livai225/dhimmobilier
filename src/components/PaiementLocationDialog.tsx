@@ -139,7 +139,7 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-3xl w-[95vw] max-h-[95vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Enregistrer un Paiement de Loyer</DialogTitle>
         </DialogHeader>
@@ -174,7 +174,7 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
             </CardContent>
           </Card>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="selectedMonth">Mois de paiement *</Label>
               <Select value={selectedMonth} onValueChange={setSelectedMonth}>
@@ -203,7 +203,7 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Date de paiement *</Label>
               <Popover>
@@ -285,11 +285,11 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
             </Card>
           )}
 
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={onClose}>
+          <div className="flex flex-col sm:flex-row justify-end gap-2 pt-4 border-t">
+            <Button type="button" variant="outline" onClick={onClose} className="w-full sm:w-auto">
               Annuler
             </Button>
-            <Button type="submit" disabled={isLoading}>
+            <Button type="submit" disabled={isLoading} className="w-full sm:w-auto">
               {isLoading ? "Enregistrement..." : "Enregistrer le Paiement"}
             </Button>
           </div>

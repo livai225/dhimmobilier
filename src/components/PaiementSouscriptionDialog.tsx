@@ -130,14 +130,14 @@ export function PaiementSouscriptionDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-3xl w-[95vw] max-h-[95vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Paiement de souscription</DialogTitle>
         </DialogHeader>
 
         {/* Subscription info */}
         <div className="bg-muted p-4 rounded-lg">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <p className="text-sm text-muted-foreground">Client</p>
               <p className="font-medium">{souscription.clients?.prenom} {souscription.clients?.nom}</p>
@@ -160,7 +160,7 @@ export function PaiementSouscriptionDialog({
         {/* Payment form */}
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="montant"
@@ -197,7 +197,7 @@ export function PaiementSouscriptionDialog({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="mode_paiement"
@@ -238,11 +238,11 @@ export function PaiementSouscriptionDialog({
               />
             </div>
 
-            <div className="flex justify-end gap-2 pt-4">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <div className="flex flex-col sm:flex-row justify-end gap-2 pt-4 border-t">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="w-full sm:w-auto">
                 Annuler
               </Button>
-              <Button type="submit" disabled={mutation.isPending}>
+              <Button type="submit" disabled={mutation.isPending} className="w-full sm:w-auto">
                 {mutation.isPending ? "Enregistrement..." : "Enregistrer le paiement"}
               </Button>
             </div>

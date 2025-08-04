@@ -117,21 +117,21 @@ export function SouscriptionDetailsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader className="flex flex-row items-center justify-between">
-          <DialogTitle className="text-2xl">Détails de la souscription</DialogTitle>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={onEdit}>
+      <DialogContent className="max-w-7xl w-[95vw] max-h-[95vh] overflow-y-auto">
+        <DialogHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <DialogTitle className="text-xl sm:text-2xl">Détails de la souscription</DialogTitle>
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <Button variant="outline" onClick={onEdit} size="sm" className="w-full sm:w-auto">
               Modifier
             </Button>
-            <Button onClick={onNewPayment}>
+            <Button onClick={onNewPayment} size="sm" className="w-full sm:w-auto">
               <CreditCard className="mr-2 h-4 w-4" />
               Nouveau paiement
             </Button>
           </div>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6">
           {/* Left Column - Client & Property Info */}
           <div className="space-y-4">
             {/* Client Information */}

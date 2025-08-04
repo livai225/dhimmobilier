@@ -123,7 +123,7 @@ export function LocationDetailsDialog({ location, onClose, onUpdate }: LocationD
   return (
     <>
       <Dialog open={true} onOpenChange={onClose}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-5xl w-[95vw] max-h-[95vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Home className="w-5 h-5" />
@@ -131,7 +131,7 @@ export function LocationDetailsDialog({ location, onClose, onUpdate }: LocationD
             </DialogTitle>
           </DialogHeader>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
             {/* Basic Information */}
             <Card>
               <CardHeader>
@@ -272,29 +272,31 @@ export function LocationDetailsDialog({ location, onClose, onUpdate }: LocationD
           </Card>
 
           {/* Actions */}
-          <div className="flex justify-between">
-            <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row justify-between gap-3 pt-4 border-t sticky bottom-0 bg-background">
+            <div className="flex flex-col sm:flex-row gap-2">
               {location.statut === 'active' && (
                 <>
                   <Button
                     onClick={() => setShowPaiementDialog(true)}
-                    className="flex items-center gap-2"
+                    className="flex items-center justify-center gap-2 w-full sm:w-auto"
+                    size="sm"
                   >
                     <CreditCard className="w-4 h-4" />
-                    Nouveau Paiement
+                    <span className="sm:inline">Nouveau Paiement</span>
                   </Button>
                   <Button
                     variant="destructive"
                     onClick={handleTerminateLocation}
-                    className="flex items-center gap-2"
+                    className="flex items-center justify-center gap-2 w-full sm:w-auto"
+                    size="sm"
                   >
                     <XCircle className="w-4 h-4" />
-                    Terminer Location
+                    <span className="sm:inline">Terminer Location</span>
                   </Button>
                 </>
               )}
             </div>
-            <Button variant="outline" onClick={onClose}>
+            <Button variant="outline" onClick={onClose} size="sm" className="w-full sm:w-auto">
               Fermer
             </Button>
           </div>
