@@ -35,18 +35,10 @@ const souscriptionSchema = z.object({
   montant_droit_terre_mensuel: z.string().optional(),
   apport_initial: z.string().optional(),
   date_debut: z.string().min(1, "La date de début est obligatoire"),
-  type_souscription: z.enum(["classique", "mise_en_garde"]),
+  type_souscription: z.enum(["classique"]),
   periode_finition_mois: z.string().optional(),
   type_bien: z.string().optional(),
   statut: z.string().default("active"),
-}).refine((data) => {
-  if (data.type_souscription === "mise_en_garde") {
-    return data.type_bien && data.type_bien.length > 0;
-  }
-  return true;
-}, {
-  message: "Le type de bien est obligatoire pour une souscription 'mise en garde'",
-  path: ["type_bien"],
 });
 
 type SouscriptionFormData = z.infer<typeof souscriptionSchema>;
@@ -288,10 +280,6 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
                         <RadioGroupItem value="classique" id="classique" />
                         <label htmlFor="classique">Classique</label>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="mise_en_garde" id="mise_en_garde" />
-                        <label htmlFor="mise_en_garde">Mise en garde</label>
-                      </div>
                     </RadioGroup>
                   </FormControl>
                   <FormMessage />
@@ -382,106 +370,6 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
           </CardContent>
         </Card>
 
-        {watchedValues.type_souscription === "mise_en_garde" && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Configuration "Mise en garde"</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="type_bien"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>
-                        Type de bien <span className="text-destructive">*</span>
-                      </FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Sélectionner le type" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {baremes.map((bareme) => (
-                            <SelectItem key={bareme.id} value={bareme.type_bien}>
-                              {bareme.description}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="periode_finition_mois"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Période de finition (mois)</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {[9, 10, 11, 12].map((mois) => (
-                            <SelectItem key={mois} value={mois.toString()}>
-                              {mois} mois
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              {selectedBareme && (
-                <div className="p-4 bg-muted rounded-lg">
-                  <h4 className="font-semibold mb-2">Informations calculées</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <p className="text-muted-foreground">Droit de terre mensuel</p>
-                      <p className="font-medium">{selectedBareme.montant_mensuel.toLocaleString()} FCFA</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Total sur 20 ans</p>
-                      <p className="font-medium">{(selectedBareme.montant_mensuel * 240).toLocaleString()} FCFA</p>
-                    </div>
-                    {watchedValues.date_debut && (
-                      <>
-                        <div>
-                          <p className="text-muted-foreground">Fin de finition prévue</p>
-                          <p className="font-medium">
-                            {format(
-                              new Date(new Date(watchedValues.date_debut).getTime() + parseInt(watchedValues.periode_finition_mois || "9") * 30 * 24 * 60 * 60 * 1000),
-                              "dd/MM/yyyy"
-                            )}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground">Début droit de terre</p>
-                          <p className="font-medium">
-                            {format(
-                              new Date(new Date(watchedValues.date_debut).getTime() + (parseInt(watchedValues.periode_finition_mois || "9") + 1) * 30 * 24 * 60 * 60 * 1000),
-                              "dd/MM/yyyy"
-                            )}
-                          </p>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
 
         <div className="flex justify-end gap-3 pt-4">
           <Button type="submit" disabled={mutation.isPending}>
