@@ -72,7 +72,10 @@ export function SouscriptionDetailsDialog({
 
   if (!souscription) return null;
 
-  const totalPaye = paiements?.reduce((sum, p) => sum + Number(p.montant), 0) || 0;
+  // Include apport initial in total paid calculation
+  const paiementsTotal = paiements?.reduce((sum, p) => sum + Number(p.montant), 0) || 0;
+  const apportInitial = Number(souscription.apport_initial || 0);
+  const totalPaye = paiementsTotal + apportInitial;
   const soldeRestant = Number(souscription.prix_total || souscription.montant_souscris || 0) - totalPaye;
   
   // Calculate work progress
@@ -323,50 +326,81 @@ export function SouscriptionDetailsDialog({
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {paiements && paiements.length > 0 ? (
-                  <div className="space-y-4">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Date</TableHead>
-                          <TableHead>Montant</TableHead>
-                          <TableHead>Mode</TableHead>
-                          <TableHead></TableHead>
+                <div className="space-y-4">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Montant</TableHead>
+                        <TableHead>Mode</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {/* Apport initial */}
+                      {apportInitial > 0 && (
+                        <TableRow className="bg-muted/50">
+                          <TableCell className="text-sm">
+                            {format(new Date(souscription.date_debut || souscription.created_at), "dd/MM/yyyy")}
+                          </TableCell>
+                          <TableCell className="text-sm font-medium">
+                            {apportInitial.toLocaleString()} FCFA
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            -
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            <Badge variant="secondary">Apport initial</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Button variant="ghost" size="sm">
+                              <Printer className="h-3 w-3" />
+                            </Button>
+                          </TableCell>
                         </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {paiements.map((paiement) => (
-                          <TableRow key={paiement.id}>
-                            <TableCell className="text-sm">
-                              {format(new Date(paiement.date_paiement), "dd/MM/yyyy")}
-                            </TableCell>
-                            <TableCell className="text-sm font-medium">
-                              {Number(paiement.montant).toLocaleString()} FCFA
-                            </TableCell>
-                            <TableCell className="text-sm">
-                              {paiement.mode_paiement || "-"}
-                            </TableCell>
-                            <TableCell>
-                              <Button variant="ghost" size="sm">
-                                <Printer className="h-3 w-3" />
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                    
-                    <div className="flex justify-between text-sm font-medium pt-2 border-t">
-                      <span>Total payé:</span>
-                      <span>{totalPaye.toLocaleString()} FCFA</span>
-                    </div>
+                      )}
+                      
+                      {/* Autres paiements */}
+                      {paiements?.map((paiement) => (
+                        <TableRow key={paiement.id}>
+                          <TableCell className="text-sm">
+                            {format(new Date(paiement.date_paiement), "dd/MM/yyyy")}
+                          </TableCell>
+                          <TableCell className="text-sm font-medium">
+                            {Number(paiement.montant).toLocaleString()} FCFA
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {paiement.mode_paiement || "-"}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            <Badge variant="outline">Paiement</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Button variant="ghost" size="sm">
+                              <Printer className="h-3 w-3" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      
+                      {/* Affichage si aucun paiement */}
+                      {(!paiements || paiements.length === 0) && apportInitial === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                            <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                            <p>Aucun paiement enregistré</p>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                  
+                  <div className="flex justify-between text-sm font-medium pt-2 border-t">
+                    <span>Total payé:</span>
+                    <span>{totalPaye.toLocaleString()} FCFA</span>
                   </div>
-                ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>Aucun paiement enregistré</p>
-                  </div>
-                )}
+                </div>
               </CardContent>
             </Card>
           </div>
