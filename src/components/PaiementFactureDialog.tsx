@@ -114,7 +114,7 @@ export function PaiementFactureDialog({
 
       // Generate receipt for invoice payment
       const receipt = await ReceiptGenerator.createReceipt({
-        clientId: facture.fournisseur_id, // Using fournisseur as "client" for receipt
+        clientId: "00000000-0000-0000-0000-000000000000", // Client système pour les factures
         referenceId: payment.id,
         typeOperation: "paiement_facture",
         montantTotal: data.montant,
@@ -126,6 +126,7 @@ export function PaiementFactureDialog({
     onSuccess: ({ receipt }) => {
       queryClient.invalidateQueries({ queryKey: ["factures"] });
       queryClient.invalidateQueries({ queryKey: ["paiements"] });
+      queryClient.invalidateQueries({ queryKey: ["recus"] }); // Invalider les reçus
       form.reset();
       toast({
         title: "Succès",
