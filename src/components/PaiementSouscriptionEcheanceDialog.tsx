@@ -370,7 +370,7 @@ export function PaiementSouscriptionEcheanceDialog({
                                   <SelectValue placeholder="Choisir une échéance" />
                                 </SelectTrigger>
                               </FormControl>
-                              <SelectContent>
+                              <SelectContent className="max-h-32 overflow-y-auto">
                                 {echeancesDisponibles.map((echeance) => {
                                   const montantPayé = echeance.montant_paye || 0;
                                   const montantRestant = echeance.montant - montantPayé;
