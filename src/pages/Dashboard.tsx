@@ -163,7 +163,7 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="container mx-auto p-4 lg:p-6 space-y-6">
       {/* Header */}
       <div className="flex flex-col space-y-4 lg:flex-row lg:items-center lg:justify-between lg:space-y-0">
         <div>
@@ -187,7 +187,7 @@ export default function Dashboard() {
       </div>
 
       {/* Main KPIs */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Chiffre d'affaires</CardTitle>
@@ -250,7 +250,7 @@ export default function Dashboard() {
       </div>
 
       {/* Detailed Statistics */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Clients</CardTitle>
@@ -335,7 +335,7 @@ export default function Dashboard() {
       </div>
 
       {/* Charts Section */}
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Monthly Revenue Trend */}
         <Card className="lg:col-span-2">
           <CardHeader>
@@ -344,13 +344,21 @@ export default function Dashboard() {
               Revenus mensuels par type (derniers 6 mois)
             </CardDescription>
           </CardHeader>
-          <CardContent className="px-2 sm:px-6">
-            <ChartContainer config={chartConfig} className="h-[250px] sm:h-[300px]">
+          <CardContent className="p-2 sm:p-6">
+            <ChartContainer config={chartConfig} className="h-[200px] sm:h-[250px] lg:h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={stats?.monthlyRevenue || []}>
+                <AreaChart data={stats?.monthlyRevenue || []} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis tickFormatter={(value) => `${value / 1000}k`} />
+                  <XAxis 
+                    dataKey="month" 
+                    fontSize={12}
+                    tickMargin={5}
+                  />
+                  <YAxis 
+                    tickFormatter={(value) => `${value / 1000}k`}
+                    fontSize={12}
+                    width={40}
+                  />
                   <ChartTooltip
                     content={<ChartTooltipContent />}
                     formatter={(value: number) => [formatCurrency(value), ""]}
@@ -385,17 +393,19 @@ export default function Dashboard() {
               Par type d'activité
             </CardDescription>
           </CardHeader>
-          <CardContent className="px-2 sm:px-6">
-            <ChartContainer config={chartConfig} className="h-[250px] sm:h-[300px]">
+          <CardContent className="p-2 sm:p-6">
+            <ChartContainer config={chartConfig} className="h-[200px] sm:h-[250px] lg:h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
+                <PieChart margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
                   <Pie
                     data={stats?.revenueBreakdown || []}
                     cx="50%"
                     cy="50%"
-                    outerRadius={80}
+                    outerRadius={60}
                     dataKey="value"
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    label={({ name, percent }) => 
+                      window.innerWidth > 640 ? `${name} ${(percent * 100).toFixed(0)}%` : `${(percent * 100).toFixed(0)}%`
+                    }
                   >
                     {stats?.revenueBreakdown?.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
@@ -413,7 +423,7 @@ export default function Dashboard() {
       </div>
 
       {/* Recent Activities and Alerts */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {/* Recent Subscriptions */}
         <Card>
           <CardHeader>
