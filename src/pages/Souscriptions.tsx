@@ -53,53 +53,6 @@ export default function Souscriptions() {
     },
   });
 
-  const generateEcheancesSouscription = async (souscriptionId: string) => {
-    try {
-      const { error } = await supabase.rpc("generate_echeances_souscription", {
-        souscription_uuid: souscriptionId
-      });
-
-      if (error) throw error;
-
-      toast({
-        title: "Succès",
-        description: "Les échéances de souscription ont été générées.",
-      });
-
-      refetch();
-    } catch (error) {
-      console.error("Error generating échéances souscription:", error);
-      toast({
-        title: "Erreur",
-        description: "Impossible de générer les échéances de souscription.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const generateEcheancesDroitTerre = async (souscriptionId: string) => {
-    try {
-      const { error } = await supabase.rpc("generate_echeances_droit_terre", {
-        souscription_uuid: souscriptionId
-      });
-
-      if (error) throw error;
-
-      toast({
-        title: "Succès",
-        description: "Les échéances de droit de terre ont été générées.",
-      });
-
-      refetch();
-    } catch (error) {
-      console.error("Error generating écheances droit terre:", error);
-      toast({
-        title: "Erreur",
-        description: "Impossible de générer les échéances de droit de terre.",
-        variant: "destructive",
-      });
-    }
-  };
 
   const deleteSouscription = async (souscriptionId: string) => {
     if (!confirm("Êtes-vous sûr de vouloir supprimer cette souscription ?")) {
@@ -309,33 +262,6 @@ export default function Souscriptions() {
                     Détails
                   </Button>
 
-                  {/* Bouton pour générer les échéances de souscription classique */}
-                  {souscription.type_souscription === "classique" && 
-                   souscription.solde_restant > 0 && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => generateEcheancesSouscription(souscription.id)}
-                    >
-                      <Calendar className="mr-2 h-4 w-4" />
-                      Générer échéances
-                    </Button>
-                  )}
-
-                  {/* Bouton pour générer les échéances de droit de terre */}
-                  {souscription.type_souscription === "mise_en_garde" && 
-                   souscription.phase_actuelle === "finition" && 
-                   souscription.date_debut_droit_terre && 
-                   new Date() >= new Date(souscription.date_debut_droit_terre) && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => generateEcheancesDroitTerre(souscription.id)}
-                    >
-                      <Calendar className="mr-2 h-4 w-4" />
-                      Échéances droit de terre
-                    </Button>
-                  )}
 
                   {/* Bouton pour paiement d'échéances */}
                   {((souscription.type_souscription === "classique" && souscription.solde_restant > 0) ||

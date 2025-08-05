@@ -90,33 +90,6 @@ export function PaiementSouscriptionEcheanceDialog({
     enabled: !!souscription?.id && open,
   });
 
-  // Generate installments if they don't exist
-  const generateEcheancesMutation = useMutation({
-    mutationFn: async () => {
-      if (!souscription?.id) throw new Error("Souscription ID manquant");
-      
-      const { error } = await supabase.rpc("generate_echeances_souscription", {
-        souscription_uuid: souscription.id,
-      });
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["echeances_souscriptions"] });
-      toast({
-        title: "Échéances générées",
-        description: "Les échéances ont été générées avec succès.",
-      });
-    },
-    onError: (error) => {
-      console.error("Erreur lors de la génération des échéances:", error);
-      toast({
-        title: "Erreur",
-        description: "Impossible de générer les échéances.",
-        variant: "destructive",
-      });
-    },
-  });
 
   const paiementMutation = useMutation({
     mutationFn: async (data: PaiementFormData) => {
@@ -331,12 +304,6 @@ export function PaiementSouscriptionEcheanceDialog({
                   <p className="text-muted-foreground">
                     Aucune échéance trouvée pour cette souscription.
                   </p>
-                  <Button 
-                    onClick={() => generateEcheancesMutation.mutate()}
-                    disabled={generateEcheancesMutation.isPending}
-                  >
-                    {generateEcheancesMutation.isPending ? "Génération..." : "Générer les échéances"}
-                  </Button>
                 </div>
               ) : echeancesDisponibles.length === 0 ? (
                 <div className="text-center">
