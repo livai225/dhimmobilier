@@ -220,7 +220,7 @@ export function PaiementDroitTerreDialog({ open, onOpenChange, souscription, onS
               <CardContent className="space-y-3">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Type de bien:</span>
-                  <span className="font-medium">{souscription.type_bien}</span>
+                  <span className="font-medium">{souscription.type_bien || "Standard"}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Montant mensuel:</span>
@@ -231,7 +231,9 @@ export function PaiementDroitTerreDialog({ open, onOpenChange, souscription, onS
                   <span className="font-medium">
                     {souscription.date_debut_droit_terre 
                       ? format(new Date(souscription.date_debut_droit_terre), "dd/MM/yyyy")
-                      : "N/A"}
+                      : souscription.type_souscription === "classique" && souscription.solde_restant <= 0
+                        ? format(new Date(souscription.date_debut), "dd/MM/yyyy")
+                        : "En attente du solde de la souscription"}
                   </span>
                 </div>
                 <Separator />
@@ -265,11 +267,15 @@ export function PaiementDroitTerreDialog({ open, onOpenChange, souscription, onS
                   <p className="mt-2">
                     <strong>Montant mensuel:</strong> {souscription.montant_droit_terre_mensuel?.toLocaleString()} FCFA
                   </p>
-                  {souscription.date_debut_droit_terre && (
-                    <p>
-                      <strong>Début:</strong> {format(new Date(souscription.date_debut_droit_terre), "dd MMMM yyyy", { locale: fr })}
-                    </p>
-                  )}
+                  <p>
+                    <strong>Début:</strong> {
+                      souscription.date_debut_droit_terre 
+                        ? format(new Date(souscription.date_debut_droit_terre), "dd MMMM yyyy", { locale: fr })
+                        : souscription.type_souscription === "classique" && souscription.solde_restant <= 0
+                          ? format(new Date(souscription.date_debut), "dd MMMM yyyy", { locale: fr })
+                          : "En attente"
+                    }
+                  </p>
                 </div>
               </CardContent>
             </Card>

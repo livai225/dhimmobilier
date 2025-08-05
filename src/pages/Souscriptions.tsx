@@ -9,8 +9,9 @@ import { Badge } from "@/components/ui/badge";
 import { SouscriptionForm } from "@/components/SouscriptionForm";
 import { SouscriptionDetailsDialog } from "@/components/SouscriptionDetailsDialog";
 import { PaiementSouscriptionEcheanceDialog } from "@/components/PaiementSouscriptionEcheanceDialog";
+import { PaiementDroitTerreDialog } from "@/components/PaiementDroitTerreDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Eye, CreditCard, Calendar, Trash2 } from "lucide-react";
+import { Plus, Eye, CreditCard, Calendar, Trash2, Coins } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -22,6 +23,7 @@ export default function Souscriptions() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
+  const [isDroitTerreDialogOpen, setIsDroitTerreDialogOpen] = useState(false);
 
   const { data: souscriptions, isLoading, refetch } = useQuery({
     queryKey: ["souscriptions"],
@@ -263,9 +265,8 @@ export default function Souscriptions() {
                   </Button>
 
 
-                  {/* Bouton pour paiement d'échéances */}
-                  {((souscription.type_souscription === "classique" && souscription.solde_restant > 0) ||
-                    (souscription.type_souscription === "mise_en_garde" && souscription.phase_actuelle === "droit_terre")) && (
+                  {/* Bouton pour paiement de souscription */}
+                  {souscription.solde_restant > 0 && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -275,9 +276,22 @@ export default function Souscriptions() {
                       }}
                     >
                       <CreditCard className="mr-2 h-4 w-4" />
-                      Paiement
+                      Paiement souscription
                     </Button>
                   )}
+
+                  {/* Bouton pour paiement de droit de terre */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedSouscription(souscription);
+                      setIsDroitTerreDialogOpen(true);
+                    }}
+                  >
+                    <Coins className="mr-2 h-4 w-4" />
+                    Droit de terre
+                  </Button>
 
                   <Button
                     variant="outline"
@@ -307,6 +321,10 @@ export default function Souscriptions() {
           setIsDetailsOpen(false);
           setIsPaymentDialogOpen(true);
         }}
+        onNewDroitTerrePayment={() => {
+          setIsDetailsOpen(false);
+          setIsDroitTerreDialogOpen(true);
+        }}
       />
 
       {/* Payment Dialog */}
@@ -316,6 +334,17 @@ export default function Souscriptions() {
         souscription={selectedSouscription}
         onSuccess={() => {
           setIsPaymentDialogOpen(false);
+          refetch();
+        }}
+      />
+
+      {/* Droit de Terre Payment Dialog */}
+      <PaiementDroitTerreDialog
+        open={isDroitTerreDialogOpen}
+        onOpenChange={setIsDroitTerreDialogOpen}
+        souscription={selectedSouscription}
+        onSuccess={() => {
+          setIsDroitTerreDialogOpen(false);
           refetch();
         }}
       />

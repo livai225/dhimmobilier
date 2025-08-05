@@ -76,6 +76,11 @@ export function PaiementSouscriptionEcheanceDialog({
 
       const montantPaiement = parseFloat(data.montant);
 
+      // Check if subscription is already fully paid
+      if (souscription.solde_restant <= 0) {
+        throw new Error("Cette souscription est déjà entièrement payée. Seuls les paiements de droit de terre sont possibles.");
+      }
+
       // Verify payment amount doesn't exceed remaining balance
       if (montantPaiement > souscription.solde_restant) {
         throw new Error("Le montant ne peut pas dépasser le solde restant de la souscription");
@@ -258,12 +263,12 @@ export function PaiementSouscriptionEcheanceDialog({
             </CardHeader>
             <CardContent>
               {souscription?.solde_restant <= 0 ? (
-                <div className="text-center">
+                <div className="text-center space-y-3">
                   <Badge variant="default" className="mb-2 bg-green-100 text-green-800">
                     Souscription entièrement payée
                   </Badge>
                   <p className="text-sm text-muted-foreground">
-                    Cette souscription est entièrement payée.
+                    Cette souscription est entièrement payée. Pour les paiements de droit de terre, utilisez le bouton "Droit de terre".
                   </p>
                 </div>
               ) : (

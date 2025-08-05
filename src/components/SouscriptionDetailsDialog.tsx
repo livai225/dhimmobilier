@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { User, MapPin, CreditCard, Calendar, FileText, Printer } from "lucide-react";
+import { User, MapPin, CreditCard, Calendar, FileText, Printer, Coins } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 
@@ -16,6 +16,7 @@ interface SouscriptionDetailsDialogProps {
   souscription: any;
   onEdit: () => void;
   onNewPayment: () => void;
+  onNewDroitTerrePayment: () => void;
 }
 
 export function SouscriptionDetailsDialog({
@@ -23,7 +24,8 @@ export function SouscriptionDetailsDialog({
   onOpenChange,
   souscription,
   onEdit,
-  onNewPayment
+  onNewPayment,
+  onNewDroitTerrePayment
 }: SouscriptionDetailsDialogProps) {
   const { data: client } = useQuery({
     queryKey: ["client", souscription?.client_id],
@@ -128,9 +130,15 @@ export function SouscriptionDetailsDialog({
             <Button variant="outline" onClick={onEdit} size="sm" className="w-full sm:w-auto">
               Modifier
             </Button>
-            <Button onClick={onNewPayment} size="sm" className="w-full sm:w-auto">
-              <CreditCard className="mr-2 h-4 w-4" />
-              Nouveau paiement
+            {soldeRestant > 0 && (
+              <Button onClick={onNewPayment} size="sm" className="w-full sm:w-auto">
+                <CreditCard className="mr-2 h-4 w-4" />
+                Paiement souscription
+              </Button>
+            )}
+            <Button onClick={onNewDroitTerrePayment} size="sm" variant="outline" className="w-full sm:w-auto">
+              <Coins className="mr-2 h-4 w-4" />
+              Droit de terre
             </Button>
           </div>
         </DialogHeader>
@@ -224,6 +232,11 @@ export function SouscriptionDetailsDialog({
                   <Badge variant="outline">
                     {souscription.type_souscription === "mise_en_garde" ? "Mise en garde" : "Classique"}
                   </Badge>
+                  {soldeRestant <= 0 && (
+                    <Badge variant="default" className="bg-green-500">
+                      Souscription soldée
+                    </Badge>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
