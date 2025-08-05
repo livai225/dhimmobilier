@@ -319,7 +319,7 @@ export function PaiementFactureDialog({
                   <TableRow>
                     <TableHead className="text-xs sm:text-sm">Date</TableHead>
                     <TableHead className="text-xs sm:text-sm">Montant</TableHead>
-                    <TableHead className="text-xs sm:text-sm hidden sm:table-cell">Mode</TableHead>
+                    <TableHead className="text-xs sm:text-sm">Mode</TableHead>
                     <TableHead className="text-xs sm:text-sm hidden sm:table-cell">Référence</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -339,7 +339,18 @@ export function PaiementFactureDialog({
                         <TableCell className="font-medium text-xs sm:text-sm">
                           {formatCurrency(paiement.montant)}
                         </TableCell>
-                        <TableCell className="text-xs sm:text-sm hidden sm:table-cell">{paiement.mode_paiement || "-"}</TableCell>
+                        <TableCell className="text-xs sm:text-sm">
+                          {paiement.mode_paiement ? (
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800">
+                              {paiement.mode_paiement === 'espece' ? 'Espèces' :
+                               paiement.mode_paiement === 'cheque' ? 'Chèque' :
+                               paiement.mode_paiement === 'virement' ? 'Virement' :
+                               paiement.mode_paiement === 'mobile_money' ? 'Mobile Money' :
+                               paiement.mode_paiement === 'carte' ? 'Carte bancaire' :
+                               paiement.mode_paiement}
+                            </span>
+                          ) : '-'}
+                        </TableCell>
                         <TableCell className="text-xs sm:text-sm hidden sm:table-cell">{paiement.reference || "-"}</TableCell>
                       </TableRow>
                     ))

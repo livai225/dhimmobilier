@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -30,6 +31,7 @@ const fournisseurSchema = z.object({
   email: z.string().email("Email invalide").optional().or(z.literal("")),
   adresse: z.string().optional(),
   secteur_id: z.string().min(1, "Veuillez sélectionner un secteur"),
+  secteur_custom: z.string().optional(),
   site_web: z.string().url("URL invalide").optional().or(z.literal("")),
   numero_tva: z.string().optional(),
   note_performance: z.number().min(1).max(5).optional(),
@@ -45,6 +47,7 @@ interface FournisseurFormProps {
 export function FournisseurForm({ fournisseur, onSuccess }: FournisseurFormProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [isOtherSector, setIsOtherSector] = useState(false);
   
   const form = useForm<FournisseurFormData>({
     resolver: zodResolver(fournisseurSchema),
@@ -55,6 +58,7 @@ export function FournisseurForm({ fournisseur, onSuccess }: FournisseurFormProps
       email: fournisseur?.email || "",
       adresse: fournisseur?.adresse || "",
       secteur_id: fournisseur?.secteur_id || "",
+      secteur_custom: "",
       site_web: fournisseur?.site_web || "",
       numero_tva: fournisseur?.numero_tva || "",
       note_performance: fournisseur?.note_performance || undefined,
@@ -78,9 +82,26 @@ export function FournisseurForm({ fournisseur, onSuccess }: FournisseurFormProps
   // Create/Update mutation
   const mutation = useMutation({
     mutationFn: async (data: FournisseurFormData) => {
+      let secteurId = data.secteur_id;
+      
+      // Si "Autre" est sélectionné et qu'un secteur personnalisé est fourni, créer un nouveau secteur
+      if (isOtherSector && data.secteur_custom?.trim()) {
+        const { data: newSecteur, error: secteurError } = await supabase
+          .from("secteurs_activite")
+          .insert({
+            nom: data.secteur_custom.trim(),
+            description: `Secteur personnalisé: ${data.secteur_custom.trim()}`
+          })
+          .select()
+          .single();
+        
+        if (secteurError) throw secteurError;
+        secteurId = newSecteur.id;
+      }
+
       const cleanData = {
         nom: data.nom,
-        secteur_id: data.secteur_id,
+        secteur_id: secteurId,
         email: data.email || null,
         site_web: data.site_web || null,
         contact: data.contact || null,
@@ -105,6 +126,7 @@ export function FournisseurForm({ fournisseur, onSuccess }: FournisseurFormProps
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["fournisseurs"] });
+      queryClient.invalidateQueries({ queryKey: ["secteurs"] }); // Invalider aussi les secteurs
       toast({
         title: "Succès",
         description: fournisseur 
@@ -123,7 +145,27 @@ export function FournisseurForm({ fournisseur, onSuccess }: FournisseurFormProps
   });
 
   const onSubmit = (data: FournisseurFormData) => {
+    // Validation spéciale pour le secteur "Autre"
+    if (isOtherSector && !data.secteur_custom?.trim()) {
+      toast({
+        title: "Erreur",
+        description: "Veuillez spécifier le secteur d'activité",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     mutation.mutate(data);
+  };
+
+  // Fonction pour gérer le changement de secteur
+  const handleSectorChange = (value: string) => {
+    const autreId = "79f144be-26d6-4479-8417-eb1788d06b4c"; // ID du secteur "Autre"
+    setIsOtherSector(value === autreId);
+    form.setValue("secteur_id", value);
+    if (value !== autreId) {
+      form.setValue("secteur_custom", "");
+    }
   };
 
   return (
@@ -150,7 +192,7 @@ export function FournisseurForm({ fournisseur, onSuccess }: FournisseurFormProps
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Secteur d'activité *</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <Select onValueChange={handleSectorChange} defaultValue={field.value}>
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="Sélectionnez un secteur" />
@@ -168,6 +210,25 @@ export function FournisseurForm({ fournisseur, onSuccess }: FournisseurFormProps
               </FormItem>
             )}
           />
+
+          {isOtherSector && (
+            <FormField
+              control={form.control}
+              name="secteur_custom"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Préciser le secteur d'activité *</FormLabel>
+                  <FormControl>
+                    <Input 
+                      {...field} 
+                      placeholder="Précisez le secteur d'activité"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-4">
