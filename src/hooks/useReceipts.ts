@@ -71,14 +71,23 @@ export const useReceipts = (filters?: {
             // Récupérer le mode de paiement selon le type d'opération
             switch (receipt.type_operation) {
               case 'location':
-                const { data: locationPayment } = await supabase
+                // Pour les locations, chercher le paiement le plus proche de la date de génération du reçu
+                const receiptDate = new Date(receipt.date_generation);
+                const { data: locationPayments } = await supabase
                   .from('paiements_locations')
-                  .select('mode_paiement')
+                  .select('mode_paiement, montant, date_paiement, created_at')
                   .eq('location_id', receipt.reference_id)
-                  .order('created_at', { ascending: false })
-                  .limit(1)
-                  .single();
-                mode_paiement = locationPayment?.mode_paiement;
+                  .eq('montant', receipt.montant_total);
+                
+                if (locationPayments && locationPayments.length > 0) {
+                  // Trouver le paiement avec la date la plus proche de la génération du reçu
+                  const closestPayment = locationPayments.reduce((closest, current) => {
+                    const currentDiff = Math.abs(new Date(current.date_paiement).getTime() - receiptDate.getTime());
+                    const closestDiff = Math.abs(new Date(closest.date_paiement).getTime() - receiptDate.getTime());
+                    return currentDiff < closestDiff ? current : closest;
+                  });
+                  mode_paiement = closestPayment.mode_paiement;
+                }
                 break;
 
               case 'paiement_facture':
@@ -109,7 +118,7 @@ export const useReceipts = (filters?: {
                 break;
             }
           } catch (error) {
-            console.log('Mode de paiement non trouvé pour le reçu:', receipt.numero);
+            console.log('Mode de paiement non trouvé pour le reçu:', receipt.numero, error);
           }
 
           return {
