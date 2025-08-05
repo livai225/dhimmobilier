@@ -17,7 +17,7 @@ export function Layout({ children }: LayoutProps) {
             <div className="flex items-center">
               <SidebarTrigger />
               <div className="ml-4">
-                <h1 className="text-xl font-semibold">Property Manage Pro</h1>
+                <h1 className="text-xl font-semibold">DH Immobilier Pro</h1>
               </div>
             </div>
             <ThemeToggle />
