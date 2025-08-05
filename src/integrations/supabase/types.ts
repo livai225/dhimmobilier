@@ -700,6 +700,14 @@ export type Database = {
           nouveau_solde: number
         }[]
       }
+      fix_souscription_balances: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          souscription_id: string
+          ancien_solde: number
+          nouveau_solde: number
+        }[]
+      }
       generate_echeances_droit_terre: {
         Args: { souscription_uuid: string }
         Returns: undefined
