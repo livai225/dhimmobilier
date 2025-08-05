@@ -344,20 +344,21 @@ export default function Dashboard() {
               Revenus mensuels par type (derniers 6 mois)
             </CardDescription>
           </CardHeader>
-          <CardContent className="p-2 sm:p-6">
+          <CardContent className="p-4 sm:p-6">
             <ChartContainer config={chartConfig} className="h-[200px] sm:h-[250px] lg:h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={stats?.monthlyRevenue || []} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
+                <AreaChart data={stats?.monthlyRevenue || []} margin={{ top: 20, right: 20, left: 50, bottom: 20 }}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis 
                     dataKey="month" 
                     fontSize={12}
-                    tickMargin={5}
+                    tickMargin={8}
+                    height={40}
                   />
                   <YAxis 
                     tickFormatter={(value) => `${value / 1000}k`}
                     fontSize={12}
-                    width={40}
+                    width={50}
                   />
                   <ChartTooltip
                     content={<ChartTooltipContent />}
@@ -393,19 +394,17 @@ export default function Dashboard() {
               Par type d'activité
             </CardDescription>
           </CardHeader>
-          <CardContent className="p-2 sm:p-6">
+          <CardContent className="p-4 sm:p-6">
             <ChartContainer config={chartConfig} className="h-[200px] sm:h-[250px] lg:h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
-                <PieChart margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
+                <PieChart margin={{ top: 20, right: 20, left: 20, bottom: 20 }}>
                   <Pie
                     data={stats?.revenueBreakdown || []}
                     cx="50%"
                     cy="50%"
-                    outerRadius={60}
+                    outerRadius={window.innerWidth > 640 ? 70 : 50}
                     dataKey="value"
-                    label={({ name, percent }) => 
-                      window.innerWidth > 640 ? `${name} ${(percent * 100).toFixed(0)}%` : `${(percent * 100).toFixed(0)}%`
-                    }
+                    label={false}
                   >
                     {stats?.revenueBreakdown?.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
