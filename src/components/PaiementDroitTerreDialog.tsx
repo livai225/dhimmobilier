@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -13,7 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { toast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { CreditCard, FileText, Calendar } from "lucide-react";
+import { CreditCard, FileText, Calculator } from "lucide-react";
 import { ReceiptGenerator } from "@/utils/receiptGenerator";
 
 interface PaiementDroitTerreDialogProps {
@@ -28,36 +28,18 @@ export function PaiementDroitTerreDialog({ open, onOpenChange, souscription, onS
     montant: "",
     date_paiement: new Date().toISOString().split("T")[0],
     mode_paiement: "",
-    reference: "",
-    numero_echeance: ""
+    reference: ""
   });
 
-  const { data: echeances, isLoading: loadingEcheances, refetch: refetchEcheances } = useQuery({
-    queryKey: ["echeances_droit_terre", souscription?.id],
+  const { data: paiements, refetch: refetchPaiements } = useQuery({
+    queryKey: ["paiements_droit_terre", souscription?.id],
     queryFn: async () => {
       if (!souscription?.id) return [];
       
       const { data, error } = await supabase
-        .from("echeances_droit_terre")
+        .from("paiements_droit_terre")
         .select("*")
         .eq("souscription_id", souscription.id)
-        .order("numero_echeance");
-
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!souscription?.id && open,
-  });
-
-  const { data: paiements } = useQuery({
-    queryKey: ["paiements_echeances", souscription?.id],
-    queryFn: async () => {
-      if (!souscription?.id) return [];
-      
-      const { data, error } = await supabase
-        .from("paiements_locations")
-        .select("*")
-        .eq("location_id", souscription.id)
         .order("date_paiement", { ascending: false });
 
       if (error) throw error;
@@ -66,29 +48,29 @@ export function PaiementDroitTerreDialog({ open, onOpenChange, souscription, onS
     enabled: !!souscription?.id && open,
   });
 
-  useEffect(() => {
-    if (souscription && echeances) {
-      // Find the next unpaid écheance
-      const nextEcheance = echeances.find(e => e.statut === "en_attente");
-      if (nextEcheance) {
-        setFormData(prev => ({
-          ...prev,
-          montant: nextEcheance.montant.toString(),
-          numero_echeance: nextEcheance.numero_echeance.toString()
-        }));
-      }
-    }
-  }, [souscription, echeances]);
+  const { data: soldeData, refetch: refetchSolde } = useQuery({
+    queryKey: ["solde_droit_terre", souscription?.id],
+    queryFn: async () => {
+      if (!souscription?.id) return null;
+      
+      const { data, error } = await supabase
+        .rpc("calculate_solde_droit_terre", { souscription_uuid: souscription.id });
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!souscription?.id && open,
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     try {
-      // Record the payment
+      // Record the payment in the new simplified table
       const { data: payment, error: paymentError } = await supabase
-        .from("paiements_locations")
+        .from("paiements_droit_terre")
         .insert({
-          location_id: souscription.id,
+          souscription_id: souscription.id,
           montant: parseFloat(formData.montant),
           date_paiement: formData.date_paiement,
           mode_paiement: formData.mode_paiement,
@@ -99,30 +81,12 @@ export function PaiementDroitTerreDialog({ open, onOpenChange, souscription, onS
 
       if (paymentError) throw paymentError;
 
-      // Update the écheance status
-      if (formData.numero_echeance) {
-        const { error: echeanceError } = await supabase
-          .from("echeances_droit_terre")
-          .update({
-            statut: "paye",
-            date_paiement: formData.date_paiement,
-            montant_paye: parseFloat(formData.montant)
-          })
-          .eq("souscription_id", souscription.id)
-          .eq("numero_echeance", parseInt(formData.numero_echeance));
-
-        if (echeanceError) throw echeanceError;
-      }
-
       // Generate receipt for land rights payment
-      const selectedEcheance = echeances?.find(e => e.numero_echeance.toString() === formData.numero_echeance);
       const receipt = await ReceiptGenerator.createReceipt({
         clientId: souscription.client_id,
         referenceId: payment.id,
         typeOperation: "droit_terre",
         montantTotal: parseFloat(formData.montant),
-        periodeDebut: selectedEcheance?.date_echeance,
-        periodeFin: selectedEcheance?.date_echeance,
         datePaiement: formData.date_paiement
       });
 
@@ -136,11 +100,11 @@ export function PaiementDroitTerreDialog({ open, onOpenChange, souscription, onS
         montant: "",
         date_paiement: new Date().toISOString().split("T")[0],
         mode_paiement: "",
-        reference: "",
-        numero_echeance: ""
+        reference: ""
       });
 
-      refetchEcheances();
+      refetchPaiements();
+      refetchSolde();
       onSuccess();
     } catch (error) {
       console.error("Error recording payment:", error);
@@ -160,11 +124,9 @@ export function PaiementDroitTerreDialog({ open, onOpenChange, souscription, onS
     });
   };
 
-  const echeancesEnRetard = echeances?.filter(e => 
-    e.statut === "en_attente" && new Date(e.date_echeance) < new Date()
-  ) || [];
-
-  const prochaines5Echeances = echeances?.filter(e => e.statut === "en_attente").slice(0, 5) || [];
+  // Calculate statistics
+  const totalPaye = paiements?.reduce((sum, p) => sum + Number(p.montant), 0) || 0;
+  const soldeRestant = Number(soldeData) || 0;
 
   if (!souscription) return null;
 
@@ -187,40 +149,18 @@ export function PaiementDroitTerreDialog({ open, onOpenChange, souscription, onS
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <Label htmlFor="numero_echeance">Échéance</Label>
-                  <Select value={formData.numero_echeance} onValueChange={(value) => {
-                    const selectedEcheance = echeances?.find(e => e.numero_echeance.toString() === value);
-                    setFormData({
-                      ...formData, 
-                      numero_echeance: value,
-                      montant: selectedEcheance?.montant.toString() || ""
-                    });
-                  }}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Sélectionner une échéance" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {echeances?.filter(e => e.statut === "en_attente").slice(0, 12).map((echeance) => (
-                        <SelectItem key={echeance.id} value={echeance.numero_echeance.toString()}>
-                          #{echeance.numero_echeance} - {format(new Date(echeance.date_echeance), "MMMM yyyy", { locale: fr })}
-                          {new Date(echeance.date_echeance) < new Date() && (
-                            <Badge variant="destructive" className="ml-2">En retard</Badge>
-                          )}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
                   <Label htmlFor="montant">Montant (FCFA) *</Label>
                   <Input
                     id="montant"
                     type="number"
                     value={formData.montant}
                     onChange={(e) => setFormData({...formData, montant: e.target.value})}
+                    placeholder="Entrez le montant à payer"
                     required
                   />
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Vous pouvez payer le montant total ou une partie
+                  </p>
                 </div>
 
                 <div>
@@ -287,7 +227,7 @@ export function PaiementDroitTerreDialog({ open, onOpenChange, souscription, onS
                   <span className="font-medium">{souscription.montant_droit_terre_mensuel?.toLocaleString()} FCFA</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Début droit de terre:</span>
+                  <span className="text-muted-foreground">Début du paiement du droit de terre:</span>
                   <span className="font-medium">
                     {souscription.date_debut_droit_terre 
                       ? format(new Date(souscription.date_debut_droit_terre), "dd/MM/yyyy")
@@ -296,44 +236,40 @@ export function PaiementDroitTerreDialog({ open, onOpenChange, souscription, onS
                 </div>
                 <Separator />
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Échéances payées:</span>
+                  <span className="text-muted-foreground">Total payé:</span>
                   <span className="font-medium text-green-600">
-                    {echeances?.filter(e => e.statut === "paye").length || 0} / 240
+                    {totalPaye.toLocaleString()} FCFA
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">En retard:</span>
-                  <span className="font-medium text-red-600">{echeancesEnRetard.length}</span>
+                  <span className="text-muted-foreground">Solde restant:</span>
+                  <span className={`font-medium ${soldeRestant > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                    {Math.abs(soldeRestant).toLocaleString()} FCFA
+                    {soldeRestant < 0 && " (avance)"}
+                  </span>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Upcoming payments */}
+            {/* Payment Summary */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4" />
-                  Prochaines échéances
+                  <Calculator className="h-4 w-4" />
+                  Calcul du solde
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {prochaines5Echeances.map((echeance) => (
-                    <div key={echeance.id} className="flex justify-between items-center p-2 border rounded">
-                      <div>
-                        <p className="font-medium">#{echeance.numero_echeance}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {format(new Date(echeance.date_echeance), "dd MMMM yyyy", { locale: fr })}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-medium">{echeance.montant.toLocaleString()} FCFA</p>
-                        {new Date(echeance.date_echeance) < new Date() && (
-                          <Badge variant="destructive" className="text-xs">En retard</Badge>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+              <CardContent className="space-y-2">
+                <div className="text-sm text-muted-foreground">
+                  <p>Le solde est calculé automatiquement en fonction du nombre de mois écoulés depuis le début du paiement du droit de terre.</p>
+                  <p className="mt-2">
+                    <strong>Montant mensuel:</strong> {souscription.montant_droit_terre_mensuel?.toLocaleString()} FCFA
+                  </p>
+                  {souscription.date_debut_droit_terre && (
+                    <p>
+                      <strong>Début:</strong> {format(new Date(souscription.date_debut_droit_terre), "dd MMMM yyyy", { locale: fr })}
+                    </p>
+                  )}
                 </div>
               </CardContent>
             </Card>

@@ -346,6 +346,36 @@ export type Database = {
           },
         ]
       }
+      paiements_droit_terre: {
+        Row: {
+          created_at: string
+          date_paiement: string
+          id: string
+          mode_paiement: string | null
+          montant: number
+          reference: string | null
+          souscription_id: string
+        }
+        Insert: {
+          created_at?: string
+          date_paiement: string
+          id?: string
+          mode_paiement?: string | null
+          montant: number
+          reference?: string | null
+          souscription_id: string
+        }
+        Update: {
+          created_at?: string
+          date_paiement?: string
+          id?: string
+          mode_paiement?: string | null
+          montant?: number
+          reference?: string | null
+          souscription_id?: string
+        }
+        Relationships: []
+      }
       paiements_factures: {
         Row: {
           created_at: string
@@ -697,6 +727,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      calculate_solde_droit_terre: {
+        Args: { souscription_uuid: string }
+        Returns: number
+      }
       generate_echeances_droit_terre: {
         Args: { souscription_uuid: string }
         Returns: undefined
