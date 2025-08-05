@@ -275,7 +275,7 @@ export default function Souscriptions() {
                       }}
                     >
                       <CreditCard className="mr-2 h-4 w-4" />
-                      {souscription.type_souscription === "classique" ? "Paiement échéance" : "Paiement droit terre"}
+                      Paiement
                     </Button>
                   )}
 

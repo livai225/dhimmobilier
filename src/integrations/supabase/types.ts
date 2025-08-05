@@ -128,45 +128,6 @@ export type Database = {
         }
         Relationships: []
       }
-      echeances_souscriptions: {
-        Row: {
-          created_at: string
-          date_echeance: string
-          date_paiement: string | null
-          id: string
-          montant: number
-          montant_paye: number | null
-          numero_echeance: number
-          souscription_id: string
-          statut: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          date_echeance: string
-          date_paiement?: string | null
-          id?: string
-          montant: number
-          montant_paye?: number | null
-          numero_echeance: number
-          souscription_id: string
-          statut?: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          date_echeance?: string
-          date_paiement?: string | null
-          id?: string
-          montant?: number
-          montant_paye?: number | null
-          numero_echeance?: number
-          souscription_id?: string
-          statut?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
       factures_fournisseurs: {
         Row: {
           created_at: string
