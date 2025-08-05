@@ -37,9 +37,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
+import { AlertTriangle } from "lucide-react";
 import { ReceiptGenerator } from "@/utils/receiptGenerator";
 
 const paiementSchema = z.object({
@@ -134,26 +136,58 @@ export function PaiementFactureDialog({
       });
       onSuccess();
     },
-    onError: (error) => {
+    onError: (error: Error) => {
+      let errorMessage = error.message;
+      
+      // Améliorer les messages d'erreur de la base de données
+      if (errorMessage.includes('dépasse le solde restant')) {
+        const matches = errorMessage.match(/Montant total: ([\d.]+), Déjà payé: ([\d.]+), Solde restant: ([\d.]+)/);
+        if (matches) {
+          const [, total, paye, restant] = matches;
+          errorMessage = `Paiement impossible: le solde restant est de ${formatCurrency(Number(restant))} (Total: ${formatCurrency(Number(total))}, Payé: ${formatCurrency(Number(paye))})`;
+        }
+      }
+      
       toast({
-        title: "Erreur",
-        description: "Une erreur est survenue lors de l'enregistrement du paiement",
+        title: "Erreur de paiement",
+        description: errorMessage,
         variant: "destructive",
       });
     },
   });
 
-  const onSubmit = (data: PaiementFormData) => {
-    // Validate that payment doesn't exceed remaining balance
-    if (data.montant > (facture?.solde || 0)) {
+  const onSubmit = async (data: PaiementFormData) => {
+    if (!facture) return;
+
+    // Recalcul du montant restant en temps réel pour éviter les conditions de course
+    const { data: paiementsExistants } = await supabase
+      .from('paiements_factures')
+      .select('montant')
+      .eq('facture_id', facture.id);
+
+    const totalPaye = paiementsExistants?.reduce((sum, p) => sum + Number(p.montant), 0) || 0;
+    const montantRestant = facture.montant_total - totalPaye;
+    
+    // Validation stricte avec marge d'erreur numérique
+    if (data.montant > montantRestant + 0.01) {
       toast({
-        title: "Erreur",
-        description: "Le montant ne peut pas dépasser le solde restant",
+        title: "Montant invalide",
+        description: `Le montant saisi (${formatCurrency(data.montant)}) dépasse le solde restant de ${formatCurrency(montantRestant)}`,
         variant: "destructive",
       });
       return;
     }
-    
+
+    // Validation de montant positif
+    if (data.montant <= 0) {
+      toast({
+        title: "Montant invalide",
+        description: "Le montant doit être supérieur à zéro",
+        variant: "destructive",
+      });
+      return;
+    }
+
     mutation.mutate(data);
   };
 
@@ -187,6 +221,15 @@ export function PaiementFactureDialog({
           <TabsContent value="nouveau" className="space-y-4">
             {/* Invoice info */}
             <div className="bg-muted p-4 rounded-lg">
+              {facture.solde < 0 && (
+                <Alert className="mb-4">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    Attention: Cette facture a un solde négatif de {formatCurrency(Math.abs(facture.solde))}. 
+                    Contactez l'administrateur pour corriger cette situation.
+                  </AlertDescription>
+                </Alert>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Fournisseur</p>
@@ -204,7 +247,9 @@ export function PaiementFactureDialog({
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Solde restant</p>
-                  <p className="font-bold text-destructive">{formatCurrency(facture.solde)}</p>
+                  <p className={`font-bold ${facture.solde < 0 ? 'text-red-600' : 'text-destructive'}`}>
+                    {formatCurrency(facture.solde)}
+                  </p>
                 </div>
               </div>
             </div>

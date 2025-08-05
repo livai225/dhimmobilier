@@ -692,6 +692,14 @@ export type Database = {
         Args: { souscription_uuid: string }
         Returns: number
       }
+      fix_negative_balances: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          facture_id: string
+          ancien_solde: number
+          nouveau_solde: number
+        }[]
+      }
       generate_echeances_droit_terre: {
         Args: { souscription_uuid: string }
         Returns: undefined

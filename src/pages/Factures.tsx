@@ -136,13 +136,16 @@ export default function Factures() {
   const getStatutBadge = (facture) => {
     const solde = facture.solde || 0;
     const montantTotal = facture.montant_total || 0;
-    
-    if (solde === 0) {
+
+    // Cas d'erreur: solde négatif (trop payé)
+    if (solde < -0.01) {
+      return <Badge className="bg-red-100 text-red-800 hover:bg-red-100 border-red-300">Erreur</Badge>;
+    } else if (Math.abs(solde) <= 0.01) {
       return <Badge variant="default">Payée</Badge>;
-    } else if (solde === montantTotal) {
-      return <Badge variant="destructive">Impayée</Badge>;
-    } else {
+    } else if (solde < montantTotal) {
       return <Badge variant="secondary">Partielle</Badge>;
+    } else {
+      return <Badge variant="destructive">Impayée</Badge>;
     }
   };
 
@@ -298,12 +301,15 @@ export default function Factures() {
                   <TableCell>
                     {format(new Date(facture.date_facture), "dd/MM/yyyy", { locale: fr })}
                   </TableCell>
-                  <TableCell>{formatCurrency(facture.montant_total)}</TableCell>
-                  <TableCell>{formatCurrency(facture.montant_paye)}</TableCell>
-                  <TableCell className="font-medium">
-                    {formatCurrency(facture.solde)}
-                  </TableCell>
-                  <TableCell>{getStatutBadge(facture)}</TableCell>
+                   <TableCell>{formatCurrency(facture.montant_total)}</TableCell>
+                   <TableCell>{formatCurrency(facture.montant_paye)}</TableCell>
+                   <TableCell className={`font-medium ${facture.solde < 0 ? 'text-red-600' : ''}`}>
+                     {formatCurrency(facture.solde)}
+                     {facture.solde < 0 && (
+                       <span className="text-xs block text-red-500">⚠️ Erreur</span>
+                     )}
+                   </TableCell>
+                   <TableCell>{getStatutBadge(facture)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
                       <Button
