@@ -87,6 +87,19 @@ export function ReceiptDetailsDialog({
                 <Badge className={`${operation.color} text-white`}>
                   {operation.label}
                 </Badge>
+                {receipt.mode_paiement && (
+                  <div>
+                    <p className="text-sm font-medium">Mode de paiement:</p>
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-100 text-green-800">
+                      {receipt.mode_paiement === 'especes' || receipt.mode_paiement === 'espece' ? 'Espèces' :
+                       receipt.mode_paiement === 'cheque' ? 'Chèque' :
+                       receipt.mode_paiement === 'virement' ? 'Virement' :
+                       receipt.mode_paiement === 'mobile_money' ? 'Mobile Money' :
+                       receipt.mode_paiement === 'carte' ? 'Carte bancaire' :
+                       receipt.mode_paiement}
+                    </span>
+                  </div>
+                )}
                 {receipt.periode_debut && (
                   <div>
                     <p className="text-sm font-medium">Période:</p>

@@ -11,6 +11,7 @@ export interface ReceiptWithDetails {
   montant_total: number;
   periode_debut: string | null;
   periode_fin: string | null;
+  mode_paiement?: string | null;
   client: {
     nom: string;
     prenom: string | null;
@@ -60,7 +61,65 @@ export const useReceipts = (filters?: {
       const { data, error } = await query;
 
       if (error) throw error;
-      return data as ReceiptWithDetails[];
+
+      // Enrichir les reçus avec le mode de paiement
+      const enrichedReceipts = await Promise.all(
+        data.map(async (receipt) => {
+          let mode_paiement = null;
+
+          try {
+            // Récupérer le mode de paiement selon le type d'opération
+            switch (receipt.type_operation) {
+              case 'location':
+                const { data: locationPayment } = await supabase
+                  .from('paiements_locations')
+                  .select('mode_paiement')
+                  .eq('location_id', receipt.reference_id)
+                  .order('created_at', { ascending: false })
+                  .limit(1)
+                  .single();
+                mode_paiement = locationPayment?.mode_paiement;
+                break;
+
+              case 'paiement_facture':
+                const { data: facturePayment } = await supabase
+                  .from('paiements_factures')
+                  .select('mode_paiement')
+                  .eq('id', receipt.reference_id)
+                  .single();
+                mode_paiement = facturePayment?.mode_paiement;
+                break;
+
+              case 'apport_souscription':
+                const { data: souscriptionPayment } = await supabase
+                  .from('paiements_souscriptions')
+                  .select('mode_paiement')
+                  .eq('id', receipt.reference_id)
+                  .single();
+                mode_paiement = souscriptionPayment?.mode_paiement;
+                break;
+
+              case 'droit_terre':
+                const { data: droitTerrePayment } = await supabase
+                  .from('paiements_droit_terre')
+                  .select('mode_paiement')
+                  .eq('id', receipt.reference_id)
+                  .single();
+                mode_paiement = droitTerrePayment?.mode_paiement;
+                break;
+            }
+          } catch (error) {
+            console.log('Mode de paiement non trouvé pour le reçu:', receipt.numero);
+          }
+
+          return {
+            ...receipt,
+            mode_paiement
+          } as ReceiptWithDetails;
+        })
+      );
+
+      return enrichedReceipts;
     },
   });
 };
