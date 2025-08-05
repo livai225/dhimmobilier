@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CalendarIcon } from "lucide-react";
-import { format } from "date-fns";
+import { format, addMonths } from "date-fns";
 import { fr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -31,18 +31,48 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Generate months for payment
-  const generateMonths = () => {
+  // Récupérer les mois déjà payés
+  const { data: paidMonths = [] } = useQuery({
+    queryKey: ["paid_months", location.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("recus")
+        .select("periode_debut")
+        .eq("reference_id", location.id)
+        .eq("type_operation", "location")
+        .not("periode_debut", "is", null);
+      
+      if (error) throw error;
+      
+      return data.map(recu => format(new Date(recu.periode_debut), "yyyy-MM"));
+    },
+    enabled: !!location.id,
+  });
+
+  // Calculer le mois de début des paiements (après les 2 mois d'avance)
+  const calculateStartingMonth = () => {
+    const locationStartDate = new Date(location.date_debut);
+    // Ajouter 2 mois à la date de début (car 2 mois d'avance déjà payés)
+    return addMonths(locationStartDate, 2);
+  };
+
+  // Générer les mois disponibles pour paiement
+  const generateAvailableMonths = () => {
     const months = [];
-    const currentDate = new Date();
+    const startingMonth = calculateStartingMonth();
     
-    // Generate 12 months starting from current month
-    for (let i = 0; i < 12; i++) {
-      const date = new Date(currentDate.getFullYear(), currentDate.getMonth() + i, 1);
-      months.push({
-        value: format(date, "yyyy-MM"),
-        label: format(date, "MMMM yyyy", { locale: fr })
-      });
+    // Générer 24 mois à partir du mois de début des paiements
+    for (let i = 0; i < 24; i++) {
+      const date = addMonths(startingMonth, i);
+      const monthValue = format(date, "yyyy-MM");
+      
+      // Exclure les mois déjà payés
+      if (!paidMonths.includes(monthValue)) {
+        months.push({
+          value: monthValue,
+          label: format(date, "MMMM yyyy", { locale: fr })
+        });
+      }
     }
     
     return months;
@@ -90,6 +120,10 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
       return { paiement, recu };
     },
     onSuccess: ({ recu }) => {
+      // Invalider les queries pour rafraîchir les données
+      queryClient.invalidateQueries({ queryKey: ["locations"] });
+      queryClient.invalidateQueries({ queryKey: ["paid_months", location.id] });
+      
       toast({
         title: "Paiement enregistré",
         description: `Paiement enregistré avec succès. Reçu généré: ${recu.numero}`,
@@ -166,11 +200,35 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
                 <span className="font-medium">{location.loyer_mensuel?.toLocaleString()} FCFA</span>
               </div>
               <div className="flex justify-between">
+                <span>Date de début:</span>
+                <span className="font-medium">{format(new Date(location.date_debut), "dd MMMM yyyy", { locale: fr })}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Premier mois à payer:</span>
+                <span className="font-medium text-blue-600">
+                  {format(calculateStartingMonth(), "MMMM yyyy", { locale: fr })}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Mois déjà payés:</span>
+                <span className="font-medium text-green-600">{paidMonths.length}</span>
+              </div>
+              <div className="flex justify-between">
                 <span>Dette actuelle:</span>
                 <span className={`font-medium ${location.dette_totale > 0 ? 'text-red-600' : 'text-green-600'}`}>
                   {location.dette_totale?.toLocaleString()} FCFA
                 </span>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Information sur les 2 mois d'avance */}
+          <Card className="bg-blue-50 border-blue-200">
+            <CardContent className="pt-4">
+              <p className="text-sm text-blue-800">
+                <strong>Note:</strong> Les 2 premiers mois ({format(new Date(location.date_debut), "MMMM yyyy", { locale: fr })} et {format(addMonths(new Date(location.date_debut), 1), "MMMM yyyy", { locale: fr })}) 
+                sont couverts par l'avance déjà payée lors de la signature du contrat.
+              </p>
             </CardContent>
           </Card>
 
@@ -182,11 +240,17 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
                   <SelectValue placeholder="Sélectionner le mois" />
                 </SelectTrigger>
                 <SelectContent>
-                  {generateMonths().map((month) => (
-                    <SelectItem key={month.value} value={month.value}>
-                      {month.label}
+                  {generateAvailableMonths().length > 0 ? (
+                    generateAvailableMonths().map((month) => (
+                      <SelectItem key={month.value} value={month.value}>
+                        {month.label}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="" disabled>
+                      Tous les mois sont déjà payés
                     </SelectItem>
-                  ))}
+                  )}
                 </SelectContent>
               </Select>
             </div>
