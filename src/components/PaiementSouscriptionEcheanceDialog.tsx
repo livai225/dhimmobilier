@@ -126,7 +126,15 @@ export function PaiementSouscriptionEcheanceDialog({
       return { paiement, receipt: receiptData };
     },
     onSuccess: (data) => {
+      // Invalider toutes les queries liées pour forcer le rafraîchissement
       queryClient.invalidateQueries({ queryKey: ["souscriptions"] });
+      queryClient.invalidateQueries({ queryKey: ["paiements_souscription"] });
+      queryClient.invalidateQueries({ queryKey: ["paiements_souscription", souscription?.id] });
+      
+      console.log("Paiement effectué - invalidation des queries:", {
+        souscriptionId: souscription?.id,
+        montant: data.paiement.montant
+      });
       
       toast({
         title: "Paiement enregistré",

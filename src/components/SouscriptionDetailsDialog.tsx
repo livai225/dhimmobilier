@@ -55,19 +55,23 @@ export function SouscriptionDetailsDialog({
     enabled: !!souscription?.propriete_id,
   });
 
-  const { data: paiements } = useQuery({
+  const { data: paiements, refetch: refetchPaiements } = useQuery({
     queryKey: ["paiements_souscription", souscription?.id],
     queryFn: async () => {
       if (!souscription?.id) return [];
+      console.log("Récupération des paiements pour souscription:", souscription.id);
       const { data, error } = await supabase
         .from("paiements_souscriptions")
         .select("*")
         .eq("souscription_id", souscription.id)
         .order("date_paiement", { ascending: false });
       if (error) throw error;
+      console.log("Paiements récupérés:", data?.length || 0);
       return data;
     },
     enabled: !!souscription?.id,
+    refetchOnWindowFocus: true,
+    staleTime: 0, // Force fresh data
   });
 
   if (!souscription) return null;
