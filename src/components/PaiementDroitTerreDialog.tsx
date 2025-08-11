@@ -66,6 +66,16 @@ export function PaiementDroitTerreDialog({ open, onOpenChange, souscription, onS
     e.preventDefault();
 
     try {
+      // Interdire le paiement du droit de terre tant que la souscription n'est pas soldée
+      if (souscription?.solde_restant > 0) {
+        toast({
+          title: "Action interdite",
+          description: "Soldez d'abord la souscription avant de payer le droit de terre.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       // Record the payment in the new simplified table
       const { data: payment, error: paymentError } = await supabase
         .from("paiements_droit_terre")

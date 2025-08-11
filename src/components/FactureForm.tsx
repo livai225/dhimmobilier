@@ -42,6 +42,7 @@ interface FactureFormProps {
 export function FactureForm({ facture, onSuccess }: FactureFormProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const isSettled = Boolean(facture && facture.solde === 0);
   
   const form = useForm<FactureFormData>({
     resolver: zodResolver(factureSchema),
@@ -146,146 +147,161 @@ export function FactureForm({ facture, onSuccess }: FactureFormProps) {
   });
 
   const onSubmit = (data: FactureFormData) => {
+    if (isSettled && facture) {
+      toast({
+        title: "Action interdite",
+        description: "Cette facture est soldée et ne peut plus être modifiée.",
+        variant: "destructive",
+      });
+      return;
+    }
     mutation.mutate(data);
   };
 
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <FormField
-            control={form.control}
-            name="numero"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Numéro de facture *</FormLabel>
-                <div className="flex gap-2">
+        {isSettled && (
+          <div className="p-3 rounded-md border bg-muted text-sm">
+            Cette facture est soldée. Les champs sont verrouillés.
+          </div>
+        )}
+        <fieldset disabled={isSettled} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="numero"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Numéro de facture *</FormLabel>
+                  <div className="flex gap-2">
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    {!facture && (
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        onClick={generateNumero}
+                        size="sm"
+                      >
+                        Auto
+                      </Button>
+                    )}
+                  </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="fournisseur_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Fournisseur *</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sélectionnez un fournisseur" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {fournisseurs.map((fournisseur) => (
+                        <SelectItem key={fournisseur.id} value={fournisseur.id}>
+                          {fournisseur.nom}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="propriete_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Propriété (optionnel)</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sélectionnez une propriété" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="none">Aucune propriété</SelectItem>
+                      {proprietes.map((propriete) => (
+                        <SelectItem key={propriete.id} value={propriete.id}>
+                          {propriete.nom}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="date_facture"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Date de facture *</FormLabel>
                   <FormControl>
-                    <Input {...field} />
+                    <Input type="date" {...field} />
                   </FormControl>
-                  {!facture && (
-                    <Button 
-                      type="button" 
-                      variant="outline" 
-                      onClick={generateNumero}
-                      size="sm"
-                    >
-                      Auto
-                    </Button>
-                  )}
-                </div>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
 
           <FormField
             control={form.control}
-            name="fournisseur_id"
+            name="montant_total"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Fournisseur *</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Sélectionnez un fournisseur" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {fournisseurs.map((fournisseur) => (
-                      <SelectItem key={fournisseur.id} value={fournisseur.id}>
-                        {fournisseur.nom}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <FormField
-            control={form.control}
-            name="propriete_id"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Propriété (optionnel)</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Sélectionnez une propriété" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="none">Aucune propriété</SelectItem>
-                    {proprietes.map((propriete) => (
-                      <SelectItem key={propriete.id} value={propriete.id}>
-                        {propriete.nom}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="date_facture"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Date de facture *</FormLabel>
+                <FormLabel>Montant total (FCFA) *</FormLabel>
                 <FormControl>
-                  <Input type="date" {...field} />
+                  <Input 
+                    type="number" 
+                    min="0" 
+                    step="1"
+                    {...field}
+                    onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
-        </div>
 
-        <FormField
-          control={form.control}
-          name="montant_total"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Montant total (FCFA) *</FormLabel>
-              <FormControl>
-                <Input 
-                  type="number" 
-                  min="0" 
-                  step="1"
-                  {...field}
-                  onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="description"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Description</FormLabel>
-              <FormControl>
-                <Textarea {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+          <FormField
+            control={form.control}
+            name="description"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Description</FormLabel>
+                <FormControl>
+                  <Textarea {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </fieldset>
 
         <div className="flex justify-end gap-2 pt-4">
           <Button type="button" variant="outline" onClick={onSuccess}>
             Annuler
           </Button>
-          <Button type="submit" disabled={mutation.isPending}>
+          <Button type="submit" disabled={mutation.isPending || isSettled}>
             {mutation.isPending ? "Enregistrement..." : "Enregistrer"}
           </Button>
         </div>
