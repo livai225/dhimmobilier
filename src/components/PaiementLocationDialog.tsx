@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CalendarIcon } from "lucide-react";
-import { format, addMonths } from "date-fns";
+import { format, addMonths, startOfMonth } from "date-fns";
 import { fr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -49,11 +49,11 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
     enabled: !!location.id,
   });
 
-  // Calculer le mois de début des paiements (après les 2 mois d'avance)
+  // Calculer le 1er mois payable (après les 2 mois d'avance: mois suivant + 1)
+  // Exemple: début 31 août -> avance couvre sept + oct -> premier paiement = novembre
   const calculateStartingMonth = () => {
-    const locationStartDate = new Date(location.date_debut);
-    // Ajouter 2 mois à la date de début (car 2 mois d'avance déjà payés)
-    return addMonths(locationStartDate, 2);
+    const startMonth = startOfMonth(new Date(location.date_debut));
+    return addMonths(startMonth, 3);
   };
 
   // Générer les mois disponibles pour paiement
@@ -226,7 +226,7 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
           <Card className="bg-blue-50 border-blue-200">
             <CardContent className="pt-4">
               <p className="text-sm text-blue-800">
-                <strong>Note:</strong> Les 2 premiers mois ({format(new Date(location.date_debut), "MMMM yyyy", { locale: fr })} et {format(addMonths(new Date(location.date_debut), 1), "MMMM yyyy", { locale: fr })}) 
+                <strong>Note:</strong> Les 2 premiers mois ({format(addMonths(startOfMonth(new Date(location.date_debut)), 1), "MMMM yyyy", { locale: fr })} et {format(addMonths(startOfMonth(new Date(location.date_debut)), 2), "MMMM yyyy", { locale: fr })}) 
                 sont couverts par l'avance déjà payée lors de la signature du contrat.
               </p>
             </CardContent>

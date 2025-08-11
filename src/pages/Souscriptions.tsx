@@ -284,14 +284,18 @@ export default function Souscriptions() {
                   <Button
                     variant="outline"
                     size="sm"
-                    disabled={souscription.solde_restant > 0 || souscription.type_souscription !== "mise_en_garde"}
+                    disabled={souscription.solde_restant > 0 || (souscription.montant_droit_terre_mensuel ?? 0) <= 0}
                     onClick={() => {
-                      if (souscription.solde_restant === 0 && souscription.type_souscription === "mise_en_garde") {
-                        setSelectedSouscription(souscription);
-                        setIsDroitTerreDialogOpen(true);
-                      }
+                      setSelectedSouscription(souscription);
+                      setIsDroitTerreDialogOpen(true);
                     }}
-                    title={souscription.solde_restant > 0 ? "Disponible après solde de la souscription" : undefined}
+                    title={
+                      souscription.solde_restant > 0
+                        ? "Disponible après solde de la souscription"
+                        : (souscription.montant_droit_terre_mensuel ?? 0) <= 0
+                          ? "Droit de terre non applicable"
+                          : undefined
+                    }
                   >
                     <Coins className="mr-2 h-4 w-4" />
                     Droit de terre
