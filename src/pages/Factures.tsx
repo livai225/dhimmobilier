@@ -25,6 +25,9 @@ import { Plus, Search, Edit, Trash2, CreditCard, Receipt } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
+import { ExportToExcelButton } from "@/components/ExportToExcelButton";
+import { FactureDetailsDialog } from "@/components/FactureDetailsDialog";
+import { Eye, Download as DownloadIcon } from "lucide-react";
 
 export default function Factures() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -34,6 +37,8 @@ export default function Factures() {
   const [isPaiementDialogOpen, setIsPaiementDialogOpen] = useState(false);
   const [editingFacture, setEditingFacture] = useState(null);
   const [selectedFactureForPaiement, setSelectedFactureForPaiement] = useState(null);
+  const [selectedFactureDetails, setSelectedFactureDetails] = useState<any | null>(null);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -166,25 +171,48 @@ export default function Factures() {
             Gérez vos factures et effectuez les paiements
           </p>
         </div>
-        <Dialog open={isFactureDialogOpen} onOpenChange={setIsFactureDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={() => setEditingFacture(null)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Nouvelle facture
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>
-                {editingFacture ? "Modifier la facture" : "Nouvelle facture"}
-              </DialogTitle>
-            </DialogHeader>
-            <FactureForm 
-              facture={editingFacture}
-              onSuccess={handleCloseFactureDialog}
-            />
-          </DialogContent>
-        </Dialog>
+        <div className="flex items-center gap-2">
+          <ExportToExcelButton
+            filename={`factures_${new Date().toISOString().slice(0,10)}`}
+            rows={filteredFactures}
+            columns={[
+              { header: "N°", accessor: (r:any) => r.numero },
+              { header: "Fournisseur", accessor: (r:any) => r.fournisseur?.nom },
+              { header: "Propriété", accessor: (r:any) => r.propriete?.nom || "-" },
+              { header: "Date", accessor: (r:any) => format(new Date(r.date_facture), "dd/MM/yyyy", { locale: fr }) },
+              { header: "Total", accessor: (r:any) => r.montant_total },
+              { header: "Payé", accessor: (r:any) => r.montant_paye },
+              { header: "Solde", accessor: (r:any) => r.solde },
+              { header: "Statut", accessor: (r:any) => {
+                const solde = r.solde || 0; const mt = r.montant_total || 0;
+                if (solde < -0.01) return 'Erreur';
+                if (Math.abs(solde) <= 0.01) return 'Payée';
+                if (solde < mt) return 'Partielle';
+                return 'Impayée';
+              }},
+            ]}
+            label="Exporter Excel"
+          />
+          <Dialog open={isFactureDialogOpen} onOpenChange={setIsFactureDialogOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={() => setEditingFacture(null)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Nouvelle facture
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>
+                  {editingFacture ? "Modifier la facture" : "Nouvelle facture"}
+                </DialogTitle>
+              </DialogHeader>
+              <FactureForm 
+                facture={editingFacture}
+                onSuccess={handleCloseFactureDialog}
+              />
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {/* Filters */}
@@ -338,8 +366,21 @@ export default function Factures() {
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="sm">
-                        <Receipt className="h-4 w-4" />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => { setSelectedFactureDetails(facture); setIsDetailsOpen(true); }}
+                        title="Détails"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={async () => { const { downloadInvoicePDF } = await import("@/utils/invoicePdf"); downloadInvoicePDF(facture); }}
+                        title="Télécharger PDF"
+                      >
+                        <DownloadIcon className="h-4 w-4" />
                       </Button>
                     </div>
                   </TableCell>
@@ -356,6 +397,13 @@ export default function Factures() {
         open={isPaiementDialogOpen}
         onOpenChange={setIsPaiementDialogOpen}
         onSuccess={handleClosePaiementDialog}
+      />
+
+      {/* Details Dialog */}
+      <FactureDetailsDialog
+        facture={selectedFactureDetails}
+        open={isDetailsOpen}
+        onOpenChange={setIsDetailsOpen}
       />
     </div>
   );

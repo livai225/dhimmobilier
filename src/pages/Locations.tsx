@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { LocationForm } from "@/components/LocationForm";
 import { LocationDetailsDialog } from "@/components/LocationDetailsDialog";
 import { PaiementLocationDialog } from "@/components/PaiementLocationDialog";
+import { ExportToExcelButton } from "@/components/ExportToExcelButton";
 
 export default function Locations() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -113,10 +114,23 @@ export default function Locations() {
             Gestion des contrats de location avec système de caution 5 mois
           </p>
         </div>
-        <Button onClick={() => setShowLocationForm(true)} className="w-full sm:w-auto">
-          <Plus className="w-4 h-4 mr-2" />
-          Nouvelle Location
-        </Button>
+        <div className="flex items-center gap-2">
+          <ExportToExcelButton
+            filename={`locations_${new Date().toISOString().slice(0,10)}`}
+            rows={filteredLocations || []}
+            columns={[
+              { header: "Propriété", accessor: (r:any) => r.proprietes?.nom || "" },
+              { header: "Client", accessor: (r:any) => `${r.clients?.prenom || ''} ${r.clients?.nom || ''}`.trim() },
+              { header: "Loyer", accessor: (r:any) => r.loyer_mensuel },
+              { header: "Statut", accessor: (r:any) => r.statut },
+              { header: "Début", accessor: (r:any) => r.date_debut ? new Date(r.date_debut).toLocaleDateString('fr-FR') : "" },
+            ]}
+          />
+          <Button onClick={() => setShowLocationForm(true)} className="w-full sm:w-auto">
+            <Plus className="w-4 h-4 mr-2" />
+            Nouvelle Location
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}

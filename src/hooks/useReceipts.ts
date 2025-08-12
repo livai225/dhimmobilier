@@ -128,7 +128,18 @@ export const useReceipts = (filters?: {
         })
       );
 
-      return enrichedReceipts;
+      let results = enrichedReceipts;
+
+      // Filtrage supplémentaire côté client pour la recherche par nom de client
+      if (filters?.search) {
+        const s = filters.search.toLowerCase();
+        results = results.filter((r) =>
+          r.numero.toLowerCase().includes(s) ||
+          `${r.client?.nom || ''} ${r.client?.prenom || ''}`.toLowerCase().includes(s)
+        );
+      }
+
+      return results;
     },
   });
 };

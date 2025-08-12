@@ -14,6 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Plus, Edit, Trash2, Users, Phone, Mail, MapPin, AlertTriangle, Search, TrendingUp, Activity, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ClientForm } from "@/components/ClientForm";
+import { ExportToExcelButton } from "@/components/ExportToExcelButton";
 
 interface Client {
   id: string;
@@ -238,37 +239,50 @@ export default function Clients() {
             Gérez vos clients et leurs informations
           </p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={() => { resetForm(); setEditingClient(null); }} className="w-full sm:w-auto">
-              <Plus className="mr-2 h-4 w-4" />
-              Nouveau client
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto mx-4">
-            <DialogHeader>
-              <DialogTitle>
-                {editingClient ? "Modifier le client" : "Nouveau client"}
-              </DialogTitle>
-              <DialogDescription>
-                {editingClient 
-                  ? "Modifiez les informations du client ci-dessous."
-                  : "Ajoutez un nouveau client en remplissant les informations ci-dessous."
-                }
-              </DialogDescription>
-            </DialogHeader>
-            <ClientForm 
-              client={editingClient}
-              onSuccess={() => {
-                setIsDialogOpen(false);
-                setEditingClient(null);
-                resetForm();
-                queryClient.invalidateQueries({ queryKey: ['clients'] });
-                queryClient.invalidateQueries({ queryKey: ['client-stats'] });
-              }}
-            />
-          </DialogContent>
-        </Dialog>
+        <div className="flex items-center gap-2">
+          <ExportToExcelButton
+            filename={`clients_${new Date().toISOString().slice(0,10)}`}
+            rows={filteredClients}
+            columns={[
+              { header: "Nom", accessor: (r:any) => r.nom },
+              { header: "Prénom", accessor: (r:any) => r.prenom || "" },
+              { header: "Email", accessor: (r:any) => r.email || "" },
+              { header: "Téléphone", accessor: (r:any) => r.telephone_principal || "" },
+              { header: "Adresse", accessor: (r:any) => r.adresse || "" },
+            ]}
+          />
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={() => { resetForm(); setEditingClient(null); }} className="w-full sm:w-auto">
+                <Plus className="mr-2 h-4 w-4" />
+                Nouveau client
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto mx-4">
+              <DialogHeader>
+                <DialogTitle>
+                  {editingClient ? "Modifier le client" : "Nouveau client"}
+                </DialogTitle>
+                <DialogDescription>
+                  {editingClient 
+                    ? "Modifiez les informations du client ci-dessous."
+                    : "Ajoutez un nouveau client en remplissant les informations ci-dessous."
+                  }
+                </DialogDescription>
+              </DialogHeader>
+              <ClientForm 
+                client={editingClient}
+                onSuccess={() => {
+                  setIsDialogOpen(false);
+                  setEditingClient(null);
+                  resetForm();
+                  queryClient.invalidateQueries({ queryKey: ['clients'] });
+                  queryClient.invalidateQueries({ queryKey: ['client-stats'] });
+                }}
+              />
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {/* Dashboard Statistics */}

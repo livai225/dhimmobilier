@@ -243,25 +243,42 @@ export function LocationDetailsDialog({ location, onClose, onUpdate }: LocationD
             <CardContent>
               {paiements && paiements.length > 0 ? (
                 <div className="space-y-2">
-                  {paiements.map((paiement) => (
-                    <div key={paiement.id} className="flex justify-between items-center p-3 border rounded-lg">
-                      <div>
-                        <p className="font-medium">{paiement.montant?.toLocaleString()} FCFA</p>
-                        <p className="text-sm text-muted-foreground">
-                          {format(new Date(paiement.date_paiement), "PPP", { locale: fr })}
-                        </p>
-                        {paiement.reference && (
-                          <p className="text-xs text-muted-foreground">Réf: {paiement.reference}</p>
-                        )}
+                  {paiements.map((paiement) => {
+                    const matchingReceipt = (recus || []).reduce((closest: any, r: any) => {
+                      if (r.type_operation !== 'location') return closest;
+                      if (Number(r.montant_total) !== Number(paiement.montant)) return closest;
+                      const diff = Math.abs(new Date(r.date_generation).getTime() - new Date(paiement.date_paiement).getTime());
+                      if (!closest) return r;
+                      const prevDiff = Math.abs(new Date(closest.date_generation).getTime() - new Date(paiement.date_paiement).getTime());
+                      return diff < prevDiff ? r : closest;
+                    }, null);
+
+                    return (
+                      <div key={paiement.id} className="flex justify-between items-center p-3 border rounded-lg">
+                        <div>
+                          <p className="font-medium">{paiement.montant?.toLocaleString()} FCFA</p>
+                          <p className="text-sm text-muted-foreground">
+                            {format(new Date(paiement.date_paiement), "PPP", { locale: fr })}
+                          </p>
+                          {matchingReceipt?.periode_debut && (
+                            <p className="text-xs text-muted-foreground">
+                              Période payée: {new Date(matchingReceipt.periode_debut).toLocaleDateString("fr-FR")}
+                              {matchingReceipt.periode_fin && ` au ${new Date(matchingReceipt.periode_fin).toLocaleDateString("fr-FR")}`}
+                            </p>
+                          )}
+                          {paiement.reference && (
+                            <p className="text-xs text-muted-foreground">Réf: {paiement.reference}</p>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm">{paiement.mode_paiement}</p>
+                          <Button variant="ghost" size="sm">
+                            <FileText className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-sm">{paiement.mode_paiement}</p>
-                        <Button variant="ghost" size="sm">
-                          <FileText className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="text-center text-muted-foreground py-4">

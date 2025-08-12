@@ -22,6 +22,7 @@ import {
 import { FournisseurForm } from "@/components/FournisseurForm";
 import { Plus, Search, Edit, Trash2, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { ExportToExcelButton } from "@/components/ExportToExcelButton";
 
 export default function Fournisseurs() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -124,25 +125,38 @@ export default function Fournisseurs() {
             Gérez vos fournisseurs et prestataires de services
           </p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={() => setEditingFournisseur(null)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Nouveau fournisseur
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>
-                {editingFournisseur ? "Modifier le fournisseur" : "Nouveau fournisseur"}
-              </DialogTitle>
-            </DialogHeader>
-            <FournisseurForm 
-              fournisseur={editingFournisseur}
-              onSuccess={handleCloseDialog}
-            />
-          </DialogContent>
-        </Dialog>
+        <div className="flex items-center gap-2">
+          <ExportToExcelButton
+            filename={`fournisseurs_${new Date().toISOString().slice(0,10)}`}
+            rows={filteredFournisseurs}
+            columns={[
+              { header: "Nom", accessor: (r:any) => r.nom },
+              { header: "Secteur", accessor: (r:any) => r.secteur?.nom || "" },
+              { header: "Contact", accessor: (r:any) => r.contact || "" },
+              { header: "Téléphone", accessor: (r:any) => r.telephone || "" },
+              { header: "Email", accessor: (r:any) => r.email || "" },
+            ]}
+          />
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={() => setEditingFournisseur(null)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Nouveau fournisseur
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>
+                  {editingFournisseur ? "Modifier le fournisseur" : "Nouveau fournisseur"}
+                </DialogTitle>
+              </DialogHeader>
+              <FournisseurForm 
+                fournisseur={editingFournisseur}
+                onSuccess={handleCloseDialog}
+              />
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {/* Filters */}

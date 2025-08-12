@@ -15,6 +15,7 @@ import { Plus, Eye, CreditCard, Calendar, Trash2, Coins } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
+import { ExportToExcelButton } from "@/components/ExportToExcelButton";
 
 export default function Souscriptions() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -134,30 +135,42 @@ export default function Souscriptions() {
     <div className="container mx-auto p-4 lg:p-6">
       <div className="flex flex-col space-y-4 lg:flex-row lg:items-center lg:justify-between lg:space-y-0 mb-6">
         <h1 className="text-2xl md:text-3xl font-bold">Gestion des Souscriptions</h1>
-        <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-          <DialogTrigger asChild>
-            <Button className="w-full sm:w-auto">
-              <Plus className="mr-2 h-4 w-4" />
-              Nouvelle souscription
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-4xl">
-            <DialogHeader>
-              <DialogTitle>
-                {selectedSouscription ? "Modifier la souscription" : "Nouvelle souscription"}
-              </DialogTitle>
-            </DialogHeader>
-            <SouscriptionForm
-              souscription={selectedSouscription}
-              onSuccess={() => {
-                setIsFormOpen(false);
-                setSelectedSouscription(null);
-                refetch();
-              }}
-              baremes={baremes || []}
-            />
-          </DialogContent>
-        </Dialog>
+        <div className="flex items-center gap-2">
+          <ExportToExcelButton
+            filename={`souscriptions_${new Date().toISOString().slice(0,10)}`}
+            rows={filteredSouscriptions || []}
+            columns={[
+              { header: "Client", accessor: (r:any) => `${r.clients?.prenom || ''} ${r.clients?.nom || ''}`.trim() },
+              { header: "Propriété", accessor: (r:any) => r.proprietes?.nom || '' },
+              { header: "Phase", accessor: (r:any) => r.phase_actuelle },
+              { header: "Prix total", accessor: (r:any) => r.prix_total },
+            ]}
+          />
+          <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+            <DialogTrigger asChild>
+              <Button className="w-full sm:w-auto">
+                <Plus className="mr-2 h-4 w-4" />
+                Nouvelle souscription
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-4xl">
+              <DialogHeader>
+                <DialogTitle>
+                  {selectedSouscription ? "Modifier la souscription" : "Nouvelle souscription"}
+                </DialogTitle>
+              </DialogHeader>
+              <SouscriptionForm
+                souscription={selectedSouscription}
+                onSuccess={() => {
+                  setIsFormOpen(false);
+                  setSelectedSouscription(null);
+                  refetch();
+                }}
+                baremes={baremes || []}
+              />
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {/* Filters */}

@@ -73,6 +73,19 @@ export default function Recus() {
             Gestion et consultation des reçus de paiement
           </p>
         </div>
+        <ExportToExcelButton
+          filename={`recus_${new Date().toISOString().slice(0,10)}`}
+          rows={receipts || []}
+          columns={[
+            { header: "Numéro", accessor: (r:any) => r.numero },
+            { header: "Date", accessor: (r:any) => new Date(r.date_generation).toLocaleDateString("fr-FR") },
+            { header: "Client", accessor: (r:any) => `${r.client?.nom || ''} ${r.client?.prenom || ''}`.trim() },
+            { header: "Type", accessor: (r:any) => r.type_operation },
+            { header: "Montant", accessor: (r:any) => r.montant_total },
+            { header: "Période début", accessor: (r:any) => r.periode_debut ? new Date(r.periode_debut).toLocaleDateString("fr-FR") : "-" },
+            { header: "Période fin", accessor: (r:any) => r.periode_fin ? new Date(r.periode_fin).toLocaleDateString("fr-FR") : "-" },
+          ]}
+        />
       </div>
 
       {/* Statistics Cards */}
@@ -137,7 +150,7 @@ export default function Recus() {
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Input
-              placeholder="Rechercher par numéro..."
+              placeholder="Rechercher par numéro ou client..."
               value={filters.search}
               onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
             />
@@ -190,7 +203,7 @@ export default function Recus() {
         <CardHeader>
           <CardTitle>Liste des reçus</CardTitle>
           <CardDescription>
-            {receipts?.length || 0} reçu(s) trouvé(s)
+            {(receipts?.length || 0)} reçu(s) trouvé(s)
           </CardDescription>
         </CardHeader>
         <CardContent className="overflow-x-auto">

@@ -13,6 +13,7 @@ import { Plus, Edit, Trash2, Building } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { PropertyDetailsDialog } from "@/components/PropertyDetailsDialog";
 import { PropertyForm } from "@/components/PropertyForm";
+import { ExportToExcelButton } from "@/components/ExportToExcelButton";
 
 interface Propriete {
   id: string;
@@ -241,35 +242,48 @@ export default function Proprietes() {
             Gérez votre portefeuille immobilier
           </p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={() => { resetForm(); setEditingPropriete(null); }} className="w-full sm:w-auto">
-              <Plus className="mr-2 h-4 w-4" />
-              Nouvelle propriété
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>
-                {editingPropriete ? "Modifier la propriété" : "Nouvelle propriété"}
-              </DialogTitle>
-              <DialogDescription>
-                {editingPropriete 
-                  ? "Modifiez les informations de la propriété ci-dessous."
-                  : "Ajoutez une nouvelle propriété en remplissant les informations ci-dessous."
-                }
-              </DialogDescription>
-            </DialogHeader>
-            <PropertyForm 
-              property={editingPropriete}
-              onSuccess={() => {
-                setIsDialogOpen(false);
-                setEditingPropriete(null);
-                resetForm();
-              }}
-            />
-          </DialogContent>
-        </Dialog>
+        <div className="flex items-center gap-2">
+          <ExportToExcelButton
+            filename={`proprietes_${new Date().toISOString().slice(0,10)}`}
+            rows={proprietes || []}
+            columns={[
+              { header: "Nom", accessor: (r:any) => r.nom },
+              { header: "Type", accessor: (r:any) => r.types_proprietes?.nom || "" },
+              { header: "Statut", accessor: (r:any) => r.statut || "" },
+              { header: "Usage", accessor: (r:any) => r.usage || "" },
+              { header: "Zone", accessor: (r:any) => r.zone || "" },
+            ]}
+          />
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={() => { resetForm(); setEditingPropriete(null); }} className="w-full sm:w-auto">
+                <Plus className="mr-2 h-4 w-4" />
+                Nouvelle propriété
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>
+                  {editingPropriete ? "Modifier la propriété" : "Nouvelle propriété"}
+                </DialogTitle>
+                <DialogDescription>
+                  {editingPropriete 
+                    ? "Modifiez les informations de la propriété ci-dessous."
+                    : "Ajoutez une nouvelle propriété en remplissant les informations ci-dessous."
+                  }
+                </DialogDescription>
+              </DialogHeader>
+              <PropertyForm 
+                property={editingPropriete}
+                onSuccess={() => {
+                  setIsDialogOpen(false);
+                  setEditingPropriete(null);
+                  resetForm();
+                }}
+              />
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
       <Card>
         <CardHeader>

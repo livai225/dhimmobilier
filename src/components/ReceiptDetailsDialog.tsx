@@ -44,6 +44,10 @@ export function ReceiptDetailsDialog({
           <DialogTitle className="flex items-center justify-between">
             <span>Détails du reçu</span>
             <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => printReceiptPDF(receipt)}>
+                <Printer className="h-4 w-4 mr-2" />
+                Imprimer
+              </Button>
               <Button variant="outline" size="sm" onClick={handleDownload}>
                 <Download className="h-4 w-4 mr-2" />
                 Télécharger PDF
