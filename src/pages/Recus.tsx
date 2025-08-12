@@ -11,6 +11,7 @@ import { ReceiptDetailsDialog } from "@/components/ReceiptDetailsDialog";
 import { downloadReceiptPDF } from "@/utils/pdfGenerator";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { ExportToExcelButton } from "@/components/ExportToExcelButton";
 
 export default function Recus() {
   const [filters, setFilters] = useState({

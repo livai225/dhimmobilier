@@ -1,9 +1,9 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Download, Eye } from "lucide-react";
+import { Download, Eye, Printer } from "lucide-react";
 import { ReceiptWithDetails } from "@/hooks/useReceipts";
-import { downloadReceiptPDF } from "@/utils/pdfGenerator";
+import { downloadReceiptPDF, printReceiptPDF } from "@/utils/pdfGenerator";
 
 interface ReceiptDetailsDialogProps {
   receipt: ReceiptWithDetails | null;

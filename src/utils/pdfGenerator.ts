@@ -1,8 +1,17 @@
 import jsPDF from "jspdf";
 import { ReceiptWithDetails } from "@/hooks/useReceipts";
 
-export const generateReceiptPDF = (receipt: ReceiptWithDetails) => {
+export const generateReceiptPDF = (receipt: ReceiptWithDetails, logoDataUrl?: string) => {
   const doc = new jsPDF();
+  
+  // Logo (optional)
+  if (logoDataUrl) {
+    try {
+      doc.addImage(logoDataUrl, "PNG", 14, 10, 30, 30);
+    } catch (e) {
+      // Ignore image errors silently
+    }
+  }
   
   // Header
   doc.setFontSize(20);
@@ -36,7 +45,7 @@ export const generateReceiptPDF = (receipt: ReceiptWithDetails) => {
   doc.text("DÉTAILS DE L'OPÉRATION", 20, 125);
   doc.setFont("helvetica", "normal");
   
-  const operationTypes = {
+  const operationTypes: Record<string, string> = {
     location: "Paiement de loyer",
     caution_location: "Caution de location",
     apport_souscription: "Apport de souscription",
@@ -56,7 +65,8 @@ export const generateReceiptPDF = (receipt: ReceiptWithDetails) => {
   // Amount
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
-  doc.text(`MONTANT: ${receipt.montant_total.toLocaleString("fr-FR")} FCFA`, 20, 170);
+  const formatCurrency = (amount: number) => new Intl.NumberFormat("fr-FR", { style: "currency", currency: "XOF", minimumFractionDigits: 0 }).format(amount || 0);
+  doc.text(`MONTANT: ${formatCurrency(Number(receipt.montant_total))}`, 20, 170);
   
   // Footer
   doc.setFontSize(10);
@@ -67,7 +77,35 @@ export const generateReceiptPDF = (receipt: ReceiptWithDetails) => {
   return doc;
 };
 
-export const downloadReceiptPDF = (receipt: ReceiptWithDetails) => {
-  const doc = generateReceiptPDF(receipt);
+// Load image as DataURL for jsPDF
+const loadImageAsDataURL = async (url: string): Promise<string> => {
+  const res = await fetch(url);
+  const blob = await res.blob();
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+};
+
+export const downloadReceiptPDF = async (receipt: ReceiptWithDetails) => {
+  let logoDataUrl: string | undefined;
+  try {
+    logoDataUrl = await loadImageAsDataURL('/lovable-uploads/88feb91e-8b8d-4e58-9691-d95421a2c943.png');
+  } catch {}
+  const doc = generateReceiptPDF(receipt, logoDataUrl);
   doc.save(`recu_${receipt.numero}.pdf`);
+};
+
+export const printReceiptPDF = async (receipt: ReceiptWithDetails) => {
+  let logoDataUrl: string | undefined;
+  try {
+    logoDataUrl = await loadImageAsDataURL('/lovable-uploads/88feb91e-8b8d-4e58-9691-d95421a2c943.png');
+  } catch {}
+  const doc = generateReceiptPDF(receipt, logoDataUrl);
+  (doc as any).autoPrint?.();
+  const blobUrl = doc.output('bloburl');
+  const win = window.open(blobUrl);
+  win?.focus();
 };
