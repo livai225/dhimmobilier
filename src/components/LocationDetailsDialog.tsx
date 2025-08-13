@@ -100,9 +100,42 @@ export function LocationDetailsDialog({ location, onClose, onUpdate }: LocationD
   });
 
   const calculateProgress = () => {
-    const totalPaye = paiements?.reduce((sum, p) => sum + Number(p.montant), 0) || 0;
-    const totalDu = location.loyer_mensuel * 12; // Assuming yearly calculation
-    return Math.min((totalPaye / totalDu) * 100, 100);
+    if (!location?.loyer_mensuel) return { percentage: 0, currentYear: 1, yearProgress: 0 };
+    
+    // Calculate months elapsed since start
+    const startDate = new Date(location.date_debut);
+    const currentDate = new Date();
+    const monthsElapsed = (currentDate.getFullYear() - startDate.getFullYear()) * 12 + 
+                         (currentDate.getMonth() - startDate.getMonth()) + 1;
+    
+    const totalPaid = paiements?.reduce((sum, p) => sum + Number(p.montant), 0) || 0;
+    
+    // Determine current year and calculate progress for that year
+    let currentYear = 1;
+    let yearlyDue = location.loyer_mensuel * 10; // First year: 10 months
+    let accumulatedDue = yearlyDue;
+    
+    // Find which year we're currently paying for
+    while (totalPaid >= accumulatedDue && currentYear < 20) { // Max 20 years
+      currentYear++;
+      yearlyDue = location.loyer_mensuel * 12; // Subsequent years: 12 months
+      accumulatedDue += yearlyDue;
+    }
+    
+    // Calculate progress for current year
+    const previousYearsDue = currentYear === 1 ? 0 : 
+      (location.loyer_mensuel * 10) + ((currentYear - 2) * location.loyer_mensuel * 12);
+    const currentYearPaid = totalPaid - previousYearsDue;
+    const currentYearDue = currentYear === 1 ? location.loyer_mensuel * 10 : location.loyer_mensuel * 12;
+    const yearProgress = Math.min((currentYearPaid / currentYearDue) * 100, 100);
+    
+    return { 
+      percentage: yearProgress, 
+      currentYear, 
+      yearProgress: Math.round(yearProgress),
+      currentYearPaid,
+      currentYearDue
+    };
   };
 
   const getStatusBadge = (statut: string) => {
@@ -223,9 +256,12 @@ export function LocationDetailsDialog({ location, onClose, onUpdate }: LocationD
 
                 <div>
                   <p className="text-sm font-medium mb-2">Progression des Paiements</p>
-                  <Progress value={calculateProgress()} className="w-full" />
+                  <Progress value={calculateProgress().percentage} className="w-full" />
                   <p className="text-xs text-muted-foreground mt-1">
-                    {calculateProgress().toFixed(1)}% des paiements annuels
+                    Année {calculateProgress().currentYear} - {calculateProgress().yearProgress}% des paiements annuels
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {calculateProgress().currentYearPaid?.toLocaleString()} / {calculateProgress().currentYearDue?.toLocaleString()} FCFA
                   </p>
                 </div>
               </CardContent>
@@ -254,24 +290,23 @@ export function LocationDetailsDialog({ location, onClose, onUpdate }: LocationD
                     }, null);
 
                     return (
-                      <div key={paiement.id} className="flex justify-between items-center p-3 border rounded-lg">
-                        <div>
+                      <div key={paiement.id} className="grid grid-cols-1 md:grid-cols-3 gap-4 p-3 border rounded-lg">
+                        <div className="md:col-span-2">
                           <p className="font-medium">{paiement.montant?.toLocaleString()} FCFA</p>
                           <p className="text-sm text-muted-foreground">
                             {format(new Date(paiement.date_paiement), "PPP", { locale: fr })}
                           </p>
-                          {matchingReceipt?.periode_debut && (
-                            <p className="text-xs text-muted-foreground">
-                              Période payée: {new Date(matchingReceipt.periode_debut).toLocaleDateString("fr-FR")}
-                              {matchingReceipt.periode_fin && ` au ${new Date(matchingReceipt.periode_fin).toLocaleDateString("fr-FR")}`}
-                            </p>
-                          )}
                           {paiement.reference && (
                             <p className="text-xs text-muted-foreground">Réf: {paiement.reference}</p>
                           )}
                         </div>
                         <div className="text-right">
-                          <p className="text-sm">{paiement.mode_paiement}</p>
+                          {matchingReceipt?.periode_debut && (
+                            <p className="text-sm font-medium text-primary">
+                              Mois payé: {format(new Date(matchingReceipt.periode_debut), "MMMM yyyy", { locale: fr })}
+                            </p>
+                          )}
+                          <p className="text-sm text-muted-foreground">{paiement.mode_paiement}</p>
                           <Button variant="ghost" size="sm">
                             <FileText className="w-4 h-4" />
                           </Button>
