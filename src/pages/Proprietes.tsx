@@ -339,7 +339,7 @@ export default function Proprietes() {
           />
         </div>
         <div className="flex gap-2">
-          <Select value={selectedStatut} onValueChange={setSelectedStatut}>
+          <Select value={selectedStatut || ""} onValueChange={setSelectedStatut}>
             <SelectTrigger className="w-40">
               <SelectValue placeholder="Tous statuts" />
             </SelectTrigger>
@@ -351,7 +351,7 @@ export default function Proprietes() {
               <SelectItem value="En vente">En vente</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={selectedUsage} onValueChange={setSelectedUsage}>
+          <Select value={selectedUsage || ""} onValueChange={setSelectedUsage}>
             <SelectTrigger className="w-40">
               <SelectValue placeholder="Tous usages" />
             </SelectTrigger>

@@ -202,7 +202,7 @@ export default function Fournisseurs() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="">Tous les secteurs</SelectItem>
-            {secteurs.map((secteur) => (
+            {secteurs.filter(secteur => secteur?.id && secteur?.nom).map((secteur) => (
               <SelectItem key={secteur.id} value={secteur.id}>
                 {secteur.nom}
               </SelectItem>
