@@ -14,9 +14,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { Plus, Edit, Trash2, Users, Phone, Mail, MapPin, AlertTriangle, Search, TrendingUp, Activity, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ClientForm } from "@/components/ClientForm";
-import ClientDetailsDialog from "@/components/ClientDetailsDialog";
-import { SouscriptionDetailsDialog } from "@/components/SouscriptionDetailsDialog";
-import { LocationDetailsDialog } from "@/components/LocationDetailsDialog";
 import { ExportToExcelButton } from "@/components/ExportToExcelButton";
 
 interface Client {
@@ -40,8 +37,6 @@ export default function Clients() {
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
-  const [selectedSubscription, setSelectedSubscription] = useState<any>(null);
-  const [selectedLocation, setSelectedLocation] = useState<any>(null);
   const [formData, setFormData] = useState({
     nom: "",
     prenom: "",
@@ -359,36 +354,86 @@ export default function Clients() {
       </div>
 
       {/* Client Details Dialog */}
-      <ClientDetailsDialog
-        client={selectedClient}
-        isOpen={!!selectedClient}
-        onClose={() => setSelectedClient(null)}
-        onViewSubscription={(subscription) => {
-          setSelectedSubscription(subscription);
-        }}
-        onViewLocation={(location) => {
-          setSelectedLocation(location);
-        }}
-      />
-
-      {/* Subscription Details Dialog */}
-      <SouscriptionDetailsDialog
-        open={!!selectedSubscription}
-        onOpenChange={(open) => !open && setSelectedSubscription(null)}
-        souscription={selectedSubscription}
-        onEdit={() => {}}
-        onNewPayment={() => {}}
-        onNewDroitTerrePayment={() => {}}
-      />
-
-      {/* Location Details Dialog */}
-      {selectedLocation && (
-        <LocationDetailsDialog
-          location={selectedLocation}
-          onClose={() => setSelectedLocation(null)}
-          onUpdate={() => {}}
-        />
-      )}
+      <Dialog open={!!selectedClient} onOpenChange={() => setSelectedClient(null)}>
+        <DialogContent className="sm:max-w-[600px] mx-4">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Eye className="h-5 w-5" />
+              Détails du client
+            </DialogTitle>
+          </DialogHeader>
+          {selectedClient && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <h4 className="font-semibold">Nom complet</h4>
+                  <p>{selectedClient.nom} {selectedClient.prenom}</p>
+                </div>
+                <div>
+                  <h4 className="font-semibold">Email</h4>
+                  <p>{selectedClient.email || "-"}</p>
+                </div>
+              </div>
+              
+              <Separator />
+              
+              <div>
+                <h4 className="font-semibold mb-2">Numéros de téléphone</h4>
+                <div className="space-y-1">
+                  {selectedClient.telephone_principal && (
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-4 w-4" />
+                      <span className="text-sm">Principal: {selectedClient.telephone_principal}</span>
+                    </div>
+                  )}
+                  {selectedClient.telephone_secondaire_1 && (
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-4 w-4" />
+                      <span className="text-sm">Secondaire 1: {selectedClient.telephone_secondaire_1}</span>
+                    </div>
+                  )}
+                  {selectedClient.telephone_secondaire_2 && (
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-4 w-4" />
+                      <span className="text-sm">Secondaire 2: {selectedClient.telephone_secondaire_2}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              {selectedClient.contact_urgence_nom && (
+                <>
+                  <Separator />
+                  <div>
+                    <h4 className="font-semibold mb-2 flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4" />
+                      Contact d'urgence
+                    </h4>
+                    <div className="space-y-1">
+                      <p><strong>Nom:</strong> {selectedClient.contact_urgence_nom}</p>
+                      <p><strong>Téléphone:</strong> {selectedClient.contact_urgence_telephone}</p>
+                      <p><strong>Relation:</strong> {selectedClient.contact_urgence_relation}</p>
+                    </div>
+                  </div>
+                </>
+              )}
+              
+              {selectedClient.adresse && (
+                <>
+                  <Separator />
+                  <div>
+                    <h4 className="font-semibold mb-2 flex items-center gap-2">
+                      <MapPin className="h-4 w-4" />
+                      Adresse
+                    </h4>
+                    <p>{selectedClient.adresse}</p>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Clients Table */}
       <Card>

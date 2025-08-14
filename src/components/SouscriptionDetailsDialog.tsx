@@ -136,13 +136,7 @@ export function SouscriptionDetailsDialog({
                 Paiement souscription
               </Button>
             )}
-            <Button 
-              onClick={onNewDroitTerrePayment} 
-              size="sm" 
-              variant="outline" 
-              className="w-full sm:w-auto"
-              disabled={!souscription.montant_droit_terre_mensuel || souscription.montant_droit_terre_mensuel === 0}
-            >
+            <Button onClick={onNewDroitTerrePayment} size="sm" variant="outline" className="w-full sm:w-auto">
               <Coins className="mr-2 h-4 w-4" />
               Droit de terre
             </Button>
