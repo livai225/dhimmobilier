@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -32,7 +33,7 @@ export default function Fournisseurs() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Fetch suppliers with their sectors
+  // Fetch suppliers with their sectors and invoice stats
   const { data: fournisseurs = [], isLoading } = useQuery({
     queryKey: ["fournisseurs"],
     queryFn: async () => {
@@ -46,6 +47,31 @@ export default function Fournisseurs() {
       
       if (error) throw error;
       return data;
+    },
+  });
+
+  // Fetch invoice stats for suppliers
+  const { data: supplierStats } = useQuery({
+    queryKey: ["supplier-stats"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("factures_fournisseurs")
+        .select("fournisseur_id, montant_total, solde");
+      
+      if (error) throw error;
+      
+      const stats = data?.reduce((acc, facture) => {
+        const id = facture.fournisseur_id;
+        if (!acc[id]) {
+          acc[id] = { totalFactures: 0, totalEnCours: 0, nombreFactures: 0 };
+        }
+        acc[id].totalFactures += Number(facture.montant_total || 0);
+        acc[id].totalEnCours += Number(facture.solde || 0);
+        acc[id].nombreFactures += 1;
+        return acc;
+      }, {} as Record<string, { totalFactures: number; totalEnCours: number; nombreFactures: number }>) || {};
+
+      return stats;
     },
   });
 
@@ -170,18 +196,19 @@ export default function Fournisseurs() {
             className="pl-10"
           />
         </div>
-        <select
-          value={selectedSecteur}
-          onChange={(e) => setSelectedSecteur(e.target.value)}
-          className="px-3 py-2 border rounded-md bg-background"
-        >
-          <option value="">Tous les secteurs</option>
-          {secteurs.map((secteur) => (
-            <option key={secteur.id} value={secteur.id}>
-              {secteur.nom}
-            </option>
-          ))}
-        </select>
+        <Select value={selectedSecteur} onValueChange={setSelectedSecteur}>
+          <SelectTrigger className="w-48">
+            <SelectValue placeholder="Tous les secteurs" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="">Tous les secteurs</SelectItem>
+            {secteurs.map((secteur) => (
+              <SelectItem key={secteur.id} value={secteur.id}>
+                {secteur.nom}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Suppliers table */}
@@ -195,19 +222,20 @@ export default function Fournisseurs() {
               <TableHead>Téléphone</TableHead>
               <TableHead>Email</TableHead>
               <TableHead>Performance</TableHead>
+              <TableHead>Factures</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8">
+                <TableCell colSpan={8} className="text-center py-8">
                   Chargement...
                 </TableCell>
               </TableRow>
             ) : filteredFournisseurs.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                   Aucun fournisseur trouvé
                 </TableCell>
               </TableRow>
@@ -229,6 +257,24 @@ export default function Fournisseurs() {
                         {fournisseur.note_performance}/5
                       </Badge>
                     )}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-col gap-1">
+                      {supplierStats?.[fournisseur.id] ? (
+                        <>
+                          <Badge variant="outline" className="text-xs">
+                            {supplierStats[fournisseur.id].nombreFactures} facture{supplierStats[fournisseur.id].nombreFactures > 1 ? 's' : ''}
+                          </Badge>
+                          {supplierStats[fournisseur.id].totalEnCours > 0 && (
+                            <Badge variant="destructive" className="text-xs">
+                              {supplierStats[fournisseur.id].totalEnCours.toLocaleString()} FCFA dus
+                            </Badge>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Aucune facture</span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">

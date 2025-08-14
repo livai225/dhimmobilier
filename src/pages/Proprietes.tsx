@@ -7,9 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, Edit, Trash2, Building } from "lucide-react";
+import { Plus, Edit, Trash2, Building, Search, Filter } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { PropertyDetailsDialog } from "@/components/PropertyDetailsDialog";
 import { PropertyForm } from "@/components/PropertyForm";
@@ -39,6 +40,9 @@ interface TypePropriete {
 export default function Proprietes() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPropriete, setEditingPropriete] = useState<Propriete | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedStatut, setSelectedStatut] = useState("");
+  const [selectedUsage, setSelectedUsage] = useState("");
   const [formData, setFormData] = useState({
     nom: "",
     adresse: "",
@@ -74,6 +78,43 @@ export default function Proprietes() {
       return data;
     },
   });
+
+  // Fetch subscriptions and locations count for properties
+  const { data: propertyStats } = useQuery({
+    queryKey: ['property-stats'],
+    queryFn: async () => {
+      const [subscriptionsData, locationsData] = await Promise.all([
+        supabase.from('souscriptions').select('propriete_id'),
+        supabase.from('locations').select('propriete_id, statut')
+      ]);
+
+      const subscriptionCounts = subscriptionsData.data?.reduce((acc, sub) => {
+        acc[sub.propriete_id] = (acc[sub.propriete_id] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>) || {};
+
+      const locationCounts = locationsData.data?.reduce((acc, loc) => {
+        if (loc.statut === 'active') {
+          acc[loc.propriete_id] = (acc[loc.propriete_id] || 0) + 1;
+        }
+        return acc;
+      }, {} as Record<string, number>) || {};
+
+      return { subscriptionCounts, locationCounts };
+    },
+  });
+
+  // Filter properties
+  const filteredProprietes = proprietes?.filter((propriete) => {
+    const matchesSearch = propriete.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      propriete.adresse?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      propriete.zone?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatut = !selectedStatut || propriete.statut === selectedStatut;
+    const matchesUsage = !selectedUsage || propriete.usage === selectedUsage;
+    
+    return matchesSearch && matchesStatut && matchesUsage;
+  }) || [];
 
   const { data: typesProprietes = [] } = useQuery({
     queryKey: ['types-proprietes'],
@@ -285,6 +326,44 @@ export default function Proprietes() {
           </Dialog>
         </div>
       </div>
+
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+          <Input
+            placeholder="Rechercher une propriété..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <div className="flex gap-2">
+          <Select value={selectedStatut} onValueChange={setSelectedStatut}>
+            <SelectTrigger className="w-40">
+              <SelectValue placeholder="Tous statuts" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">Tous statuts</SelectItem>
+              <SelectItem value="Libre">Libre</SelectItem>
+              <SelectItem value="Occupé">Occupé</SelectItem>
+              <SelectItem value="En travaux">En travaux</SelectItem>
+              <SelectItem value="En vente">En vente</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={selectedUsage} onValueChange={setSelectedUsage}>
+            <SelectTrigger className="w-40">
+              <SelectValue placeholder="Tous usages" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">Tous usages</SelectItem>
+              <SelectItem value="Location">Location</SelectItem>
+              <SelectItem value="Bail">Bail</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -292,18 +371,23 @@ export default function Proprietes() {
             Liste des propriétés
           </CardTitle>
           <CardDescription>
-            {proprietes?.length || 0} propriété{(proprietes?.length || 0) !== 1 ? 's' : ''} enregistrée{(proprietes?.length || 0) !== 1 ? 's' : ''}
+            {filteredProprietes.length} propriété{filteredProprietes.length !== 1 ? 's' : ''} affichée{filteredProprietes.length !== 1 ? 's' : ''} sur {proprietes?.length || 0}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
             <p>Chargement...</p>
-          ) : proprietes?.length === 0 ? (
+          ) : filteredProprietes.length === 0 ? (
             <div className="text-center py-10">
               <Building className="mx-auto h-12 w-12 text-muted-foreground" />
-              <h3 className="mt-2 text-sm font-semibold">Aucune propriété</h3>
+              <h3 className="mt-2 text-sm font-semibold">
+                {searchTerm || selectedStatut || selectedUsage ? "Aucune propriété trouvée" : "Aucune propriété"}
+              </h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                Commencez par créer votre première propriété.
+                {searchTerm || selectedStatut || selectedUsage 
+                  ? "Modifiez vos critères de recherche ou créez une nouvelle propriété." 
+                  : "Commencez par créer votre première propriété."
+                }
               </p>
             </div>
           ) : (
@@ -317,12 +401,12 @@ export default function Proprietes() {
                   <TableHead>Usage</TableHead>
                   <TableHead>Tarif</TableHead>
                   <TableHead>Surface</TableHead>
-                  <TableHead>Adresse</TableHead>
+                  <TableHead>Activité</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {proprietes?.map((propriete) => (
+                {filteredProprietes.map((propriete) => (
                   <TableRow key={propriete.id}>
                     <TableCell className="font-medium">{propriete.nom}</TableCell>
                     <TableCell>{propriete.types_proprietes?.nom || "-"}</TableCell>
@@ -354,7 +438,24 @@ export default function Proprietes() {
                       }
                     </TableCell>
                     <TableCell>{propriete.surface ? `${propriete.surface} m²` : "-"}</TableCell>
-                    <TableCell className="max-w-xs truncate">{propriete.adresse || "-"}</TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        {(propertyStats?.subscriptionCounts[propriete.id] || 0) > 0 && (
+                          <Badge variant="outline" className="text-xs">
+                            {propertyStats?.subscriptionCounts[propriete.id]} souscr.
+                          </Badge>
+                        )}
+                        {(propertyStats?.locationCounts[propriete.id] || 0) > 0 && (
+                          <Badge variant="secondary" className="text-xs">
+                            {propertyStats?.locationCounts[propriete.id]} loc.
+                          </Badge>
+                        )}
+                        {!(propertyStats?.subscriptionCounts[propriete.id] || 0) && 
+                         !(propertyStats?.locationCounts[propriete.id] || 0) && (
+                          <span className="text-xs text-muted-foreground">Libre</span>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <div className="flex gap-2">
                         <PropertyDetailsDialog propriete={propriete} />
