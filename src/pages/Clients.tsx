@@ -15,6 +15,8 @@ import { Plus, Edit, Trash2, Users, Phone, Mail, MapPin, AlertTriangle, Search, 
 import { useToast } from "@/hooks/use-toast";
 import { ClientForm } from "@/components/ClientForm";
 import ClientDetailsDialog from "@/components/ClientDetailsDialog";
+import { SouscriptionDetailsDialog } from "@/components/SouscriptionDetailsDialog";
+import { LocationDetailsDialog } from "@/components/LocationDetailsDialog";
 import { ExportToExcelButton } from "@/components/ExportToExcelButton";
 
 interface Client {
@@ -38,6 +40,8 @@ export default function Clients() {
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [selectedSubscription, setSelectedSubscription] = useState<any>(null);
+  const [selectedLocation, setSelectedLocation] = useState<any>(null);
   const [formData, setFormData] = useState({
     nom: "",
     prenom: "",
@@ -359,7 +363,32 @@ export default function Clients() {
         client={selectedClient}
         isOpen={!!selectedClient}
         onClose={() => setSelectedClient(null)}
+        onViewSubscription={(subscription) => {
+          setSelectedSubscription(subscription);
+        }}
+        onViewLocation={(location) => {
+          setSelectedLocation(location);
+        }}
       />
+
+      {/* Subscription Details Dialog */}
+      <SouscriptionDetailsDialog
+        open={!!selectedSubscription}
+        onOpenChange={(open) => !open && setSelectedSubscription(null)}
+        souscription={selectedSubscription}
+        onEdit={() => {}}
+        onNewPayment={() => {}}
+        onNewDroitTerrePayment={() => {}}
+      />
+
+      {/* Location Details Dialog */}
+      {selectedLocation && (
+        <LocationDetailsDialog
+          location={selectedLocation}
+          onClose={() => setSelectedLocation(null)}
+          onUpdate={() => {}}
+        />
+      )}
 
       {/* Clients Table */}
       <Card>
