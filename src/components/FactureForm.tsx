@@ -174,21 +174,9 @@ export function FactureForm({ facture, onSuccess }: FactureFormProps) {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Numéro de facture *</FormLabel>
-                  <div className="flex gap-2">
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    {!facture && (
-                      <Button 
-                        type="button" 
-                        variant="outline" 
-                        onClick={generateNumero}
-                        size="sm"
-                      >
-                        Auto
-                      </Button>
-                    )}
-                  </div>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
