@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Download, Eye, Receipt, TrendingUp, FileText, Clock } from "lucide-react";
@@ -155,37 +155,33 @@ export default function Recus() {
               onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
             />
             
-            <Select
+            <Combobox
+              options={[
+                { value: "all", label: "Tous les types" },
+                ...Object.entries(operationTypes).map(([key, { label }]) => ({
+                  value: key,
+                  label: label
+                }))
+              ]}
               value={filters.type_operation}
-              onValueChange={(value) => setFilters(prev => ({ ...prev, type_operation: value }))}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Type d'opération" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tous les types</SelectItem>
-                {Object.entries(operationTypes).map(([key, { label }]) => (
-                  <SelectItem key={key} value={key}>{label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              onChange={(value) => setFilters(prev => ({ ...prev, type_operation: value }))}
+              placeholder="Type d'opération"
+              buttonClassName="w-48 justify-start"
+            />
 
-            <Select
+            <Combobox
+              options={[
+                { value: "all", label: "Tous les clients" },
+                ...(clients?.map(client => ({
+                  value: client.id,
+                  label: `${client.prenom} ${client.nom}`.trim()
+                })) || [])
+              ]}
               value={filters.client_id}
-              onValueChange={(value) => setFilters(prev => ({ ...prev, client_id: value }))}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Client" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tous les clients</SelectItem>
-                {clients?.map((client) => (
-                  <SelectItem key={client.id} value={client.id}>
-                    {client.nom} {client.prenom}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              onChange={(value) => setFilters(prev => ({ ...prev, client_id: value }))}
+              placeholder="Sélectionner un client"
+              buttonClassName="w-64 justify-start"
+            />
 
             <Button 
               variant="outline" 

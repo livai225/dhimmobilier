@@ -20,13 +20,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -316,20 +310,20 @@ export function PaiementSouscriptionEcheanceDialog({
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Mode de paiement</FormLabel>
-                            <Select onValueChange={field.onChange} defaultValue={field.value}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Sélectionner un mode" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="especes">Espèces</SelectItem>
-                                <SelectItem value="cheque">Chèque</SelectItem>
-                                <SelectItem value="virement">Virement</SelectItem>
-                                <SelectItem value="carte">Carte bancaire</SelectItem>
-                                <SelectItem value="mobile">Paiement mobile</SelectItem>
-                              </SelectContent>
-                            </Select>
+                            <FormControl>
+                              <Combobox
+                                options={[
+                                  { value: "especes", label: "Espèces" },
+                                  { value: "cheque", label: "Chèque" },
+                                  { value: "virement", label: "Virement" },
+                                  { value: "carte", label: "Carte bancaire" },
+                                  { value: "mobile", label: "Paiement mobile" }
+                                ]}
+                                value={field.value}
+                                onChange={field.onChange}
+                                placeholder="Sélectionner un mode"
+                              />
+                            </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}

@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Search, Eye, CreditCard, FileText, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -144,17 +144,18 @@ export default function Locations() {
             className="pl-10"
           />
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="Filtrer par statut" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Tous les statuts</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="termine">Terminée</SelectItem>
-            <SelectItem value="suspendu">Suspendue</SelectItem>
-          </SelectContent>
-        </Select>
+        <Combobox
+          options={[
+            { value: "all", label: "Tous les statuts" },
+            { value: "active", label: "Active" },
+            { value: "termine", label: "Terminée" },
+            { value: "suspendu", label: "Suspendue" }
+          ]}
+          value={statusFilter}
+          onChange={setStatusFilter}
+          placeholder="Filtrer par statut"
+          buttonClassName="w-48 justify-start"
+        />
       </div>
 
       {/* Locations List */}

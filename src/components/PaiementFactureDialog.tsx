@@ -21,13 +21,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import {
   Table,
   TableBody,
@@ -311,20 +305,20 @@ export function PaiementFactureDialog({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Mode de paiement</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Sélectionnez un mode" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="espece">Espèces</SelectItem>
-                            <SelectItem value="cheque">Chèque</SelectItem>
-                            <SelectItem value="virement">Virement</SelectItem>
-                            <SelectItem value="mobile_money">Mobile Money</SelectItem>
-                            <SelectItem value="carte">Carte bancaire</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <FormControl>
+                          <Combobox
+                            options={[
+                              { value: "espece", label: "Espèces" },
+                              { value: "cheque", label: "Chèque" },
+                              { value: "virement", label: "Virement" },
+                              { value: "mobile_money", label: "Mobile Money" },
+                              { value: "carte", label: "Carte bancaire" }
+                            ]}
+                            value={field.value}
+                            onChange={field.onChange}
+                            placeholder="Sélectionnez un mode"
+                          />
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}

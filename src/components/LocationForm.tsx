@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CalendarIcon } from "lucide-react";
@@ -165,43 +165,34 @@ export function LocationForm({ onClose, onSuccess }: LocationFormProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="client">Client *</Label>
-              <Select value={clientId} onValueChange={setClientId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionner un client" />
-                </SelectTrigger>
-                <SelectContent>
-                  {clients?.map((client) => (
-                    <SelectItem key={client.id} value={client.id}>
-                      {client.prenom} {client.nom} - {client.telephone_principal}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Combobox
+                options={clients?.map(client => ({
+                  value: client.id,
+                  label: `${client.prenom} ${client.nom} - ${client.telephone_principal}`
+                })) || []}
+                value={clientId}
+                onChange={setClientId}
+                placeholder="Sélectionner un client"
+              />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="propriete">Propriété *</Label>
-              <Select 
-                value={proprieteId} 
-                onValueChange={(value) => {
+              <Combobox
+                options={proprietes?.map(propriete => ({
+                  value: propriete.id,
+                  label: `${propriete.nom} - ${propriete.loyer_mensuel?.toLocaleString()} FCFA/mois`
+                })) || []}
+                value={proprieteId}
+                onChange={(value) => {
                   setProprieteId(value);
                   const selectedProp = proprietes?.find(p => p.id === value);
                   if (selectedProp) {
                     setSelectedLoyer(selectedProp.loyer_mensuel || 0);
                   }
                 }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionner une propriété" />
-                </SelectTrigger>
-                <SelectContent>
-                  {proprietes?.map((propriete) => (
-                    <SelectItem key={propriete.id} value={propriete.id}>
-                      {propriete.nom} - {propriete.loyer_mensuel?.toLocaleString()} FCFA/mois
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                placeholder="Sélectionner une propriété"
+              />
             </div>
           </div>
 

@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CalendarIcon } from "lucide-react";
@@ -235,24 +235,15 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="selectedMonth">Mois de paiement *</Label>
-              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionner le mois" />
-                </SelectTrigger>
-                <SelectContent>
-                  {generateAvailableMonths().length > 0 ? (
-                    generateAvailableMonths().map((month) => (
-                      <SelectItem key={month.value} value={month.value}>
-                        {month.label}
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <SelectItem value="" disabled>
-                      Tous les mois sont déjà payés
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
+              <Combobox
+                options={generateAvailableMonths().length > 0 ? 
+                  generateAvailableMonths() : 
+                  [{ value: "", label: "Tous les mois sont déjà payés", disabled: true }]
+                }
+                value={selectedMonth}
+                onChange={setSelectedMonth}
+                placeholder="Sélectionner le mois"
+              />
             </div>
 
             <div className="space-y-2">
@@ -296,30 +287,14 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="modePaiement">Mode de paiement *</Label>
-              <Select value={modePaiement} onValueChange={setModePaiement}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionner le mode" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="especes">Espèces</SelectItem>
-                  <SelectItem value="cheque">Chèque</SelectItem>
-                  <SelectItem value="virement">Virement</SelectItem>
-                  <SelectItem value="carte">Carte bancaire</SelectItem>
-                  <SelectItem value="mobile_money">Mobile Money</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label htmlFor="reference">Référence</Label>
+              <Input
+                id="reference"
+                value={reference}
+                onChange={(e) => setReference(e.target.value)}
+                placeholder="Numéro de chèque, référence virement, etc."
+              />
             </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="reference">Référence (optionnel)</Label>
-            <Input
-              id="reference"
-              value={reference}
-              onChange={(e) => setReference(e.target.value)}
-              placeholder="Numéro de chèque, référence virement, etc."
-            />
           </div>
 
           {/* Payment Impact */}

@@ -20,13 +20,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 
 const souscriptionSchema = z.object({
   client_id: z.string().min(1, "Le client est obligatoire"),
@@ -69,7 +63,13 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
     },
   });
 
-  const { data: clients } = useQuery({
+  interface Client {
+    id: string;
+    nom: string;
+    prenom: string;
+  }
+
+  const { data: clients = [] } = useQuery<Array<Client & { label: string; value: string }>>({
     queryKey: ["clients"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -77,11 +77,23 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
         .select("id, nom, prenom")
         .order("nom");
       if (error) throw error;
-      return data;
+      return (data as Client[]).map(client => ({
+        ...client,
+        label: `${client.prenom} ${client.nom}`,
+        value: client.id
+      }));
     },
   });
 
-  const { data: proprietes } = useQuery({
+  interface Propriete {
+    id: string;
+    nom: string;
+    adresse: string;
+    montant_bail: number;
+    droit_terre: number;
+  }
+
+  const { data: proprietes = [] } = useQuery<Array<Propriete & { label: string; value: string }>>({
     queryKey: ["proprietes"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -91,7 +103,11 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
         .eq("statut", "Libre")
         .order("nom");
       if (error) throw error;
-      return data;
+      return (data as Propriete[]).map(propriete => ({
+        ...propriete,
+        label: propriete.nom,
+        value: propriete.id
+      }));
     },
   });
 
@@ -181,7 +197,9 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
 
   // Function to handle property selection and auto-fill
   const handlePropertyChange = (proprieteId: string) => {
-    const selectedPropriete = proprietes?.find(p => p.id === proprieteId);
+    if (!proprieteId) return;
+    
+    const selectedPropriete = proprietes.find(p => p.id === proprieteId);
     if (selectedPropriete) {
       form.setValue("propriete_id", proprieteId);
       form.setValue("montant_souscris", selectedPropriete.montant_bail?.toString() || "");
@@ -191,12 +209,24 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
     }
   };
 
+  // Handle combobox changes
+  const handleClientChange = (value: string) => {
+    if (!value) return;
+    form.setValue("client_id", value);
+  };
+
+  const handleProprieteChange = (value: string) => {
+    if (!value) return;
+    form.setValue("propriete_id", value);
+    handlePropertyChange(value);
+  };
+
   const onSubmit = (data: SouscriptionFormData) => {
     mutation.mutate(data);
   };
 
   const watchedValues = form.watch();
-  const selectedBareme = baremes.find(b => b.type_bien === watchedValues.type_bien);
+  const selectedBareme = baremes?.find(b => b.type_bien === watchedValues.type_bien);
 
   return (
     <Form {...form}>
@@ -215,20 +245,19 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
                     <FormLabel>
                       Client <span className="text-destructive">*</span>
                     </FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner un client" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {clients?.map((client) => (
-                          <SelectItem key={client.id} value={client.id}>
-                            {client.prenom} {client.nom}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <Combobox
+                        options={clients || []}
+                        value={field.value}
+                        onChange={(value) => {
+                          field.onChange(value);
+                          handleClientChange(value);
+                        }}
+                        placeholder="Sélectionner un client"
+                        searchPlaceholder="Rechercher un client..."
+                        emptyText="Aucun client trouvé"
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -242,20 +271,19 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
                     <FormLabel>
                       Propriété <span className="text-destructive">*</span>
                     </FormLabel>
-                    <Select onValueChange={handlePropertyChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner une propriété" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {proprietes?.map((propriete) => (
-                          <SelectItem key={propriete.id} value={propriete.id}>
-                            {propriete.nom} - {propriete.adresse}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <Combobox
+                        options={proprietes || []}
+                        value={field.value}
+                        onChange={(value) => {
+                          field.onChange(value);
+                          handleProprieteChange(value);
+                        }}
+                        placeholder="Sélectionner une propriété"
+                        searchPlaceholder="Rechercher une propriété..."
+                        emptyText="Aucune propriété trouvée"
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

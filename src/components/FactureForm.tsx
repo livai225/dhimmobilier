@@ -14,14 +14,8 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { Combobox } from "@/components/ui/combobox";
 
 const factureSchema = z.object({
   numero: z.string().min(1, "Le numéro de facture est requis"),
@@ -188,20 +182,19 @@ export function FactureForm({ facture, onSuccess }: FactureFormProps) {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Fournisseur *</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Sélectionnez un fournisseur" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {fournisseurs.map((fournisseur) => (
-                        <SelectItem key={fournisseur.id} value={fournisseur.id}>
-                          {fournisseur.nom}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <Combobox
+                      options={fournisseurs.map(f => ({
+                        value: f.id,
+                        label: f.nom
+                      }))}
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder="Sélectionnez un fournisseur"
+                      searchPlaceholder="Rechercher un fournisseur..."
+                      emptyText="Aucun fournisseur trouvé"
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -215,21 +208,22 @@ export function FactureForm({ facture, onSuccess }: FactureFormProps) {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Propriété (optionnel)</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Sélectionnez une propriété" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="none">Aucune propriété</SelectItem>
-                      {proprietes.map((propriete) => (
-                        <SelectItem key={propriete.id} value={propriete.id}>
-                          {propriete.nom}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <Combobox
+                      options={[
+                        { value: "none", label: "Aucune propriété" },
+                        ...proprietes.map(p => ({
+                          value: p.id,
+                          label: p.nom
+                        }))
+                      ]}
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder="Sélectionnez une propriété"
+                      searchPlaceholder="Rechercher une propriété..."
+                      emptyText="Aucune propriété trouvée"
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}

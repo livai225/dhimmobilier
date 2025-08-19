@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -186,17 +186,17 @@ export function PaiementDroitTerreDialog({ open, onOpenChange, souscription, onS
 
                 <div>
                   <Label htmlFor="mode_paiement">Mode de paiement</Label>
-                  <Select value={formData.mode_paiement} onValueChange={(value) => setFormData({...formData, mode_paiement: value})}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Sélectionner un mode" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Espèces">Espèces</SelectItem>
-                      <SelectItem value="Chèque">Chèque</SelectItem>
-                      <SelectItem value="Virement">Virement</SelectItem>
-                      <SelectItem value="Mobile Money">Mobile Money</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Combobox
+                    options={[
+                      { value: "Espèces", label: "Espèces" },
+                      { value: "Chèque", label: "Chèque" },
+                      { value: "Virement", label: "Virement" },
+                      { value: "Mobile Money", label: "Mobile Money" }
+                    ]}
+                    value={formData.mode_paiement}
+                    onChange={(value) => setFormData({...formData, mode_paiement: value})}
+                    placeholder="Sélectionner un mode"
+                  />
                 </div>
 
                 <div>

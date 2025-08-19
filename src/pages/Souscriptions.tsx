@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import { Badge } from "@/components/ui/badge";
 import { SouscriptionForm } from "@/components/SouscriptionForm";
 import { SouscriptionDetailsDialog } from "@/components/SouscriptionDetailsDialog";
@@ -181,18 +181,19 @@ export default function Souscriptions() {
           onChange={(e) => setSearchTerm(e.target.value)}
           className="max-w-sm"
         />
-        <Select value={phaseFilter} onValueChange={setPhaseFilter}>
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="Filtrer par phase" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Toutes les phases</SelectItem>
-            <SelectItem value="souscription">Souscription</SelectItem>
-            <SelectItem value="finition">En finition</SelectItem>
-            <SelectItem value="droit_terre">Droit de terre</SelectItem>
-            <SelectItem value="termine">Terminé</SelectItem>
-          </SelectContent>
-        </Select>
+        <Combobox
+          options={[
+            { value: "all", label: "Toutes les phases" },
+            { value: "souscription", label: "Souscription" },
+            { value: "finition", label: "En finition" },
+            { value: "droit_terre", label: "Droit de terre" },
+            { value: "termine", label: "Terminé" }
+          ]}
+          value={phaseFilter}
+          onChange={setPhaseFilter}
+          placeholder="Filtrer par phase"
+          buttonClassName="w-48 justify-start"
+        />
       </div>
 
 

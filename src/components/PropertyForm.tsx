@@ -17,13 +17,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 
 const propertySchema = z.object({
   nom: z.string().min(1, "Le nom est obligatoire"),
@@ -192,20 +186,17 @@ export function PropertyForm({ property, onSuccess }: PropertyFormProps) {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Type de propriété</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Sélectionner un type" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {typesProprietes.map((type) => (
-                      <SelectItem key={type.id} value={type.id}>
-                        {type.nom}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FormControl>
+                  <Combobox
+                    options={typesProprietes?.map(type => ({
+                      value: type.id,
+                      label: type.nom
+                    })) || []}
+                    value={field.value || ""}
+                    onChange={field.onChange}
+                    placeholder="Sélectionner un type"
+                  />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -219,18 +210,18 @@ export function PropertyForm({ property, onSuccess }: PropertyFormProps) {
                 <FormLabel>
                   Statut <span className="text-destructive">*</span>
                 </FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Sélectionner un statut" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="Libre">Libre</SelectItem>
-                    <SelectItem value="Occupé">Occupé</SelectItem>
-                    <SelectItem value="Maintenance">Maintenance</SelectItem>
-                  </SelectContent>
-                </Select>
+                <FormControl>
+                  <Combobox
+                    options={[
+                      { value: "Libre", label: "Libre" },
+                      { value: "Occupé", label: "Occupé" },
+                      { value: "Maintenance", label: "Maintenance" }
+                    ]}
+                    value={field.value || ""}
+                    onChange={field.onChange}
+                    placeholder="Sélectionner un statut"
+                  />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -244,17 +235,17 @@ export function PropertyForm({ property, onSuccess }: PropertyFormProps) {
                 <FormLabel>
                   Usage <span className="text-destructive">*</span>
                 </FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Sélectionner un usage" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="Location">Location</SelectItem>
-                    <SelectItem value="Bail">Bail</SelectItem>
-                  </SelectContent>
-                </Select>
+                <FormControl>
+                  <Combobox
+                    options={[
+                      { value: "Location", label: "Location" },
+                      { value: "Bail", label: "Bail" }
+                    ]}
+                    value={field.value || ""}
+                    onChange={field.onChange}
+                    placeholder="Sélectionner un usage"
+                  />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}
