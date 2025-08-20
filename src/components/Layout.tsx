@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import BalanceBadge from "@/components/BalanceBadge";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -20,7 +21,7 @@ export function Layout({ children }: LayoutProps) {
                 <h1 className="text-xl font-semibold">DH Immobilier Pro</h1>
               </div>
             </div>
-            <ThemeToggle />
+            <div className="flex items-center gap-3"><BalanceBadge /><ThemeToggle /></div>
           </div>
         </div>
         <div className="p-4 sm:p-6">

@@ -7,13 +7,61 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instanciate createClient with right options
+  // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "13.0.4"
   }
   public: {
     Tables: {
+      agents_recouvrement: {
+        Row: {
+          adresse: string | null
+          code_agent: string
+          commission_pourcentage: number | null
+          created_at: string
+          date_embauche: string
+          email: string | null
+          id: string
+          nom: string
+          prenom: string
+          salaire_base: number | null
+          statut: string
+          telephone: string | null
+          updated_at: string
+        }
+        Insert: {
+          adresse?: string | null
+          code_agent: string
+          commission_pourcentage?: number | null
+          created_at?: string
+          date_embauche?: string
+          email?: string | null
+          id?: string
+          nom: string
+          prenom: string
+          salaire_base?: number | null
+          statut?: string
+          telephone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          adresse?: string | null
+          code_agent?: string
+          commission_pourcentage?: number | null
+          created_at?: string
+          date_embauche?: string
+          email?: string | null
+          id?: string
+          nom?: string
+          prenom?: string
+          salaire_base?: number | null
+          statut?: string
+          telephone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       bareme_droits_terre: {
         Row: {
           created_at: string
@@ -40,6 +88,92 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      caisse_balance: {
+        Row: {
+          created_at: string
+          derniere_maj: string
+          id: string
+          solde_courant: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          derniere_maj?: string
+          id?: string
+          solde_courant?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          derniere_maj?: string
+          id?: string
+          solde_courant?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      cash_transactions: {
+        Row: {
+          agent_id: string | null
+          beneficiaire: string | null
+          created_at: string
+          created_by: string | null
+          date_transaction: string
+          description: string | null
+          heure_transaction: string
+          id: string
+          montant: number
+          piece_justificative: string | null
+          reference_operation: string | null
+          solde_apres: number
+          solde_avant: number
+          type_operation: string
+          type_transaction: string
+        }
+        Insert: {
+          agent_id?: string | null
+          beneficiaire?: string | null
+          created_at?: string
+          created_by?: string | null
+          date_transaction?: string
+          description?: string | null
+          heure_transaction?: string
+          id?: string
+          montant: number
+          piece_justificative?: string | null
+          reference_operation?: string | null
+          solde_apres: number
+          solde_avant: number
+          type_operation: string
+          type_transaction: string
+        }
+        Update: {
+          agent_id?: string | null
+          beneficiaire?: string | null
+          created_at?: string
+          created_by?: string | null
+          date_transaction?: string
+          description?: string | null
+          heure_transaction?: string
+          id?: string
+          montant?: number
+          piece_justificative?: string | null
+          reference_operation?: string | null
+          solde_apres?: number
+          solde_avant?: number
+          type_operation?: string
+          type_transaction?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cash_transactions_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents_recouvrement"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       clients: {
         Row: {
@@ -692,20 +826,24 @@ export type Database = {
         Args: { souscription_uuid: string }
         Returns: number
       }
+      can_make_payment: {
+        Args: { amount: number }
+        Returns: boolean
+      }
       fix_negative_balances: {
         Args: Record<PropertyKey, never>
         Returns: {
-          facture_id: string
           ancien_solde: number
+          facture_id: string
           nouveau_solde: number
         }[]
       }
       fix_souscription_balances: {
         Args: Record<PropertyKey, never>
         Returns: {
-          souscription_id: string
           ancien_solde: number
           nouveau_solde: number
+          souscription_id: string
         }[]
       }
       generate_echeances_droit_terre: {
@@ -718,6 +856,32 @@ export type Database = {
       }
       generate_facture_number: {
         Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      get_agent_statistics: {
+        Args: { agent_uuid: string; end_date?: string; start_date?: string }
+        Returns: {
+          dernier_versement: string
+          moyenne_versement: number
+          nombre_versements: number
+          total_verse: number
+        }[]
+      }
+      get_current_cash_balance: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
+      record_cash_transaction: {
+        Args: {
+          p_agent_id?: string
+          p_beneficiaire?: string
+          p_description?: string
+          p_montant: number
+          p_piece_justificative?: string
+          p_reference_operation?: string
+          p_type_operation: string
+          p_type_transaction: string
+        }
         Returns: string
       }
     }

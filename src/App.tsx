@@ -15,6 +15,8 @@ import Locations from "./pages/Locations";
 import Recus from "./pages/Recus";
 import ReceiptIntegrity from "./pages/ReceiptIntegrity";
 import NotFound from "./pages/NotFound";
+import Caisse from "./pages/Caisse";
+import Agents from "./pages/Agents";
 
 const queryClient = new QueryClient();
 
@@ -38,6 +40,8 @@ const App = () => (
           <Route path="/factures" element={<Layout><Factures /></Layout>} />
           <Route path="/souscriptions" element={<Layout><Souscriptions /></Layout>} />
           <Route path="/locations" element={<Layout><Locations /></Layout>} />
+          <Route path="/caisse" element={<Layout><Caisse /></Layout>} />
+          <Route path="/agents" element={<Layout><Agents /></Layout>} />
           <Route path="/recus" element={<Layout><Recus /></Layout>} />
           <Route path="/receipt-integrity" element={<Layout><ReceiptIntegrity /></Layout>} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

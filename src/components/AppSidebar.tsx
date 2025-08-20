@@ -18,7 +18,9 @@ import {
   UserCheck, 
   Home,
   Receipt,
-  Settings
+  Settings,
+  Wallet,
+  UserCog
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 
@@ -57,6 +59,16 @@ const menuItems = [
     title: "Locations",
     url: "/locations",
     icon: Home,
+  },
+  {
+    title: "Caisse",
+    url: "/caisse",
+    icon: Wallet,
+  },
+  {
+    title: "Agents",
+    url: "/agents",
+    icon: UserCog,
   },
   {
     title: "Reçus",
