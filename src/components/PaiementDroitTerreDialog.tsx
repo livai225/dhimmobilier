@@ -83,7 +83,7 @@ export function PaiementDroitTerreDialog({ open, onOpenChange, souscription, onS
       }
 
       // 1) Paiement via caisse (sortie + journal)
-      const { data: paiementId, error: rpcError } = await supabase.rpc("pay_droit_terre_with_cash", {
+      const { data: paiementId, error } = await supabase.rpc("pay_droit_terre_with_cash" as any, {
         p_souscription_id: souscription.id,
         p_montant: montantNum,
         p_date_paiement: formData.date_paiement,
@@ -91,7 +91,7 @@ export function PaiementDroitTerreDialog({ open, onOpenChange, souscription, onS
         p_reference: formData.reference || null,
         p_description: "Paiement droit de terre",
       });
-      if (rpcError) throw rpcError;
+      if (error) throw error;
 
       // 2) Générer le reçu
       const receipt = await ReceiptGenerator.createReceipt({

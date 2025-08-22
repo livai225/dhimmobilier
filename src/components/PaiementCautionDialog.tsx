@@ -22,9 +22,8 @@ import {
 } from "@/components/ui/form";
 import { Combobox } from "@/components/ui/combobox";
 import { useToast } from "@/hooks/use-toast";
-import { format } from "date-fns";
-import { fr } from "date-fns/locale";
 import { ReceiptGenerator } from "@/utils/receiptGenerator";
+import BalanceBadge from "@/components/BalanceBadge";
 
 const paiementSchema = z.object({
   montant: z.number().min(0.01, "Le montant doit être supérieur à 0"),
@@ -35,27 +34,27 @@ const paiementSchema = z.object({
 
 type PaiementFormData = z.infer<typeof paiementSchema>;
 
-interface PaiementSouscriptionDialogProps {
-  souscription: any;
+interface PaiementCautionDialogProps {
+  location: any;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
 }
 
-export function PaiementSouscriptionDialog({ 
-  souscription, 
-  open, 
-  onOpenChange, 
-  onSuccess 
-}: PaiementSouscriptionDialogProps) {
+export function PaiementCautionDialog({
+  location,
+  open,
+  onOpenChange,
+  onSuccess,
+}: PaiementCautionDialogProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  
+
   const form = useForm<PaiementFormData>({
     resolver: zodResolver(paiementSchema),
     defaultValues: {
       montant: 0,
-      date_paiement: new Date().toISOString().split('T')[0],
+      date_paiement: new Date().toISOString().split("T")[0],
       mode_paiement: "",
       reference: "",
     },
@@ -63,40 +62,56 @@ export function PaiementSouscriptionDialog({
 
   const mutation = useMutation({
     mutationFn: async (data: PaiementFormData) => {
-      if (!souscription?.id) throw new Error("Souscription introuvable");
+      if (!location?.id) throw new Error("Location introuvable");
 
-      // 1) Paiement via caisse (sortie + journal)
-      const { data: paiementId, error } = await supabase.rpc("pay_souscription_with_cash" as any, {
-        p_souscription_id: souscription.id,
-        p_montant: data.montant,
-        p_date_paiement: data.date_paiement,
-        p_mode_paiement: data.mode_paiement || null,
-        p_reference: data.reference || null,
-        p_description: "Paiement souscription",
-      });
-      if (error) throw error;
+      // 1) Check cash balance
+      const { data: balance, error: balanceError } = await supabase.rpc(
+        "get_current_cash_balance"
+      );
+      if (balanceError) throw balanceError;
 
-      // 2) Génération du reçu
+      if (Number(balance) < data.montant) {
+        throw new Error(
+          `Solde insuffisant. Solde actuel: ${Number(balance).toLocaleString()} FCFA, Montant demandé: ${data.montant.toLocaleString()} FCFA`
+        );
+      }
+
+      // 2) Record cash transaction
+      const { data: transactionId, error: transactionError } = await supabase.rpc(
+        "record_cash_transaction",
+        {
+          p_type_transaction: "sortie",
+          p_montant: data.montant,
+          p_type_operation: "paiement_caution",
+          p_agent_id: null,
+          p_beneficiaire: `${location.clients?.prenom} ${location.clients?.nom}`,
+          p_reference_operation: location.id,
+          p_description: `Paiement caution - ${location.proprietes?.nom}`,
+          p_piece_justificative: data.reference || null,
+        }
+      );
+      if (transactionError) throw transactionError;
+
+      // 3) Generate receipt
       const receipt = await ReceiptGenerator.createReceipt({
-        clientId: souscription.client_id,
-        referenceId: paiementId as unknown as string,
-        typeOperation: "apport_souscription",
+        clientId: location.client_id,
+        referenceId: transactionId as string,
+        typeOperation: "caution_location",
         montantTotal: data.montant,
-        datePaiement: data.date_paiement
+        datePaiement: data.date_paiement,
       });
 
-      return { paiementId, receipt };
+      return { transactionId, receipt };
     },
     onSuccess: ({ receipt }) => {
-      queryClient.invalidateQueries({ queryKey: ["souscriptions"] });
-      queryClient.invalidateQueries({ queryKey: ["paiements"] });
+      queryClient.invalidateQueries({ queryKey: ["locations"] });
       queryClient.invalidateQueries({ queryKey: ["cash_transactions"] });
       queryClient.invalidateQueries({ queryKey: ["cash_balance"] });
 
       form.reset();
       toast({
         title: "Succès",
-        description: `Paiement enregistré avec succès. Reçu généré: ${receipt.numero}`,
+        description: `Paiement de caution enregistré avec succès. Reçu généré: ${receipt.numero}`,
       });
       onSuccess();
     },
@@ -114,40 +129,52 @@ export function PaiementSouscriptionDialog({
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('fr-FR', {
-      style: 'currency',
-      currency: 'XOF',
+    return new Intl.NumberFormat("fr-FR", {
+      style: "currency",
+      currency: "XOF",
       minimumFractionDigits: 0,
     }).format(amount || 0);
   };
 
-  if (!souscription) return null;
+  if (!location) return null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl w-[95vw] max-h-[95vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl w-[95vw] max-h-[95vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Paiement de souscription</DialogTitle>
+          <DialogTitle>Paiement de Caution</DialogTitle>
         </DialogHeader>
 
-        {/* Subscription info */}
+        {/* Cash balance display */}
+        <div className="flex items-center justify-between bg-muted p-3 rounded-lg">
+          <span className="text-sm font-medium">Solde caisse disponible:</span>
+          <BalanceBadge />
+        </div>
+
+        {/* Location info */}
         <div className="bg-muted p-4 rounded-lg">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <p className="text-sm text-muted-foreground">Client</p>
-              <p className="font-medium">{souscription.clients?.prenom} {souscription.clients?.nom}</p>
+              <p className="font-medium">
+                {location.clients?.prenom} {location.clients?.nom}
+              </p>
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Propriété</p>
-              <p className="font-medium">{souscription.proprietes?.nom}</p>
+              <p className="font-medium">{location.proprietes?.nom}</p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Montant total</p>
-              <p className="font-medium">{formatCurrency(souscription.montant_souscris)}</p>
+              <p className="text-sm text-muted-foreground">Caution totale versée</p>
+              <p className="font-medium">
+                {formatCurrency(location.caution_totale)}
+              </p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Solde restant</p>
-              <p className="font-bold text-destructive">{formatCurrency(souscription.solde_restant)}</p>
+              <p className="text-sm text-muted-foreground">Loyer mensuel</p>
+              <p className="font-medium">
+                {formatCurrency(location.loyer_mensuel)}
+              </p>
             </div>
           </div>
         </div>
@@ -162,13 +189,14 @@ export function PaiementSouscriptionDialog({
                   <FormItem>
                     <FormLabel>Montant à payer (FCFA) *</FormLabel>
                     <FormControl>
-                      <Input 
-                        type="number" 
-                        min="0" 
-                        max={souscription.solde_restant}
+                      <Input
+                        type="number"
+                        min="0"
                         step="1"
                         {...field}
-                        onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                        onChange={(e) =>
+                          field.onChange(parseFloat(e.target.value) || 0)
+                        }
                       />
                     </FormControl>
                     <FormMessage />
@@ -205,7 +233,7 @@ export function PaiementSouscriptionDialog({
                           { value: "cheque", label: "Chèque" },
                           { value: "virement", label: "Virement" },
                           { value: "mobile_money", label: "Mobile Money" },
-                          { value: "carte", label: "Carte bancaire" }
+                          { value: "carte", label: "Carte bancaire" },
                         ]}
                         value={field.value}
                         onChange={field.onChange}
@@ -224,7 +252,10 @@ export function PaiementSouscriptionDialog({
                   <FormItem>
                     <FormLabel>Référence</FormLabel>
                     <FormControl>
-                      <Input {...field} placeholder="N° chèque, réf. virement..." />
+                      <Input
+                        {...field}
+                        placeholder="N° chèque, réf. virement..."
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -233,10 +264,19 @@ export function PaiementSouscriptionDialog({
             </div>
 
             <div className="flex flex-col sm:flex-row justify-end gap-2 pt-4 border-t">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="w-full sm:w-auto">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                className="w-full sm:w-auto"
+              >
                 Annuler
               </Button>
-              <Button type="submit" disabled={mutation.isPending} className="w-full sm:w-auto">
+              <Button
+                type="submit"
+                disabled={mutation.isPending}
+                className="w-full sm:w-auto"
+              >
                 {mutation.isPending ? "Enregistrement..." : "Enregistrer le paiement"}
               </Button>
             </div>

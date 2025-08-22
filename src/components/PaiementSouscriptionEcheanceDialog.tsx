@@ -77,7 +77,7 @@ export function PaiementSouscriptionEcheanceDialog({
       }
 
       // 1) Paiement via caisse (sortie + journal)
-      const { data: paiementId, error: rpcError } = await supabase.rpc("pay_souscription_with_cash", {
+      const { data: paiementId, error: rpcError } = await supabase.rpc("pay_souscription_with_cash" as any, {
         p_souscription_id: souscription.id,
         p_montant: montantPaiement,
         p_date_paiement: data.date_paiement,

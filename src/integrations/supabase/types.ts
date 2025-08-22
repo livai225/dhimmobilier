@@ -871,6 +871,17 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: number
       }
+      pay_caution_with_cash: {
+        Args: {
+          p_date_paiement: string
+          p_description?: string
+          p_location_id: string
+          p_mode_paiement?: string
+          p_montant: number
+          p_reference?: string
+        }
+        Returns: string
+      }
       record_cash_transaction: {
         Args: {
           p_agent_id?: string

@@ -90,7 +90,7 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
         ? `Loyer ${format(new Date(selectedMonth + "-01"), "MMMM yyyy", { locale: fr })}`
         : "Paiement loyer";
 
-      const { data: paiementId, error: rpcError } = await supabase.rpc("pay_location_with_cash", {
+      const { data: paiementId, error: rpcError } = await supabase.rpc("pay_location_with_cash" as any, {
         p_location_id: location.id,
         p_montant: amount,
         p_date_paiement: datePaiement.toISOString().split("T")[0],

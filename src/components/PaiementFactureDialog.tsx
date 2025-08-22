@@ -93,7 +93,7 @@ export function PaiementFactureDialog({
       if (!facture?.id) throw new Error("Facture introuvable");
 
       // 1) Paiement via caisse (sortie + journal)
-      const { data: paiementId, error } = await supabase.rpc("pay_facture_with_cash", {
+      const { data: paiementId, error } = await supabase.rpc("pay_facture_with_cash" as any, {
         p_facture_id: facture.id,
         p_montant: data.montant,
         p_date_paiement: data.date_paiement,
