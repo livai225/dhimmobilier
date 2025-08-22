@@ -31,7 +31,6 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Récupérer les mois déjà payés
   const { data: paidMonths = [] } = useQuery({
     queryKey: ["paid_months", location.id],
     queryFn: async () => {
@@ -49,24 +48,17 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
     enabled: !!location.id,
   });
 
-  // Calculer le 1er mois payable (après les 2 mois d'avance: mois suivant + 1)
-  // Exemple: début 31 août -> avance couvre sept + oct -> premier paiement = novembre
   const calculateStartingMonth = () => {
     const startMonth = startOfMonth(new Date(location.date_debut));
     return addMonths(startMonth, 3);
   };
 
-  // Générer les mois disponibles pour paiement
   const generateAvailableMonths = () => {
     const months = [];
     const startingMonth = calculateStartingMonth();
-    
-    // Générer 24 mois à partir du mois de début des paiements
     for (let i = 0; i < 24; i++) {
       const date = addMonths(startingMonth, i);
       const monthValue = format(date, "yyyy-MM");
-      
-      // Exclure les mois déjà payés
       if (!paidMonths.includes(monthValue)) {
         months.push({
           value: monthValue,
@@ -74,7 +66,6 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
         });
       }
     }
-    
     return months;
   };
 
@@ -88,17 +79,28 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
   };
 
   const createPaiementMutation = useMutation({
-    mutationFn: async (paiementData: any) => {
-      // Create payment
-      const { data: paiement, error: paiementError } = await supabase
-        .from("paiements_locations")
-        .insert([paiementData])
-        .select()
-        .single();
+    mutationFn: async () => {
+      const amount = Number(montant);
+      if (!amount || !selectedMonth || !modePaiement) {
+        throw new Error("Veuillez renseigner le mois, le mode de paiement et un montant valide.");
+      }
 
-      if (paiementError) throw paiementError;
+      // 1) Effectuer le paiement via la caisse (sortie + journal)
+      const description = selectedMonth
+        ? `Loyer ${format(new Date(selectedMonth + "-01"), "MMMM yyyy", { locale: fr })}`
+        : "Paiement loyer";
 
-      // Generate receipt
+      const { data: paiementId, error: rpcError } = await supabase.rpc("pay_location_with_cash", {
+        p_location_id: location.id,
+        p_montant: amount,
+        p_date_paiement: datePaiement.toISOString().split("T")[0],
+        p_mode_paiement: modePaiement || null,
+        p_reference: reference || null,
+        p_description: description,
+      });
+      if (rpcError) throw rpcError;
+
+      // 2) Générer le reçu
       const receiptNumber = generateReceiptNumber();
       const { data: recu, error: recuError } = await supabase
         .from("recus")
@@ -107,33 +109,33 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
           client_id: location.client_id,
           reference_id: location.id,
           type_operation: "location",
-          montant_total: Number(montant),
+          montant_total: amount,
           periode_debut: selectedMonth ? (selectedMonth + "-01") : null,
           periode_fin: selectedMonth ? (selectedMonth + "-01") : null,
           date_generation: datePaiement.toISOString().split('T')[0],
         })
         .select()
         .single();
-
       if (recuError) throw recuError;
 
-      return { paiement, recu };
+      return { paiementId, recu };
     },
     onSuccess: ({ recu }) => {
-      // Invalider les queries pour rafraîchir les données
       queryClient.invalidateQueries({ queryKey: ["locations"] });
       queryClient.invalidateQueries({ queryKey: ["paid_months", location.id] });
-      
+      queryClient.invalidateQueries({ queryKey: ["cash_transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["cash_balance"] });
+
       toast({
         title: "Paiement enregistré",
         description: `Paiement enregistré avec succès. Reçu généré: ${recu.numero}`,
       });
       onSuccess();
     },
-    onError: (error) => {
+    onError: (error: any) => {
       toast({
         title: "Erreur",
-        description: "Impossible d'enregistrer le paiement.",
+        description: error?.message || "Impossible d'enregistrer le paiement.",
         variant: "destructive",
       });
     },
@@ -141,7 +143,6 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!montant || !datePaiement || !modePaiement || !selectedMonth) {
       toast({
         title: "Erreur",
@@ -150,18 +151,8 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
       });
       return;
     }
-
     setIsLoading(true);
-
-    const paiementData = {
-      location_id: location.id,
-      montant: Number(montant),
-      date_paiement: datePaiement.toISOString().split('T')[0],
-      mode_paiement: modePaiement,
-      reference: reference || null,
-    };
-
-    createPaiementMutation.mutate(paiementData);
+    createPaiementMutation.mutate();
     setIsLoading(false);
   };
 
@@ -297,7 +288,7 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
             </div>
           </div>
 
-          {/* Payment Impact */}
+          {/* Impact du Paiement */}
           {montant && (
             <Card>
               <CardHeader>

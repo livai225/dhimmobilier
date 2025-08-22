@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -30,18 +30,17 @@ export function PaiementDroitTerreDialog({ open, onOpenChange, souscription, onS
     mode_paiement: "",
     reference: ""
   });
+  const queryClient = useQueryClient();
 
   const { data: paiements, refetch: refetchPaiements } = useQuery({
     queryKey: ["paiements_droit_terre", souscription?.id],
     queryFn: async () => {
       if (!souscription?.id) return [];
-      
       const { data, error } = await supabase
         .from("paiements_droit_terre")
         .select("*")
         .eq("souscription_id", souscription.id)
         .order("date_paiement", { ascending: false });
-
       if (error) throw error;
       return data;
     },
@@ -52,10 +51,8 @@ export function PaiementDroitTerreDialog({ open, onOpenChange, souscription, onS
     queryKey: ["solde_droit_terre", souscription?.id],
     queryFn: async () => {
       if (!souscription?.id) return null;
-      
       const { data, error } = await supabase
         .rpc("calculate_solde_droit_terre", { souscription_uuid: souscription.id });
-
       if (error) throw error;
       return data;
     },
@@ -66,7 +63,6 @@ export function PaiementDroitTerreDialog({ open, onOpenChange, souscription, onS
     e.preventDefault();
 
     try {
-      // Interdire le paiement du droit de terre tant que la souscription n'est pas soldée
       if (souscription?.solde_restant > 0) {
         toast({
           title: "Action interdite",
@@ -76,27 +72,33 @@ export function PaiementDroitTerreDialog({ open, onOpenChange, souscription, onS
         return;
       }
 
-      // Record the payment in the new simplified table
-      const { data: payment, error: paymentError } = await supabase
-        .from("paiements_droit_terre")
-        .insert({
-          souscription_id: souscription.id,
-          montant: parseFloat(formData.montant),
-          date_paiement: formData.date_paiement,
-          mode_paiement: formData.mode_paiement,
-          reference: formData.reference
-        })
-        .select()
-        .single();
+      const montantNum = parseFloat(formData.montant);
+      if (!montantNum || montantNum <= 0) {
+        toast({
+          title: "Montant invalide",
+          description: "Veuillez saisir un montant valide.",
+          variant: "destructive",
+        });
+        return;
+      }
 
-      if (paymentError) throw paymentError;
+      // 1) Paiement via caisse (sortie + journal)
+      const { data: paiementId, error: rpcError } = await supabase.rpc("pay_droit_terre_with_cash", {
+        p_souscription_id: souscription.id,
+        p_montant: montantNum,
+        p_date_paiement: formData.date_paiement,
+        p_mode_paiement: formData.mode_paiement || null,
+        p_reference: formData.reference || null,
+        p_description: "Paiement droit de terre",
+      });
+      if (rpcError) throw rpcError;
 
-      // Generate receipt for land rights payment
+      // 2) Générer le reçu
       const receipt = await ReceiptGenerator.createReceipt({
         clientId: souscription.client_id,
-        referenceId: payment.id,
+        referenceId: paiementId as unknown as string,
         typeOperation: "droit_terre",
-        montantTotal: parseFloat(formData.montant),
+        montantTotal: montantNum,
         datePaiement: formData.date_paiement
       });
 
@@ -105,7 +107,6 @@ export function PaiementDroitTerreDialog({ open, onOpenChange, souscription, onS
         description: `Paiement enregistré avec succès. Reçu généré: ${receipt.numero}`,
       });
 
-      // Reset form
       setFormData({
         montant: "",
         date_paiement: new Date().toISOString().split("T")[0],
@@ -115,26 +116,26 @@ export function PaiementDroitTerreDialog({ open, onOpenChange, souscription, onS
 
       refetchPaiements();
       refetchSolde();
+      queryClient.invalidateQueries({ queryKey: ["cash_transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["cash_balance"] });
       onSuccess();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error recording payment:", error);
       toast({
         title: "Erreur",
-        description: "Une erreur est survenue lors de l'enregistrement",
+        description: error?.message || "Une erreur est survenue lors de l'enregistrement",
         variant: "destructive",
       });
     }
   };
 
   const generateReceipt = async () => {
-    // This would generate a PDF receipt
     toast({
       title: "Reçu généré",
       description: "Le reçu cumulatif a été généré avec succès",
     });
   };
 
-  // Calculate statistics
   const totalPaye = paiements?.reduce((sum, p) => sum + Number(p.montant), 0) || 0;
   const soldeRestant = Number(soldeData) || 0;
 

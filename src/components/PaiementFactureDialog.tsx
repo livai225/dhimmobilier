@@ -73,56 +73,54 @@ export function PaiementFactureDialog({
     },
   });
 
-  // Fetch payment history
   const { data: paiements = [] } = useQuery({
     queryKey: ["paiements", facture?.id],
     queryFn: async () => {
       if (!facture?.id) return [];
-      
       const { data, error } = await supabase
         .from("paiements_factures")
         .select("*")
         .eq("facture_id", facture.id)
         .order("date_paiement", { ascending: false });
-      
       if (error) throw error;
       return data;
     },
     enabled: !!facture?.id,
   });
 
-  // Create payment mutation
   const mutation = useMutation({
     mutationFn: async (data: PaiementFormData) => {
-      const { data: payment, error } = await supabase
-        .from("paiements_factures")
-        .insert({
-          facture_id: facture.id,
-          montant: data.montant,
-          date_paiement: data.date_paiement,
-          mode_paiement: data.mode_paiement || null,
-          reference: data.reference || null,
-        })
-        .select()
-        .single();
-      
+      if (!facture?.id) throw new Error("Facture introuvable");
+
+      // 1) Paiement via caisse (sortie + journal)
+      const { data: paiementId, error } = await supabase.rpc("pay_facture_with_cash", {
+        p_facture_id: facture.id,
+        p_montant: data.montant,
+        p_date_paiement: data.date_paiement,
+        p_mode_paiement: data.mode_paiement || null,
+        p_reference: data.reference || null,
+        p_description: "Paiement facture fournisseur",
+      });
       if (error) throw error;
 
-      // Generate receipt for invoice payment
+      // 2) Générer le reçu (client système)
       const receipt = await ReceiptGenerator.createReceipt({
-        clientId: "00000000-0000-0000-0000-000000000000", // Client système pour les factures
-        referenceId: payment.id,
+        clientId: "00000000-0000-0000-0000-000000000000",
+        referenceId: paiementId as unknown as string,
         typeOperation: "paiement_facture",
         montantTotal: data.montant,
         datePaiement: data.date_paiement
       });
 
-      return { payment, receipt };
+      return { paiementId, receipt };
     },
     onSuccess: ({ receipt }) => {
       queryClient.invalidateQueries({ queryKey: ["factures"] });
       queryClient.invalidateQueries({ queryKey: ["paiements"] });
-      queryClient.invalidateQueries({ queryKey: ["recus"] }); // Invalider les reçus
+      queryClient.invalidateQueries({ queryKey: ["recus"] });
+      queryClient.invalidateQueries({ queryKey: ["cash_transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["cash_balance"] });
+
       form.reset();
       toast({
         title: "Succès",
@@ -132,8 +130,6 @@ export function PaiementFactureDialog({
     },
     onError: (error: Error) => {
       let errorMessage = error.message;
-      
-      // Améliorer les messages d'erreur de la base de données
       if (errorMessage.includes('dépasse le solde restant')) {
         const matches = errorMessage.match(/Montant total: ([\d.]+), Déjà payé: ([\d.]+), Solde restant: ([\d.]+)/);
         if (matches) {
@@ -141,7 +137,6 @@ export function PaiementFactureDialog({
           errorMessage = `Paiement impossible: le solde restant est de ${formatCurrency(Number(restant))} (Total: ${formatCurrency(Number(total))}, Payé: ${formatCurrency(Number(paye))})`;
         }
       }
-      
       toast({
         title: "Erreur de paiement",
         description: errorMessage,
@@ -153,7 +148,6 @@ export function PaiementFactureDialog({
   const onSubmit = async (data: PaiementFormData) => {
     if (!facture) return;
 
-    // Recalcul du montant restant en temps réel pour éviter les conditions de course
     const { data: paiementsExistants } = await supabase
       .from('paiements_factures')
       .select('montant')
@@ -161,8 +155,6 @@ export function PaiementFactureDialog({
 
     const totalPaye = paiementsExistants?.reduce((sum, p) => sum + Number(p.montant), 0) || 0;
     const montantRestant = facture.montant_total - totalPaye;
-    
-    // Validation stricte avec marge d'erreur numérique
     if (data.montant > montantRestant + 0.01) {
       toast({
         title: "Montant invalide",
@@ -171,8 +163,6 @@ export function PaiementFactureDialog({
       });
       return;
     }
-
-    // Validation de montant positif
     if (data.montant <= 0) {
       toast({
         title: "Montant invalide",
@@ -185,7 +175,7 @@ export function PaiementFactureDialog({
     mutation.mutate(data);
   };
 
-  const formatCurrency = (amount) => {
+  const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('fr-FR', {
       style: 'currency',
       currency: 'XOF',

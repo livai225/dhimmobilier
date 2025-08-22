@@ -67,72 +67,53 @@ export function PaiementSouscriptionEcheanceDialog({
   const paiementMutation = useMutation({
     mutationFn: async (data: PaiementFormData) => {
       if (!souscription?.id) throw new Error("Souscription ID manquant");
-
       const montantPaiement = parseFloat(data.montant);
 
-      // Check if subscription is already fully paid
       if (souscription.solde_restant <= 0) {
         throw new Error("Cette souscription est déjà entièrement payée. Seuls les paiements de droit de terre sont possibles.");
       }
-
-      // Verify payment amount doesn't exceed remaining balance
       if (montantPaiement > souscription.solde_restant) {
         throw new Error("Le montant ne peut pas dépasser le solde restant de la souscription");
       }
 
-      // Create payment in paiements_souscriptions
-      const { data: paiement, error: paiementError } = await supabase
-        .from("paiements_souscriptions")
-        .insert({
-          souscription_id: souscription.id,
-          montant: montantPaiement,
-          date_paiement: data.date_paiement,
-          mode_paiement: data.mode_paiement,
-          reference: data.reference,
-        })
-        .select()
-        .single();
+      // 1) Paiement via caisse (sortie + journal)
+      const { data: paiementId, error: rpcError } = await supabase.rpc("pay_souscription_with_cash", {
+        p_souscription_id: souscription.id,
+        p_montant: montantPaiement,
+        p_date_paiement: data.date_paiement,
+        p_mode_paiement: data.mode_paiement || null,
+        p_reference: data.reference || null,
+        p_description: "Paiement souscription",
+      });
+      if (rpcError) throw rpcError;
 
-      if (paiementError) throw paiementError;
-
-      // Update subscription remaining balance
-      const { error: souscriptionError } = await supabase
-        .from("souscriptions")
-        .update({
-          solde_restant: Math.max(0, souscription.solde_restant - montantPaiement),
-        })
-        .eq("id", souscription.id);
-
-      if (souscriptionError) throw souscriptionError;
-
-      // Generate receipt
+      // 2) Générer et enregistrer le reçu
       const receiptData = {
         numero: `PAY-${Date.now()}`,
         client_id: souscription.client_id,
         type_operation: "paiement_souscription",
         montant_total: montantPaiement,
-        reference_id: paiement.id,
+        reference_id: paiementId as unknown as string,
         periode_debut: data.date_paiement,
         periode_fin: data.date_paiement,
       };
-
       const { error: receiptError } = await supabase
         .from("recus")
         .insert(receiptData);
-
       if (receiptError) throw receiptError;
 
-      return { paiement, receipt: receiptData };
+      return { paiementId, receipt: receiptData };
     },
     onSuccess: (data) => {
-      // Invalider toutes les queries liées pour forcer le rafraîchissement
       queryClient.invalidateQueries({ queryKey: ["souscriptions"] });
       queryClient.invalidateQueries({ queryKey: ["paiements_souscription"] });
       queryClient.invalidateQueries({ queryKey: ["paiements_souscription", souscription?.id] });
+      queryClient.invalidateQueries({ queryKey: ["cash_transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["cash_balance"] });
       
       console.log("Paiement effectué - invalidation des queries:", {
         souscriptionId: souscription?.id,
-        montant: data.paiement.montant
+        montant: (data as any).receipt.montant_total
       });
       
       toast({
@@ -144,14 +125,14 @@ export function PaiementSouscriptionEcheanceDialog({
       onOpenChange(false);
       onSuccess?.();
 
-      // Generate and download receipt
-      ReceiptGenerator.generateSouscriptionPaymentReceipt(data.receipt, souscription);
+      // Générer le PDF du reçu
+      ReceiptGenerator.generateSouscriptionPaymentReceipt((data as any).receipt, souscription);
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error("Erreur lors du paiement:", error);
       toast({
         title: "Erreur",
-        description: "Impossible d'enregistrer le paiement.",
+        description: error?.message || "Impossible d'enregistrer le paiement.",
         variant: "destructive",
       });
     },
@@ -161,7 +142,6 @@ export function PaiementSouscriptionEcheanceDialog({
     paiementMutation.mutate(data);
   };
 
-  // Calculate payment progress
   const montantPaye = souscription?.prix_total - souscription?.solde_restant;
   const progressPercent = souscription?.prix_total > 0 ? (montantPaye / souscription.prix_total) * 100 : 0;
 

@@ -61,37 +61,38 @@ export function PaiementSouscriptionDialog({
     },
   });
 
-  // Create payment mutation
   const mutation = useMutation({
     mutationFn: async (data: PaiementFormData) => {
-      const { data: payment, error } = await supabase
-        .from("paiements_souscriptions")
-        .insert({
-          souscription_id: souscription.id,
-          montant: data.montant,
-          date_paiement: data.date_paiement,
-          mode_paiement: data.mode_paiement || null,
-          reference: data.reference || null,
-        })
-        .select()
-        .single();
-      
+      if (!souscription?.id) throw new Error("Souscription introuvable");
+
+      // 1) Paiement via caisse (sortie + journal)
+      const { data: paiementId, error } = await supabase.rpc("pay_souscription_with_cash", {
+        p_souscription_id: souscription.id,
+        p_montant: data.montant,
+        p_date_paiement: data.date_paiement,
+        p_mode_paiement: data.mode_paiement || null,
+        p_reference: data.reference || null,
+        p_description: "Paiement souscription",
+      });
       if (error) throw error;
 
-      // Generate receipt for subscription payment
+      // 2) Génération du reçu
       const receipt = await ReceiptGenerator.createReceipt({
         clientId: souscription.client_id,
-        referenceId: payment.id,
+        referenceId: paiementId as unknown as string,
         typeOperation: "apport_souscription",
         montantTotal: data.montant,
         datePaiement: data.date_paiement
       });
 
-      return { payment, receipt };
+      return { paiementId, receipt };
     },
     onSuccess: ({ receipt }) => {
       queryClient.invalidateQueries({ queryKey: ["souscriptions"] });
       queryClient.invalidateQueries({ queryKey: ["paiements"] });
+      queryClient.invalidateQueries({ queryKey: ["cash_transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["cash_balance"] });
+
       form.reset();
       toast({
         title: "Succès",
@@ -99,10 +100,10 @@ export function PaiementSouscriptionDialog({
       });
       onSuccess();
     },
-    onError: (error) => {
+    onError: (error: any) => {
       toast({
         title: "Erreur",
-        description: "Une erreur est survenue lors de l'enregistrement du paiement",
+        description: error?.message || "Une erreur est survenue lors de l'enregistrement du paiement",
         variant: "destructive",
       });
     },
@@ -112,7 +113,7 @@ export function PaiementSouscriptionDialog({
     mutation.mutate(data);
   };
 
-  const formatCurrency = (amount) => {
+  const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('fr-FR', {
       style: 'currency',
       currency: 'XOF',
@@ -151,7 +152,6 @@ export function PaiementSouscriptionDialog({
           </div>
         </div>
 
-        {/* Payment form */}
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
