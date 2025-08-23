@@ -278,14 +278,30 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="reference">Référence</Label>
-              <Input
-                id="reference"
-                value={reference}
-                onChange={(e) => setReference(e.target.value)}
-                placeholder="Numéro de chèque, référence virement, etc."
+              <Label htmlFor="modePaiement">Mode de paiement *</Label>
+              <Combobox
+                options={[
+                  { value: "especes", label: "Espèces" },
+                  { value: "cheque", label: "Chèque" },
+                  { value: "virement", label: "Virement" },
+                  { value: "carte", label: "Carte bancaire" },
+                  { value: "mobile", label: "Paiement mobile" }
+                ]}
+                value={modePaiement}
+                onChange={setModePaiement}
+                placeholder="Sélectionner le mode"
               />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="reference">Référence</Label>
+            <Input
+              id="reference"
+              value={reference}
+              onChange={(e) => setReference(e.target.value)}
+              placeholder="Numéro de chèque, référence virement, etc."
+            />
           </div>
 
           {/* Impact du Paiement */}
