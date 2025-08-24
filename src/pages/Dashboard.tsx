@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Users, Building, FileText, TrendingUp, AlertCircle, CheckCircle, Home, DollarSign, Calendar, Clock, Plus, Receipt, CreditCard, MapPin } from "lucide-react";
 import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
 import { useNavigate } from "react-router-dom";
+import { BalanceBadge } from "@/components/BalanceBadge";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -23,7 +24,9 @@ export default function Dashboard() {
         paiementsFactures, 
         paiementsLocations, 
         paiementsSouscriptions,
-        echeances
+        paiementsDroitTerre,
+        echeances,
+        cashBalance
       ] = await Promise.all([
         supabase.from('clients').select('*', { count: 'exact' }),
         supabase.from('proprietes').select('*'),
@@ -33,7 +36,9 @@ export default function Dashboard() {
         supabase.from('paiements_factures').select('*'),
         supabase.from('paiements_locations').select('*'),
         supabase.from('paiements_souscriptions').select('*'),
+        supabase.from('paiements_droit_terre').select('*'),
         supabase.from('echeances_droit_terre').select('*'),
+        supabase.rpc('get_current_cash_balance')
       ]);
 
       // Calculate main KPIs
@@ -41,8 +46,17 @@ export default function Dashboard() {
       const totalPaiementsFactures = paiementsFactures.data?.reduce((sum, p) => sum + (p.montant || 0), 0) || 0;
       const totalRevenuLocations = paiementsLocations.data?.reduce((sum, p) => sum + (p.montant || 0), 0) || 0;
       const totalRevenuSouscriptions = paiementsSouscriptions.data?.reduce((sum, p) => sum + (p.montant || 0), 0) || 0;
+      const totalRevenuDroitTerre = paiementsDroitTerre.data?.reduce((sum, p) => sum + (p.montant || 0), 0) || 0;
       
-      const chiffreAffaires = totalRevenuLocations + totalRevenuSouscriptions;
+      // Chiffre d'affaires = revenus encaissés (locations + souscriptions + droits de terre)
+      const chiffreAffaires = totalRevenuLocations + totalRevenuSouscriptions + totalRevenuDroitTerre;
+      
+      // Dépenses = paiements de factures fournisseurs
+      const totalDepenses = totalPaiementsFactures;
+      
+      // Solde de caisse actuel
+      const soldeCaisse = Number(cashBalance.data || 0);
+      
       const facturesImpayees = factures.data?.reduce((sum, f) => sum + (f.solde || 0), 0) || 0;
       const dettesLocations = locations.data?.reduce((sum, l) => sum + (l.dette_totale || 0), 0) || 0;
       const echeancesEnRetard = echeances.data?.filter(e => 
@@ -90,6 +104,8 @@ export default function Dashboard() {
       return {
         // Main KPIs
         chiffreAffaires,
+        totalDepenses,
+        soldeCaisse,
         creancesImpayees,
         contratsActifs,
         proprietesDisponibles: proprietesLibres,
@@ -175,6 +191,7 @@ export default function Dashboard() {
         
         {/* Quick Actions */}
         <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-2">
+          <BalanceBadge />
           <Button onClick={() => navigate('/souscriptions')} size="sm" className="w-full sm:w-auto">
             <Plus className="h-4 w-4 mr-2" />
             Souscription
@@ -187,11 +204,11 @@ export default function Dashboard() {
       </div>
 
       {/* Main KPIs */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Chiffre d'affaires</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <TrendingUp className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
@@ -199,6 +216,36 @@ export default function Dashboard() {
             </div>
             <p className="text-xs text-muted-foreground">
               Revenus encaissés
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Dépenses</CardTitle>
+            <AlertCircle className="h-4 w-4 text-red-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">
+              {formatCurrency(stats?.totalDepenses || 0)}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Factures payées
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Solde caisse</CardTitle>
+            <DollarSign className="h-4 w-4 text-blue-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-600">
+              {formatCurrency(stats?.soldeCaisse || 0)}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Disponible
             </p>
           </CardContent>
         </Card>
@@ -228,22 +275,7 @@ export default function Dashboard() {
               {stats?.contratsActifs || 0}
             </div>
             <p className="text-xs text-muted-foreground">
-              Souscriptions + Locations
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Propriétés disponibles</CardTitle>
-            <Building className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {stats?.proprietesDisponibles || 0}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Libres pour location
+              Total en cours
             </p>
           </CardContent>
         </Card>
