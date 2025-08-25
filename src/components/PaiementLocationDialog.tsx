@@ -34,16 +34,23 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
   const { data: paidMonths = [] } = useQuery({
     queryKey: ["paid_months", location.id],
     queryFn: async () => {
+      console.log("Fetching paid months for location:", location.id);
       const { data, error } = await supabase
         .from("recus")
-        .select("periode_debut")
+        .select("periode_debut, numero, montant_total")
         .eq("reference_id", location.id)
         .eq("type_operation", "location")
         .not("periode_debut", "is", null);
       
-      if (error) throw error;
+      if (error) {
+        console.error("Error fetching paid months:", error);
+        throw error;
+      }
       
-      return data.map(recu => format(new Date(recu.periode_debut), "yyyy-MM"));
+      console.log("Raw paid months data:", data);
+      const monthsFormatted = data?.map(recu => format(new Date(recu.periode_debut), "yyyy-MM")) || [];
+      console.log("Formatted paid months:", monthsFormatted);
+      return monthsFormatted;
     },
     enabled: !!location.id,
   });
@@ -58,21 +65,32 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
     const startDate = new Date(location.date_debut);
     const currentDate = new Date();
     
-    // Generate months from start date to current date
-    let date = new Date(startDate);
+    // Start from 4th month (3 months after start date to account for advance payment)
+    const actualStartDate = addMonths(startOfMonth(startDate), 3);
+    
+    console.log("Generating available months from:", actualStartDate, "to:", currentDate);
+    console.log("Paid months array:", paidMonths);
+    
+    // Generate months from actual start date to current date
+    let date = new Date(actualStartDate);
     while (date <= currentDate) {
       const monthStr = format(date, 'yyyy-MM');
+      console.log("Checking month:", monthStr);
+      
       // Check if this month hasn't been paid yet
-      const isPaid = paidMonths?.some(paidMonth => paidMonth === monthStr);
+      const isPaid = paidMonths?.includes(monthStr);
+      console.log("Is month paid?", isPaid);
+      
       if (!isPaid) {
         months.push({
           value: monthStr,
           label: format(date, 'MMMM yyyy', { locale: fr })
         });
       }
-      date.setMonth(date.getMonth() + 1);
+      date = addMonths(date, 1);
     }
     
+    console.log("Available months:", months);
     return months;
   };
 
@@ -132,6 +150,7 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
       return { paiementId, recu };
     },
     onSuccess: ({ recu }) => {
+      console.log("Payment successful, invalidating queries...");
       queryClient.invalidateQueries({ queryKey: ["locations"] });
       queryClient.invalidateQueries({ queryKey: ["paid_months", location.id] });
       queryClient.invalidateQueries({ queryKey: ["cash_transactions"] });
@@ -141,9 +160,13 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
         title: "Paiement enregistré",
         description: `Paiement enregistré avec succès. Reçu généré: ${recu.numero}`,
       });
+      
+      setIsLoading(false);
       onSuccess();
     },
     onError: (error: any) => {
+      console.error("Payment error:", error);
+      setIsLoading(false);
       toast({
         title: "Erreur",
         description: error?.message || "Impossible d'enregistrer le paiement.",
@@ -154,7 +177,16 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!montant || !datePaiement || !modePaiement || !selectedMonth) {
+    
+    console.log("Form validation:", {
+      montant: montant,
+      datePaiement: datePaiement,
+      modePaiement: modePaiement,
+      selectedMonth: selectedMonth
+    });
+    
+    if (!montant || montant === "0" || !datePaiement || !modePaiement || !selectedMonth) {
+      console.log("Validation failed - missing fields");
       toast({
         title: "Erreur",
         description: "Veuillez remplir tous les champs obligatoires.",
@@ -162,9 +194,20 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
       });
       return;
     }
+
+    const amount = Number(montant);
+    if (isNaN(amount) || amount <= 0) {
+      toast({
+        title: "Erreur",
+        description: "Veuillez saisir un montant valide.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    console.log("Form validation passed, submitting...");
     setIsLoading(true);
     createPaiementMutation.mutate();
-    setIsLoading(false);
   };
 
   const calculateNewBalance = () => {
