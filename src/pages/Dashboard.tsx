@@ -26,8 +26,7 @@ export default function Dashboard() {
         paiementsSouscriptions,
         paiementsDroitTerre,
         echeances,
-        cashBalance,
-        cashTransactions
+        cashBalance
       ] = await Promise.all([
         supabase.from('clients').select('*', { count: 'exact' }),
         supabase.from('proprietes').select('*'),
@@ -39,8 +38,7 @@ export default function Dashboard() {
         supabase.from('paiements_souscriptions').select('*'),
         supabase.from('paiements_droit_terre').select('*'),
         supabase.from('echeances_droit_terre').select('*'),
-        supabase.rpc('get_current_cash_balance'),
-        supabase.from('cash_transactions').select('montant, type_operation, type_transaction').eq('type_transaction', 'sortie')
+        supabase.rpc('get_current_cash_balance')
       ]);
 
       // Calculate main KPIs
@@ -53,9 +51,8 @@ export default function Dashboard() {
       // Chiffre d'affaires = revenus encaissés (locations + souscriptions + droits de terre)
       const chiffreAffaires = totalRevenuLocations + totalRevenuSouscriptions + totalRevenuDroitTerre;
       
-      // Dépenses = paiements d'entreprise uniquement (pas les revenus)
-      const totalDepensesEntreprise = cashTransactions.data?.filter(t => t.type_operation === 'depense_entreprise')?.reduce((sum, t) => sum + (t.montant || 0), 0) || 0;
-      const totalDepenses = totalDepensesEntreprise;
+      // Dépenses = paiements de factures fournisseurs
+      const totalDepenses = totalPaiementsFactures;
       
       // Solde de caisse actuel
       const soldeCaisse = Number(cashBalance.data || 0);

@@ -34,23 +34,16 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
   const { data: paidMonths = [] } = useQuery({
     queryKey: ["paid_months", location.id],
     queryFn: async () => {
-      console.log("Fetching paid months for location:", location.id);
       const { data, error } = await supabase
         .from("recus")
-        .select("periode_debut, numero, montant_total")
+        .select("periode_debut")
         .eq("reference_id", location.id)
         .eq("type_operation", "location")
         .not("periode_debut", "is", null);
       
-      if (error) {
-        console.error("Error fetching paid months:", error);
-        throw error;
-      }
+      if (error) throw error;
       
-      console.log("Raw paid months data:", data);
-      const monthsFormatted = data?.map(recu => format(new Date(recu.periode_debut), "yyyy-MM")) || [];
-      console.log("Formatted paid months:", monthsFormatted);
-      return monthsFormatted;
+      return data.map(recu => format(new Date(recu.periode_debut), "yyyy-MM"));
     },
     enabled: !!location.id,
   });
@@ -62,35 +55,17 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
 
   const generateAvailableMonths = () => {
     const months = [];
-    const startDate = new Date(location.date_debut);
-    const currentDate = new Date();
-    
-    // Start from 4th month (3 months after start date to account for advance payment)
-    const actualStartDate = addMonths(startOfMonth(startDate), 3);
-    
-    console.log("Generating available months from:", actualStartDate, "to:", currentDate);
-    console.log("Paid months array:", paidMonths);
-    
-    // Generate months from actual start date to current date
-    let date = new Date(actualStartDate);
-    while (date <= currentDate) {
-      const monthStr = format(date, 'yyyy-MM');
-      console.log("Checking month:", monthStr);
-      
-      // Check if this month hasn't been paid yet
-      const isPaid = paidMonths?.includes(monthStr);
-      console.log("Is month paid?", isPaid);
-      
-      if (!isPaid) {
+    const startingMonth = calculateStartingMonth();
+    for (let i = 0; i < 24; i++) {
+      const date = addMonths(startingMonth, i);
+      const monthValue = format(date, "yyyy-MM");
+      if (!paidMonths.includes(monthValue)) {
         months.push({
-          value: monthStr,
-          label: format(date, 'MMMM yyyy', { locale: fr })
+          value: monthValue,
+          label: format(date, "MMMM yyyy", { locale: fr })
         });
       }
-      date = addMonths(date, 1);
     }
-    
-    console.log("Available months:", months);
     return months;
   };
 
@@ -125,12 +100,8 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
       });
       if (rpcError) throw rpcError;
 
-      // 2) Générer le reçu avec les bonnes dates de période
+      // 2) Générer le reçu
       const receiptNumber = generateReceiptNumber();
-      const selectedMonthDate = new Date(selectedMonth + '-01');
-      const periodeDebut = format(selectedMonthDate, 'yyyy-MM-dd');
-      const periodeFin = format(new Date(selectedMonthDate.getFullYear(), selectedMonthDate.getMonth() + 1, 0), 'yyyy-MM-dd');
-      
       const { data: recu, error: recuError } = await supabase
         .from("recus")
         .insert({
@@ -139,8 +110,8 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
           reference_id: location.id,
           type_operation: "location",
           montant_total: amount,
-          periode_debut: periodeDebut,
-          periode_fin: periodeFin,
+          periode_debut: selectedMonth ? (selectedMonth + "-01") : null,
+          periode_fin: selectedMonth ? (selectedMonth + "-01") : null,
           date_generation: datePaiement.toISOString().split('T')[0],
         })
         .select()
@@ -150,7 +121,6 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
       return { paiementId, recu };
     },
     onSuccess: ({ recu }) => {
-      console.log("Payment successful, invalidating queries...");
       queryClient.invalidateQueries({ queryKey: ["locations"] });
       queryClient.invalidateQueries({ queryKey: ["paid_months", location.id] });
       queryClient.invalidateQueries({ queryKey: ["cash_transactions"] });
@@ -160,13 +130,9 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
         title: "Paiement enregistré",
         description: `Paiement enregistré avec succès. Reçu généré: ${recu.numero}`,
       });
-      
-      setIsLoading(false);
       onSuccess();
     },
     onError: (error: any) => {
-      console.error("Payment error:", error);
-      setIsLoading(false);
       toast({
         title: "Erreur",
         description: error?.message || "Impossible d'enregistrer le paiement.",
@@ -177,16 +143,7 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    console.log("Form validation:", {
-      montant: montant,
-      datePaiement: datePaiement,
-      modePaiement: modePaiement,
-      selectedMonth: selectedMonth
-    });
-    
-    if (!montant || montant === "0" || !datePaiement || !modePaiement || !selectedMonth) {
-      console.log("Validation failed - missing fields");
+    if (!montant || !datePaiement || !modePaiement || !selectedMonth) {
       toast({
         title: "Erreur",
         description: "Veuillez remplir tous les champs obligatoires.",
@@ -194,20 +151,9 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
       });
       return;
     }
-
-    const amount = Number(montant);
-    if (isNaN(amount) || amount <= 0) {
-      toast({
-        title: "Erreur",
-        description: "Veuillez saisir un montant valide.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    console.log("Form validation passed, submitting...");
     setIsLoading(true);
     createPaiementMutation.mutate();
+    setIsLoading(false);
   };
 
   const calculateNewBalance = () => {
