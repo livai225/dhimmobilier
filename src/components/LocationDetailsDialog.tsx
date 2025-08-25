@@ -21,7 +21,6 @@ import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import { PaiementLocationDialog } from "@/components/PaiementLocationDialog";
-import { PaiementCautionDialog } from "@/components/PaiementCautionDialog";
 
 interface LocationDetailsDialogProps {
   location: any;
@@ -31,7 +30,6 @@ interface LocationDetailsDialogProps {
 
 export function LocationDetailsDialog({ location, onClose, onUpdate }: LocationDetailsDialogProps) {
   const [showPaiementDialog, setShowPaiementDialog] = useState(false);
-  const [showCautionDialog, setShowCautionDialog] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -339,15 +337,6 @@ export function LocationDetailsDialog({ location, onClose, onUpdate }: LocationD
                     <span className="sm:inline">Nouveau Paiement</span>
                   </Button>
                   <Button
-                    onClick={() => setShowCautionDialog(true)}
-                    variant="secondary"
-                    className="flex items-center justify-center gap-2 w-full sm:w-auto"
-                    size="sm"
-                  >
-                    <DollarSign className="w-4 h-4" />
-                    <span className="sm:inline">Payer Caution</span>
-                  </Button>
-                  <Button
                     variant="destructive"
                     onClick={handleTerminateLocation}
                     className="flex items-center justify-center gap-2 w-full sm:w-auto"
@@ -380,18 +369,6 @@ export function LocationDetailsDialog({ location, onClose, onUpdate }: LocationD
         />
       )}
 
-      {/* Caution Payment Dialog */}
-      {showCautionDialog && (
-        <PaiementCautionDialog
-          location={location}
-          open={showCautionDialog}
-          onOpenChange={setShowCautionDialog}
-          onSuccess={() => {
-            setShowCautionDialog(false);
-            onUpdate();
-          }}
-        />
-      )}
     </>
   );
 }

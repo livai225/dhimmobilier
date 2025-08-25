@@ -55,17 +55,24 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
 
   const generateAvailableMonths = () => {
     const months = [];
-    const startingMonth = calculateStartingMonth();
-    for (let i = 0; i < 24; i++) {
-      const date = addMonths(startingMonth, i);
-      const monthValue = format(date, "yyyy-MM");
-      if (!paidMonths.includes(monthValue)) {
+    const startDate = new Date(location.date_debut);
+    const currentDate = new Date();
+    
+    // Generate months from start date to current date
+    let date = new Date(startDate);
+    while (date <= currentDate) {
+      const monthStr = format(date, 'yyyy-MM');
+      // Check if this month hasn't been paid yet
+      const isPaid = paidMonths?.some(paidMonth => paidMonth === monthStr);
+      if (!isPaid) {
         months.push({
-          value: monthValue,
-          label: format(date, "MMMM yyyy", { locale: fr })
+          value: monthStr,
+          label: format(date, 'MMMM yyyy', { locale: fr })
         });
       }
+      date.setMonth(date.getMonth() + 1);
     }
+    
     return months;
   };
 
@@ -100,8 +107,12 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
       });
       if (rpcError) throw rpcError;
 
-      // 2) Générer le reçu
+      // 2) Générer le reçu avec les bonnes dates de période
       const receiptNumber = generateReceiptNumber();
+      const selectedMonthDate = new Date(selectedMonth + '-01');
+      const periodeDebut = format(selectedMonthDate, 'yyyy-MM-dd');
+      const periodeFin = format(new Date(selectedMonthDate.getFullYear(), selectedMonthDate.getMonth() + 1, 0), 'yyyy-MM-dd');
+      
       const { data: recu, error: recuError } = await supabase
         .from("recus")
         .insert({
@@ -110,8 +121,8 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
           reference_id: location.id,
           type_operation: "location",
           montant_total: amount,
-          periode_debut: selectedMonth ? (selectedMonth + "-01") : null,
-          periode_fin: selectedMonth ? (selectedMonth + "-01") : null,
+          periode_debut: periodeDebut,
+          periode_fin: periodeFin,
           date_generation: datePaiement.toISOString().split('T')[0],
         })
         .select()
