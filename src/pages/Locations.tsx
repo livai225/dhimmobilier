@@ -12,6 +12,8 @@ import { LocationForm } from "@/components/LocationForm";
 import { LocationDetailsDialog } from "@/components/LocationDetailsDialog";
 import { PaiementLocationDialog } from "@/components/PaiementLocationDialog";
 import { ExportToExcelButton } from "@/components/ExportToExcelButton";
+import { LocationsDashboard } from "@/components/LocationsDashboard";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function Locations() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -111,7 +113,7 @@ export default function Locations() {
         <div>
           <h1 className="text-2xl md:text-3xl font-bold">Gestion des Locations</h1>
           <p className="text-muted-foreground">
-            Gestion des contrats de location avec système de caution 5 mois
+            Dashboard et gestion des contrats de location
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -133,33 +135,44 @@ export default function Locations() {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-4 mb-6">
-        <div className="relative flex-1">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Rechercher par client ou propriété..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-        <Combobox
-          options={[
-            { value: "all", label: "Tous les statuts" },
-            { value: "active", label: "Active" },
-            { value: "termine", label: "Terminée" },
-            { value: "suspendu", label: "Suspendue" }
-          ]}
-          value={statusFilter}
-          onChange={setStatusFilter}
-          placeholder="Filtrer par statut"
-          buttonClassName="w-48 justify-start"
-        />
-      </div>
+      <Tabs defaultValue="list" className="w-full">
+        <TabsList className="grid w-full grid-cols-2 mb-6">
+          <TabsTrigger value="dashboard">📊 Dashboard</TabsTrigger>
+          <TabsTrigger value="list">📋 Liste des locations</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="dashboard" className="space-y-6">
+          <LocationsDashboard />
+        </TabsContent>
+        
+        <TabsContent value="list" className="space-y-6">
+          {/* Filters */}
+          <div className="flex gap-4">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Rechercher par client ou propriété..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <Combobox
+              options={[
+                { value: "all", label: "Tous les statuts" },
+                { value: "active", label: "Active" },
+                { value: "termine", label: "Terminée" },
+                { value: "suspendu", label: "Suspendue" }
+              ]}
+              value={statusFilter}
+              onChange={setStatusFilter}
+              placeholder="Filtrer par statut"
+              buttonClassName="w-48 justify-start"
+            />
+          </div>
 
-      {/* Locations List */}
-      <div className="grid gap-4">
+          {/* Locations List */}
+          <div className="grid gap-4">
         {filteredLocations?.map((location) => (
           <Card key={location.id}>
             <CardHeader>
@@ -254,16 +267,18 @@ export default function Locations() {
           </Card>
         ))}
         
-        {filteredLocations?.length === 0 && (
-          <Card>
-            <CardContent className="text-center py-8">
-              <p className="text-muted-foreground">
-                Aucune location trouvée.
-              </p>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+            {filteredLocations?.length === 0 && (
+              <Card>
+                <CardContent className="text-center py-8">
+                  <p className="text-muted-foreground">
+                    Aucune location trouvée.
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </TabsContent>
+      </Tabs>
 
       {/* Dialogs */}
       {showLocationForm && (
