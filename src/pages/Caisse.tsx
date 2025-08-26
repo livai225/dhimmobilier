@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from "date-fns";
+import * as XLSX from 'xlsx';
 
 export default function Caisse() {
   const { toast } = useToast();
@@ -20,6 +21,8 @@ export default function Caisse() {
   const [customEnd, setCustomEnd] = useState<string>("");
   const [tab, setTab] = useState<"entree" | "depense">("entree");
   const [file, setFile] = useState<File | null>(null);
+  const [typeOperationFilter, setTypeOperationFilter] = useState<string>("");
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     document.title = "Caisse - Solde et opérations";
@@ -67,16 +70,22 @@ export default function Caisse() {
   }, [period, customStart, customEnd]);
 
   const { data: transactions = [], isLoading } = useQuery({
-    queryKey: ["cash_transactions", periodRange],
+    queryKey: ["cash_transactions", periodRange, typeOperationFilter],
     queryFn: async () => {
-      const query = supabase
+      let query = supabase
         .from("cash_transactions")
         .select("*")
         .gte("date_transaction", periodRange.start)
-        .lte("date_transaction", periodRange.end)
+        .lte("date_transaction", periodRange.end);
+      
+      if (typeOperationFilter) {
+        query = query.eq("type_operation", typeOperationFilter);
+      }
+      
+      const { data, error } = await query
         .order("date_transaction", { ascending: false })
         .order("heure_transaction", { ascending: false });
-      const { data, error } = await query;
+      
       if (error) throw error;
       return data;
     },
@@ -150,6 +159,68 @@ export default function Caisse() {
       toast({ title: "Erreur", description: e.message || "Impossible d'enregistrer", variant: "destructive" });
     },
   });
+
+  const exportToExcel = () => {
+    if (isExporting || transactions.length === 0) return;
+    
+    setIsExporting(true);
+    
+    try {
+      // Préparer les données pour l'export
+      const dataToExport = transactions.map((t: any) => ({
+        'Date': format(new Date(t.date_transaction), 'dd/MM/yyyy'),
+        'Heure': t.heure_transaction?.toString().slice(0,5) || '',
+        'Type': t.type_transaction === 'entree' ? 'Entrée' : 'Sortie',
+        'Opération': t.type_operation,
+        'Montant (FCFA)': Number(t.montant).toLocaleString(),
+        'Solde avant': Number(t.solde_avant).toLocaleString(),
+        'Solde après': Number(t.solde_apres).toLocaleString(),
+        'Bénéficiaire': t.beneficiaire || '',
+        'Description': t.description || '',
+        'Agent': t.agent_nom || ''
+      }));
+
+      // Créer un nouveau classeur et une feuille
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(dataToExport);
+
+      // Définir la largeur des colonnes
+      const wscols = [
+        { wch: 12 }, // Date
+        { wch: 8 },  // Heure
+        { wch: 10 }, // Type
+        { wch: 20 }, // Opération
+        { wch: 15 }, // Montant
+        { wch: 15 }, // Solde avant
+        { wch: 15 }, // Solde après
+        { wch: 20 }, // Bénéficiaire
+        { wch: 30 }, // Description
+        { wch: 25 }  // Agent
+      ];
+      ws['!cols'] = wscols;
+
+      // Ajouter la feuille au classeur
+      XLSX.utils.book_append_sheet(wb, ws, 'Transactions');
+
+      // Générer le fichier Excel
+      const dateStr = format(new Date(), 'yyyy-MM-dd');
+      XLSX.writeFile(wb, `transactions_${dateStr}.xlsx`);
+      
+      toast({
+        title: 'Export réussi',
+        description: 'Le fichier Excel a été généré avec succès.',
+      });
+    } catch (error) {
+      console.error('Erreur lors de l\'export Excel:', error);
+      toast({
+        title: 'Erreur',
+        description: 'Une erreur est survenue lors de l\'export.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   return (
     <div className="container mx-auto p-2 sm:p-4">
@@ -248,17 +319,46 @@ export default function Caisse() {
             <CardTitle>Journal des opérations</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-wrap items-end gap-2 mb-3">
-              <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-4 mb-3 items-start">
+              <div className="flex gap-2 flex-wrap">
                 <Button variant={period === "day" ? "default" : "outline"} onClick={() => setPeriod("day")}>Jour</Button>
                 <Button variant={period === "week" ? "default" : "outline"} onClick={() => setPeriod("week")}>Semaine</Button>
                 <Button variant={period === "month" ? "default" : "outline"} onClick={() => setPeriod("month")}>Mois</Button>
                 <Button variant={period === "year" ? "default" : "outline"} onClick={() => setPeriod("year")}>Année</Button>
               </div>
-              <div className="ml-auto flex gap-2">
-                <Input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} />
-                <Input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} />
+              <div className="flex-1 flex flex-col sm:flex-row gap-2">
+                <div className="flex-1">
+                  <label className="text-sm block mb-1">Type d'opération</label>
+                  <select
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    value={typeOperationFilter}
+                    onChange={(e) => setTypeOperationFilter(e.target.value)}
+                  >
+                    <option value="">Tous les types</option>
+                    <option value="versement_agent">Versement agent</option>
+                    <option value="depense_entreprise">Dépense entreprise</option>
+                    <option value="autre">Autre opération</option>
+                  </select>
+                </div>
+                <div className="flex gap-2">
+                  <div>
+                    <label className="text-sm block mb-1">Début</label>
+                    <Input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-sm block mb-1">Fin</label>
+                    <Input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} />
+                  </div>
+                </div>
               </div>
+              <Button 
+                variant="outline" 
+                onClick={exportToExcel}
+                disabled={isExporting || transactions.length === 0}
+                className="self-end"
+              >
+                {isExporting ? 'Export en cours...' : 'Exporter en Excel'}
+              </Button>
             </div>
 
             <div className="rounded-md border overflow-x-auto">
@@ -314,19 +414,6 @@ export default function Caisse() {
             <div className="flex justify-between text-sm">
               <span>Solde d'ouverture</span>
               <span className="font-medium">{totals.ouverture.toLocaleString()} FCFA</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span>Total entrées</span>
-              <span className="font-medium text-green-600">{totals.entrees.toLocaleString()} FCFA</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span>Total sorties</span>
-              <span className="font-medium text-red-600">{totals.sorties.toLocaleString()} FCFA</span>
-            </div>
-            <Separator />
-            <div className="flex justify-between text-sm">
-              <span>Solde de clôture</span>
-              <span className="font-bold">{totals.cloture.toLocaleString()} FCFA</span>
             </div>
           </CardContent>
         </Card>
