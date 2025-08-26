@@ -8,11 +8,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Combobox } from "@/components/ui/combobox";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { AgentOperationsDialog } from "@/components/AgentOperationsDialog";
 
 export default function Agents() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedAgent, setSelectedAgent] = useState<string>("");
+  const [showOperationsDialog, setShowOperationsDialog] = useState(false);
+  const [selectedAgentForOperations, setSelectedAgentForOperations] = useState<any>(null);
   const [form, setForm] = useState({ nom: "", prenom: "", code_agent: "", telephone: "", email: "", statut: "actif" });
 
   useEffect(() => {
@@ -89,12 +92,13 @@ export default function Agents() {
                     <TableHead>Téléphone</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Statut</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {agents.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
+                      <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
                         Aucun agent enregistré
                       </TableCell>
                     </TableRow>
@@ -107,6 +111,18 @@ export default function Agents() {
                         <TableCell>{a.email || '-'}</TableCell>
                         <TableCell>
                           <Badge variant={a.statut === 'actif' ? 'secondary' : 'outline'}>{a.statut}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedAgentForOperations(a);
+                              setShowOperationsDialog(true);
+                            }}
+                          >
+                            📊 Fiche détaillée
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))
@@ -178,6 +194,18 @@ export default function Agents() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Dialog des opérations */}
+      {showOperationsDialog && selectedAgentForOperations && (
+        <AgentOperationsDialog
+          agent={selectedAgentForOperations}
+          isOpen={showOperationsDialog}
+          onClose={() => {
+            setShowOperationsDialog(false);
+            setSelectedAgentForOperations(null);
+          }}
+        />
+      )}
     </div>
   );
 }

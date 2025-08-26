@@ -369,7 +369,9 @@ export default function Caisse() {
                     <TableHead>Heure</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead>Opération</TableHead>
+                    <TableHead>Agent</TableHead>
                     <TableHead>Montant</TableHead>
+                    <TableHead>Reçu</TableHead>
                     <TableHead>Solde avant</TableHead>
                     <TableHead>Solde après</TableHead>
                   </TableRow>
@@ -377,28 +379,54 @@ export default function Caisse() {
                 <TableBody>
                   {transactions.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">
+                      <TableCell colSpan={9} className="text-center py-6 text-muted-foreground">
                         Aucune opération pour cette période
                       </TableCell>
                     </TableRow>
                   ) : (
-                    transactions.map((t: any) => (
-                      <TableRow key={t.id}>
-                        <TableCell>{format(new Date(t.date_transaction), "dd/MM/yyyy")}</TableCell>
-                        <TableCell>{t.heure_transaction?.toString().slice(0,5)}</TableCell>
-                        <TableCell>
-                          <Badge variant={t.type_transaction === "entree" ? "secondary" : "outline"}>
-                            {t.type_transaction}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{t.type_operation}</TableCell>
-                        <TableCell className={t.type_transaction === "entree" ? "text-green-600" : "text-red-600"}>
-                          {Number(t.montant).toLocaleString()} FCFA
-                        </TableCell>
-                        <TableCell>{Number(t.solde_avant).toLocaleString()}</TableCell>
-                        <TableCell>{Number(t.solde_apres).toLocaleString()}</TableCell>
-                      </TableRow>
-                    ))
+                    transactions.map((t: any) => {
+                      const agent = agents.find(a => a.id === t.agent_id);
+                      return (
+                        <TableRow key={t.id}>
+                          <TableCell>{format(new Date(t.date_transaction), "dd/MM/yyyy")}</TableCell>
+                          <TableCell>{t.heure_transaction?.toString().slice(0,5)}</TableCell>
+                          <TableCell>
+                            <Badge variant={t.type_transaction === "entree" ? "secondary" : "outline"}>
+                              {t.type_transaction}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{t.type_operation}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            {agent ? (
+                              <div className="text-xs">
+                                <div className="font-medium">{agent.prenom} {agent.nom}</div>
+                                <div className="text-muted-foreground">{agent.code_agent}</div>
+                              </div>
+                            ) : t.agent_id ? (
+                              <span className="text-xs text-muted-foreground">Agent supprimé</span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className={t.type_transaction === "entree" ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
+                            {t.type_transaction === "entree" ? "+" : "-"}{Number(t.montant).toLocaleString()} FCFA
+                          </TableCell>
+                          <TableCell>
+                            {t.reference_operation ? (
+                              <Button variant="outline" size="sm" className="h-7 text-xs">
+                                📄 Voir reçu
+                              </Button>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-sm">{Number(t.solde_avant).toLocaleString()}</TableCell>
+                          <TableCell className="text-sm font-medium">{Number(t.solde_apres).toLocaleString()}</TableCell>
+                        </TableRow>
+                      );
+                    })
                   )}
                 </TableBody>
               </Table>

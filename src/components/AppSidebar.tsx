@@ -61,6 +61,11 @@ const menuItems = [
     icon: Home,
   },
   {
+    title: "Loyers",
+    url: "/loyers",
+    icon: Receipt,
+  },
+  {
     title: "Caisse",
     url: "/caisse",
     icon: Wallet,
@@ -104,12 +109,14 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter>
+          <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton>
-              <Settings />
-              <span>Paramètres</span>
+            <SidebarMenuButton asChild>
+              <Link to="/settings">
+                <Settings />
+                <span>Paramètres</span>
+              </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
