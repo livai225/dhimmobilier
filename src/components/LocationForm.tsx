@@ -91,6 +91,19 @@ export function LocationForm({ onClose, onSuccess }: LocationFormProps) {
 
       if (propertyError) throw propertyError;
 
+      // Record caution payment in cash system (deduct from cash, record as revenue)
+      const { data: cashTransaction, error: cashError } = await supabase
+        .rpc('pay_caution_with_cash', {
+          p_location_id: location.id,
+          p_montant: locationData.caution_totale,
+          p_date_paiement: locationData.date_debut,
+          p_mode_paiement: 'Caution initiale',
+          p_reference: `LOC-${location.id}`,
+          p_description: 'Versement caution location'
+        });
+
+      if (cashError) throw cashError;
+
       // Generate caution receipt automatically
       const receipt = await ReceiptGenerator.createReceipt({
         clientId: locationData.client_id,
@@ -101,7 +114,7 @@ export function LocationForm({ onClose, onSuccess }: LocationFormProps) {
         datePaiement: locationData.date_debut
       });
 
-      return { location, receipt };
+      return { location, receipt, cashTransaction };
     },
     onSuccess: ({ receipt }) => {
       toast({
