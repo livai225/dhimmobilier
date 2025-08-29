@@ -26,7 +26,8 @@ export default function Dashboard() {
         paiementsSouscriptions,
         paiementsDroitTerre,
         echeances,
-        cashBalance
+        cashBalance,
+        cashTransactions
       ] = await Promise.all([
         supabase.from('clients').select('*', { count: 'exact' }),
         supabase.from('proprietes').select('*'),
@@ -38,7 +39,8 @@ export default function Dashboard() {
         supabase.from('paiements_souscriptions').select('*'),
         supabase.from('paiements_droit_terre').select('*'),
         supabase.from('echeances_droit_terre').select('*'),
-        supabase.rpc('get_current_cash_balance')
+        supabase.rpc('get_current_cash_balance'),
+        supabase.from('cash_transactions').select('montant, date_transaction, type_transaction, type_operation')
       ]);
 
       // Calculate main KPIs
@@ -47,9 +49,10 @@ export default function Dashboard() {
       const totalRevenuLocations = paiementsLocations.data?.reduce((sum, p) => sum + (p.montant || 0), 0) || 0;
       const totalRevenuSouscriptions = paiementsSouscriptions.data?.reduce((sum, p) => sum + (p.montant || 0), 0) || 0;
       const totalRevenuDroitTerre = paiementsDroitTerre.data?.reduce((sum, p) => sum + (p.montant || 0), 0) || 0;
+      const totalRevenuCaution = cashTransactions.data?.filter((t: any) => t.type_transaction === 'entree' && t.type_operation === 'paiement_caution').reduce((sum: number, t: any) => sum + (t.montant || 0), 0) || 0;
       
-      // Chiffre d'affaires = revenus encaissés (locations + souscriptions + droits de terre)
-      const chiffreAffaires = totalRevenuLocations + totalRevenuSouscriptions + totalRevenuDroitTerre;
+      // Chiffre d'affaires = revenus encaissés (locations + souscriptions + droits de terre + cautions)
+      const chiffreAffaires = totalRevenuLocations + totalRevenuSouscriptions + totalRevenuDroitTerre + totalRevenuCaution;
       
       // Dépenses = paiements de factures fournisseurs
       const totalDepenses = totalPaiementsFactures;
@@ -76,6 +79,7 @@ export default function Dashboard() {
       const revenueBreakdown = [
         { name: 'Locations', value: totalRevenuLocations, color: '#8b5cf6' },
         { name: 'Souscriptions', value: totalRevenuSouscriptions, color: '#06b6d4' },
+        { name: 'Cautions', value: totalRevenuCaution, color: '#10b981' },
       ];
 
       // Monthly revenue trend (last 6 months)
