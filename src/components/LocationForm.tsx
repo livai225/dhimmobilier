@@ -167,11 +167,24 @@ export function LocationForm({ onClose, onSuccess }: LocationFormProps) {
 
   const cautionBreakdown = selectedLoyer > 0 ? calculateCautionBreakdown(selectedLoyer) : null;
 
+  const availablePropertiesCount = proprietes?.length || 0;
+
   return (
     <Dialog open={true} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Nouvelle Location</DialogTitle>
+          <div className="text-sm text-muted-foreground">
+            {availablePropertiesCount > 0 ? (
+              <span className="text-green-600">
+                {availablePropertiesCount} propriété(s) disponible(s)
+              </span>
+            ) : (
+              <span className="text-red-600">
+                Aucune propriété disponible - Veuillez libérer une propriété d'abord
+              </span>
+            )}
+          </div>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -191,21 +204,31 @@ export function LocationForm({ onClose, onSuccess }: LocationFormProps) {
 
             <div className="space-y-2">
               <Label htmlFor="propriete">Propriété *</Label>
-              <Combobox
-                options={proprietes?.map(propriete => ({
-                  value: propriete.id,
-                  label: `${propriete.nom} - ${propriete.loyer_mensuel?.toLocaleString()} FCFA/mois`
-                })) || []}
-                value={proprieteId}
-                onChange={(value) => {
-                  setProprieteId(value);
-                  const selectedProp = proprietes?.find(p => p.id === value);
-                  if (selectedProp) {
-                    setSelectedLoyer(selectedProp.loyer_mensuel || 0);
-                  }
-                }}
-                placeholder="Sélectionner une propriété"
-              />
+              {availablePropertiesCount > 0 ? (
+                <Combobox
+                  options={proprietes?.map(propriete => ({
+                    value: propriete.id,
+                    label: `${propriete.nom} - ${propriete.loyer_mensuel?.toLocaleString()} FCFA/mois`
+                  })) || []}
+                  value={proprieteId}
+                  onChange={(value) => {
+                    setProprieteId(value);
+                    const selectedProp = proprietes?.find(p => p.id === value);
+                    if (selectedProp) {
+                      setSelectedLoyer(selectedProp.loyer_mensuel || 0);
+                    }
+                  }}
+                  placeholder="Sélectionner une propriété"
+                />
+              ) : (
+                <div className="p-3 border border-red-200 bg-red-50 rounded-md">
+                  <p className="text-sm text-red-700">
+                    Aucune propriété disponible pour location.
+                    <br />
+                    Rendez-vous dans la section "Locations" pour libérer une propriété.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -298,7 +321,7 @@ export function LocationForm({ onClose, onSuccess }: LocationFormProps) {
             <Button type="button" variant="outline" onClick={onClose}>
               Annuler
             </Button>
-            <Button type="submit" disabled={isLoading}>
+            <Button type="submit" disabled={isLoading || availablePropertiesCount === 0}>
               {isLoading ? "Création..." : "Créer la Location"}
             </Button>
           </div>

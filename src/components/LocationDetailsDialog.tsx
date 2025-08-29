@@ -89,6 +89,8 @@ export function LocationDetailsDialog({ location, onClose, onUpdate }: LocationD
         title: "Location terminée",
         description: "La location a été terminée et la propriété est maintenant libre.",
       });
+      queryClient.invalidateQueries({ queryKey: ['locations'] });
+      queryClient.invalidateQueries({ queryKey: ['proprietes'] });
       onUpdate();
       onClose();
     },
@@ -96,6 +98,32 @@ export function LocationDetailsDialog({ location, onClose, onUpdate }: LocationD
       toast({
         title: "Erreur",
         description: "Impossible de terminer la location.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const freePropertyMutation = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase
+        .from('proprietes')
+        .update({ statut: 'Libre' })
+        .eq('id', location.propriete_id);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Propriété libérée",
+        description: "La propriété est maintenant disponible pour location.",
+      });
+      queryClient.invalidateQueries({ queryKey: ['proprietes'] });
+      onUpdate();
+    },
+    onError: (error) => {
+      toast({
+        title: "Erreur",
+        description: "Impossible de libérer la propriété.",
         variant: "destructive",
       });
     },
@@ -152,6 +180,12 @@ export function LocationDetailsDialog({ location, onClose, onUpdate }: LocationD
   const handleTerminateLocation = () => {
     if (confirm("Êtes-vous sûr de vouloir terminer cette location ? Cette action libérera la propriété.")) {
       terminateLocationMutation.mutate();
+    }
+  };
+
+  const handleFreeProperty = () => {
+    if (confirm("Êtes-vous sûr de vouloir libérer cette propriété ? Cette action rendra la propriété disponible pour de nouvelles locations.")) {
+      freePropertyMutation.mutate();
     }
   };
 
@@ -347,14 +381,25 @@ export function LocationDetailsDialog({ location, onClose, onUpdate }: LocationD
                     <DollarSign className="w-4 h-4" />
                     <span className="sm:inline">Payer Caution</span>
                   </Button>
+                  <Button 
+                    onClick={handleFreeProperty}
+                    variant="outline"
+                    className="flex items-center justify-center gap-2 w-full sm:w-auto"
+                    size="sm"
+                    disabled={freePropertyMutation.isPending}
+                  >
+                    <Home className="w-4 h-4" />
+                    <span className="sm:inline">{freePropertyMutation.isPending ? "Libération..." : "Libérer Propriété"}</span>
+                  </Button>
                   <Button
                     variant="destructive"
                     onClick={handleTerminateLocation}
                     className="flex items-center justify-center gap-2 w-full sm:w-auto"
                     size="sm"
+                    disabled={terminateLocationMutation.isPending}
                   >
                     <XCircle className="w-4 h-4" />
-                    <span className="sm:inline">Terminer Location</span>
+                    <span className="sm:inline">{terminateLocationMutation.isPending ? "Traitement..." : "Terminer Location"}</span>
                   </Button>
                 </>
               )}
