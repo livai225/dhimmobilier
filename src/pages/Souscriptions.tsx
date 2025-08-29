@@ -6,12 +6,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Combobox } from "@/components/ui/combobox";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SouscriptionForm } from "@/components/SouscriptionForm";
 import { SouscriptionDetailsDialog } from "@/components/SouscriptionDetailsDialog";
 import { PaiementSouscriptionEcheanceDialog } from "@/components/PaiementSouscriptionEcheanceDialog";
 import { PaiementDroitTerreDialog } from "@/components/PaiementDroitTerreDialog";
-import { SouscriptionsDashboard } from "@/components/SouscriptionsDashboard";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, Eye, CreditCard, Calendar, Trash2, Coins } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
@@ -136,12 +134,7 @@ export default function Souscriptions() {
   return (
     <div className="container mx-auto p-4 lg:p-6">
       <div className="flex flex-col space-y-4 lg:flex-row lg:items-center lg:justify-between lg:space-y-0 mb-6">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold">Gestion des Souscriptions</h1>
-          <p className="text-muted-foreground">
-            Dashboard et gestion des contrats de souscription
-          </p>
-        </div>
+        <h1 className="text-2xl md:text-3xl font-bold">Gestion des Souscriptions</h1>
         <div className="flex items-center gap-2">
           <ExportToExcelButton
             filename={`souscriptions_${new Date().toISOString().slice(0,10)}`}
@@ -180,173 +173,162 @@ export default function Souscriptions() {
         </div>
       </div>
 
-      <Tabs defaultValue="list" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 mb-6">
-          <TabsTrigger value="dashboard">📊 Dashboard</TabsTrigger>
-          <TabsTrigger value="list">📋 Liste des souscriptions</TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="dashboard" className="space-y-6">
-          <SouscriptionsDashboard />
-        </TabsContent>
-        
-        <TabsContent value="list" className="space-y-6">
-          {/* Filters */}
-          <div className="flex gap-4 mb-6">
-            <Input
-              placeholder="Rechercher par client ou propriété..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="max-w-sm"
-            />
-            <Combobox
-              options={[
-                { value: "all", label: "Toutes les phases" },
-                { value: "souscription", label: "Souscription" },
-                { value: "finition", label: "En finition" },
-                { value: "droit_terre", label: "Droit de terre" },
-                { value: "termine", label: "Terminé" }
-              ]}
-              value={phaseFilter}
-              onChange={setPhaseFilter}
-              placeholder="Filtrer par phase"
-              buttonClassName="w-48 justify-start"
-            />
-          </div>
+      {/* Filters */}
+      <div className="flex gap-4 mb-6">
+        <Input
+          placeholder="Rechercher par client ou propriété..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="max-w-sm"
+        />
+        <Combobox
+          options={[
+            { value: "all", label: "Toutes les phases" },
+            { value: "souscription", label: "Souscription" },
+            { value: "finition", label: "En finition" },
+            { value: "droit_terre", label: "Droit de terre" },
+            { value: "termine", label: "Terminé" }
+          ]}
+          value={phaseFilter}
+          onChange={setPhaseFilter}
+          placeholder="Filtrer par phase"
+          buttonClassName="w-48 justify-start"
+        />
+      </div>
 
-          {/* Souscriptions List */}
-          <div className="grid gap-4">
-            {filteredSouscriptions?.map((souscription) => (
-              <Card key={souscription.id}>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-4 mb-2">
-                        <h3 className="text-lg font-semibold">
-                          {souscription.clients?.prenom} {souscription.clients?.nom}
-                        </h3>
-                        <Badge className={getPhaseColor(souscription.phase_actuelle)}>
-                          {getPhaseLabel(souscription.phase_actuelle)}
-                        </Badge>
-                        <Badge variant="outline">
-                          {souscription.type_souscription === "mise_en_garde" ? "Mise en garde" : "Classique"}
-                        </Badge>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
-                        <div>
-                          <p className="text-muted-foreground">Propriété</p>
-                          <p className="font-medium">{souscription.proprietes?.nom}</p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground">Prix total</p>
-                          <p className="font-medium">{souscription.prix_total?.toLocaleString()} FCFA</p>
-                        </div>
-                        {souscription.type_souscription === "mise_en_garde" && (
-                          <>
-                            <div>
-                              <p className="text-muted-foreground">Type de bien</p>
-                              <p className="font-medium">{souscription.type_bien}</p>
-                            </div>
-                            <div>
-                              <p className="text-muted-foreground">Droit de terre</p>
-                              <p className="font-medium">{souscription.montant_droit_terre_mensuel?.toLocaleString()} FCFA/mois</p>
-                            </div>
-                          </>
-                        )}
-                      </div>
 
-                      {souscription.type_souscription === "mise_en_garde" && souscription.date_fin_finition && (
-                        <div className="mt-4 p-3 bg-muted rounded-lg">
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
-                            <div>
-                              <p className="text-muted-foreground">Fin de finition</p>
-                              <p className="font-medium">
-                                {format(new Date(souscription.date_fin_finition), "dd MMMM yyyy", { locale: fr })}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-muted-foreground">Début droit de terre</p>
-                              <p className="font-medium">
-                                {souscription.date_debut_droit_terre 
-                                  ? format(new Date(souscription.date_debut_droit_terre), "dd MMMM yyyy", { locale: fr })
-                                  : "À définir"}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-muted-foreground">Période de finition</p>
-                              <p className="font-medium">{souscription.periode_finition_mois} mois</p>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex flex-col gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setSelectedSouscription(souscription);
-                          setIsDetailsOpen(true);
-                        }}
-                      >
-                        <Eye className="mr-2 h-4 w-4" />
-                        Détails
-                      </Button>
-
-                      {/* Bouton pour paiement de souscription */}
-                      {souscription.solde_restant > 0 && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedSouscription(souscription);
-                            setIsPaymentDialogOpen(true);
-                          }}
-                        >
-                          <CreditCard className="mr-2 h-4 w-4" />
-                          Paiement souscription
-                        </Button>
-                      )}
-
-                      {/* Bouton pour paiement de droit de terre */}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={souscription.solde_restant > 0 || (souscription.montant_droit_terre_mensuel ?? 0) <= 0}
-                        onClick={() => {
-                          setSelectedSouscription(souscription);
-                          setIsDroitTerreDialogOpen(true);
-                        }}
-                        title={
-                          souscription.solde_restant > 0
-                            ? "Disponible après solde de la souscription"
-                            : (souscription.montant_droit_terre_mensuel ?? 0) <= 0
-                              ? "Droit de terre non applicable"
-                              : undefined
-                        }
-                      >
-                        <Coins className="mr-2 h-4 w-4" />
-                        Droit de terre
-                      </Button>
-
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => deleteSouscription(souscription.id)}
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Supprimer
-                      </Button>
-                    </div>
+      {/* Souscriptions List */}
+      <div className="grid gap-4">
+        {filteredSouscriptions?.map((souscription) => (
+          <Card key={souscription.id}>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-4 mb-2">
+                    <h3 className="text-lg font-semibold">
+                      {souscription.clients?.prenom} {souscription.clients?.nom}
+                    </h3>
+                    <Badge className={getPhaseColor(souscription.phase_actuelle)}>
+                      {getPhaseLabel(souscription.phase_actuelle)}
+                    </Badge>
+                    <Badge variant="outline">
+                      {souscription.type_souscription === "mise_en_garde" ? "Mise en garde" : "Classique"}
+                    </Badge>
                   </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </TabsContent>
-      </Tabs>
+                  
+                  <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+                    <div>
+                      <p className="text-muted-foreground">Propriété</p>
+                      <p className="font-medium">{souscription.proprietes?.nom}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Prix total</p>
+                      <p className="font-medium">{souscription.prix_total?.toLocaleString()} FCFA</p>
+                    </div>
+                    {souscription.type_souscription === "mise_en_garde" && (
+                      <>
+                        <div>
+                          <p className="text-muted-foreground">Type de bien</p>
+                          <p className="font-medium">{souscription.type_bien}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Droit de terre</p>
+                          <p className="font-medium">{souscription.montant_droit_terre_mensuel?.toLocaleString()} FCFA/mois</p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {souscription.type_souscription === "mise_en_garde" && souscription.date_fin_finition && (
+                    <div className="mt-4 p-3 bg-muted rounded-lg">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
+                        <div>
+                          <p className="text-muted-foreground">Fin de finition</p>
+                          <p className="font-medium">
+                            {format(new Date(souscription.date_fin_finition), "dd MMMM yyyy", { locale: fr })}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Début droit de terre</p>
+                          <p className="font-medium">
+                            {souscription.date_debut_droit_terre 
+                              ? format(new Date(souscription.date_debut_droit_terre), "dd MMMM yyyy", { locale: fr })
+                              : "À définir"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Période de finition</p>
+                          <p className="font-medium">{souscription.periode_finition_mois} mois</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedSouscription(souscription);
+                      setIsDetailsOpen(true);
+                    }}
+                  >
+                    <Eye className="mr-2 h-4 w-4" />
+                    Détails
+                  </Button>
+
+
+                  {/* Bouton pour paiement de souscription */}
+                  {souscription.solde_restant > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedSouscription(souscription);
+                        setIsPaymentDialogOpen(true);
+                      }}
+                    >
+                      <CreditCard className="mr-2 h-4 w-4" />
+                      Paiement souscription
+                    </Button>
+                  )}
+
+                  {/* Bouton pour paiement de droit de terre */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={souscription.solde_restant > 0 || (souscription.montant_droit_terre_mensuel ?? 0) <= 0}
+                    onClick={() => {
+                      setSelectedSouscription(souscription);
+                      setIsDroitTerreDialogOpen(true);
+                    }}
+                    title={
+                      souscription.solde_restant > 0
+                        ? "Disponible après solde de la souscription"
+                        : (souscription.montant_droit_terre_mensuel ?? 0) <= 0
+                          ? "Droit de terre non applicable"
+                          : undefined
+                    }
+                  >
+                    <Coins className="mr-2 h-4 w-4" />
+                    Droit de terre
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => deleteSouscription(souscription.id)}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Supprimer
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
       {/* Details Dialog */}
       <SouscriptionDetailsDialog
