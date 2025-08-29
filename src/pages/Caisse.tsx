@@ -10,6 +10,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ReceiptDialog } from "@/components/ReceiptDialog";
+import { Eye } from "lucide-react";
 import { format } from "date-fns";
 import * as XLSX from 'xlsx';
 
@@ -23,6 +25,9 @@ export default function Caisse() {
   const [file, setFile] = useState<File | null>(null);
   const [typeOperationFilter, setTypeOperationFilter] = useState<string>("");
   const [isExporting, setIsExporting] = useState(false);
+  const [selectedReceiptId, setSelectedReceiptId] = useState<string | null>(null);
+  const [selectedReceiptType, setSelectedReceiptType] = useState<string>("");
+  const [showReceiptDialog, setShowReceiptDialog] = useState(false);
 
   useEffect(() => {
     document.title = "Caisse - Solde et opérations";
@@ -222,6 +227,12 @@ export default function Caisse() {
     }
   };
 
+  const handleViewReceipt = (referenceId: string, typeOperation: string) => {
+    setSelectedReceiptId(referenceId);
+    setSelectedReceiptType(typeOperation);
+    setShowReceiptDialog(true);
+  };
+
   return (
     <div className="container mx-auto p-2 sm:p-4">
       <div className="flex items-start justify-between gap-4 flex-col sm:flex-row">
@@ -404,26 +415,36 @@ export default function Caisse() {
                                 <div className="font-medium">{agent.prenom} {agent.nom}</div>
                                 <div className="text-muted-foreground">{agent.code_agent}</div>
                               </div>
-                            ) : t.agent_id ? (
-                              <span className="text-xs text-muted-foreground">Agent supprimé</span>
                             ) : (
-                              <span className="text-xs text-muted-foreground">-</span>
+                              <span className="text-muted-foreground text-xs">-</span>
                             )}
                           </TableCell>
-                          <TableCell className={t.type_transaction === "entree" ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
-                            {t.type_transaction === "entree" ? "+" : "-"}{Number(t.montant).toLocaleString()} FCFA
+                          <TableCell className="font-medium">
+                            <span className={t.type_transaction === "entree" ? "text-green-600" : "text-red-600"}>
+                              {t.type_transaction === "entree" ? "+" : "-"}{Number(t.montant).toLocaleString()} FCFA
+                            </span>
                           </TableCell>
                           <TableCell>
                             {t.reference_operation ? (
-                              <Button variant="outline" size="sm" className="h-7 text-xs">
-                                📄 Voir reçu
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleViewReceipt(t.reference_operation, t.type_operation)}
+                                className="text-blue-600 hover:text-blue-800"
+                              >
+                                <Eye className="h-3 w-3 mr-1" />
+                                Voir reçu
                               </Button>
                             ) : (
-                              <span className="text-xs text-muted-foreground">-</span>
+                              <span className="text-muted-foreground text-xs">-</span>
                             )}
                           </TableCell>
-                          <TableCell className="text-sm">{Number(t.solde_avant).toLocaleString()}</TableCell>
-                          <TableCell className="text-sm font-medium">{Number(t.solde_apres).toLocaleString()}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {Number(t.solde_avant).toLocaleString()} FCFA
+                          </TableCell>
+                          <TableCell className="text-xs font-medium">
+                            {Number(t.solde_apres).toLocaleString()} FCFA
+                          </TableCell>
                         </TableRow>
                       );
                     })
@@ -443,9 +464,37 @@ export default function Caisse() {
               <span>Solde d'ouverture</span>
               <span className="font-medium">{totals.ouverture.toLocaleString()} FCFA</span>
             </div>
+            <Separator />
+            <div className="flex justify-between text-sm text-green-600">
+              <span>+ Entrées</span>
+              <span className="font-medium">{totals.entrees.toLocaleString()} FCFA</span>
+            </div>
+            <div className="flex justify-between text-sm text-red-600">
+              <span>- Sorties</span>
+              <span className="font-medium">{totals.sorties.toLocaleString()} FCFA</span>
+            </div>
+            <Separator />
+            <div className="flex justify-between font-medium">
+              <span>Solde de clôture</span>
+              <span className="text-lg">{totals.cloture.toLocaleString()} FCFA</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span>Variation nette</span>
+              <span className={`font-medium ${totals.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {totals.net >= 0 ? '+' : ''}{totals.net.toLocaleString()} FCFA
+              </span>
+            </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Receipt Dialog */}
+      <ReceiptDialog
+        open={showReceiptDialog}
+        onOpenChange={setShowReceiptDialog}
+        referenceId={selectedReceiptId}
+        typeOperation={selectedReceiptType}
+      />
     </div>
   );
 }
