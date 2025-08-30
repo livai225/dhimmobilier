@@ -57,6 +57,17 @@ export function LocationForm({ onClose, onSuccess }: LocationFormProps) {
     },
   });
 
+  // Solde de caisse actuel
+  const { data: cashBalance } = useQuery({
+    queryKey: ["cash-balance"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("get_current_cash_balance");
+      if (error) throw error;
+      return Number(data || 0);
+    },
+    refetchOnWindowFocus: false,
+  });
+
   // Calculate deposit breakdown
   const calculateCautionBreakdown = (loyerMensuel: number) => {
     const garantie2Mois = loyerMensuel * 2;
@@ -146,6 +157,17 @@ export function LocationForm({ onClose, onSuccess }: LocationFormProps) {
     setIsLoading(true);
 
     const cautionBreakdown = calculateCautionBreakdown(selectedLoyer);
+
+    const cautionAmount = cautionBreakdown.cautionTotale;
+    if ((cashBalance ?? 0) < cautionAmount) {
+      toast({
+        title: "Solde insuffisant",
+        description: `Solde caisse actuel: ${(cashBalance ?? 0).toLocaleString()} FCFA. Caution requise: ${cautionAmount.toLocaleString()} FCFA.`,
+        variant: "destructive",
+      });
+      setIsLoading(false);
+      return;
+    }
 
     const locationData = {
       client_id: clientId,
@@ -288,6 +310,18 @@ export function LocationForm({ onClose, onSuccess }: LocationFormProps) {
                   <div className="flex justify-between font-bold text-lg">
                     <span>Total à verser:</span>
                     <span className="text-primary">{cautionBreakdown.cautionTotale.toLocaleString()} FCFA</span>
+                  </div>
+                  <div className="mt-3 space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span>Solde caisse actuel:</span>
+                      <span className="font-medium">{(cashBalance ?? 0).toLocaleString()} FCFA</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Solde après déduction:</span>
+                      <span className={cn('font-medium', (cashBalance ?? 0) - cautionBreakdown.cautionTotale < 0 ? 'text-destructive' : '')}>
+                        {((cashBalance ?? 0) - cautionBreakdown.cautionTotale).toLocaleString()} FCFA
+                      </span>
+                    </div>
                   </div>
                 </div>
               </CardContent>
