@@ -339,15 +339,6 @@ export function LocationDetailsDialog({ location, onClose, onUpdate }: LocationD
                     <span className="sm:inline">Nouveau Paiement</span>
                   </Button>
                   <Button
-                    onClick={() => setShowCautionDialog(true)}
-                    variant="secondary"
-                    className="flex items-center justify-center gap-2 w-full sm:w-auto"
-                    size="sm"
-                  >
-                    <DollarSign className="w-4 h-4" />
-                    <span className="sm:inline">Payer Caution</span>
-                  </Button>
-                  <Button
                     variant="destructive"
                     onClick={handleTerminateLocation}
                     className="flex items-center justify-center gap-2 w-full sm:w-auto"
