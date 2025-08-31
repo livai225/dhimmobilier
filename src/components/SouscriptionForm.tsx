@@ -154,8 +154,25 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
           .select()
           .single();
         
-        // Generate receipt for initial payment if apport_initial > 0
+        // Generate receipt and record cash transaction for initial payment if apport_initial > 0
         if (processedData.apport_initial > 0 && result.data) {
+          // Record cash transaction for the initial payment
+          const { error: cashError } = await supabase.rpc('record_cash_transaction', {
+            p_montant: processedData.apport_initial,
+            p_type_transaction: 'entree',
+            p_type_operation: 'apport_souscription',
+            p_beneficiaire: `Souscription - ${result.data.id}`,
+            p_description: `Apport initial pour souscription`,
+            p_reference_operation: result.data.id,
+            p_agent_id: null,
+            p_piece_justificative: null
+          });
+
+          if (cashError) {
+            console.error('Error recording cash transaction:', cashError);
+            throw new Error('Erreur lors de l\'enregistrement de la transaction caisse');
+          }
+
           receipt = await ReceiptGenerator.createReceipt({
             clientId: processedData.client_id,
             referenceId: result.data.id,
