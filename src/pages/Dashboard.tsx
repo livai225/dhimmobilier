@@ -362,9 +362,11 @@ export default function Dashboard() {
             <TrendingUp className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">85%</div>
+            <div className="text-2xl font-bold text-green-600">
+              {stats?.contratsActifs > 0 ? Math.round((stats?.chiffreAffaires || 0) / ((stats?.chiffreAffaires || 0) + (stats?.creancesImpayees || 0)) * 100) : 0}%
+            </div>
             <p className="text-xs text-muted-foreground">
-              Score global
+              Taux recouvrement
             </p>
           </CardContent>
         </Card>
