@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Building, TrendingUp, MapPin, DollarSign, BarChart3, PieChart } from "lucide-react";
+import { Building, TrendingUp, MapPin, DollarSign, BarChart3, PieChart as PieChartIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--secondary))', 'hsl(var(--accent))', 'hsl(var(--muted))'];
 
@@ -246,13 +246,13 @@ export function PropertiesDashboard() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <PieChart className="h-5 w-5" />
+                  <PieChartIcon className="h-5 w-5" />
                   Répartition par Statut
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
-                  <RechartsPieChart>
+                  <PieChart>
                     <Pie
                       data={stats.statusDistribution}
                       cx="50%"
@@ -268,7 +268,7 @@ export function PropertiesDashboard() {
                       ))}
                     </Pie>
                     <Tooltip />
-                  </RechartsPieChart>
+                  </PieChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
