@@ -61,11 +61,6 @@ const menuItems = [
     icon: Home,
   },
   {
-    title: "Loyers",
-    url: "/loyers",
-    icon: Receipt,
-  },
-  {
     title: "Caisse",
     url: "/caisse",
     icon: Wallet,

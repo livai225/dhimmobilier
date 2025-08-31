@@ -17,7 +17,7 @@ import ReceiptIntegrity from "./pages/ReceiptIntegrity";
 import NotFound from "./pages/NotFound";
 import Caisse from "./pages/Caisse";
 import Agents from "./pages/Agents";
-import Loyers from "./pages/Loyers";
+
 import Settings from "./pages/Settings";
 
 const queryClient = new QueryClient();
@@ -42,7 +42,7 @@ const App = () => (
           <Route path="/factures" element={<Layout><Factures /></Layout>} />
           <Route path="/souscriptions" element={<Layout><Souscriptions /></Layout>} />
           <Route path="/locations" element={<Layout><Locations /></Layout>} />
-          <Route path="/loyers" element={<Layout><Loyers /></Layout>} />
+          
           <Route path="/caisse" element={<Layout><Caisse /></Layout>} />
           <Route path="/agents" element={<Layout><Agents /></Layout>} />
           <Route path="/recus" element={<Layout><Recus /></Layout>} />

@@ -85,6 +85,11 @@ export function LocationForm({ onClose, onSuccess }: LocationFormProps) {
 
   const createLocationMutation = useMutation({
     mutationFn: async (locationData: any) => {
+      // Vérifier le solde de caisse d'abord
+      if (!cashBalance || cashBalance < locationData.caution_totale) {
+        throw new Error(`Solde de caisse insuffisant. Solde actuel: ${cashBalance?.toLocaleString()} FCFA, Montant requis: ${locationData.caution_totale?.toLocaleString()} FCFA`);
+      }
+
       // Create the location
       const { data: location, error: locationError } = await supabase
         .from("locations")
@@ -102,7 +107,7 @@ export function LocationForm({ onClose, onSuccess }: LocationFormProps) {
 
       if (propertyError) throw propertyError;
 
-      // Record caution payment in cash system (deduct from cash, record as revenue)
+      // Record caution payment in cash system (sortie de caisse)
       const { data: cashTransaction, error: cashError } = await supabase
         .rpc('pay_caution_with_cash', {
           p_location_id: location.id,
@@ -110,7 +115,7 @@ export function LocationForm({ onClose, onSuccess }: LocationFormProps) {
           p_date_paiement: locationData.date_debut,
           p_mode_paiement: 'Caution initiale',
           p_reference: `LOC-${location.id}`,
-          p_description: 'Versement caution location'
+          p_description: 'Avance caution location'
         });
 
       if (cashError) {
