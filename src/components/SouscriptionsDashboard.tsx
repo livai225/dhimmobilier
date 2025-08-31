@@ -55,7 +55,7 @@ export function SouscriptionsDashboard() {
       sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
       const { data: recentPayments } = await supabase
-        .from("paiements_souscriptions")
+        .from("paiements_droit_terre")
         .select("montant, date_paiement")
         .gte("date_paiement", sixMonthsAgo.toISOString().split('T')[0]);
 
