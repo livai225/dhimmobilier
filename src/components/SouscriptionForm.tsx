@@ -173,7 +173,7 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
           // Record cash transaction
           const { error: cashError } = await supabase.rpc('record_cash_transaction', {
             p_montant: processedData.apport_initial,
-            p_type_transaction: 'entree',
+            p_type_transaction: 'sortie',
             p_type_operation: operationType,
             p_beneficiaire: `Souscription - ${result.data.id}`,
             p_description: description,
