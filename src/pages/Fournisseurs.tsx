@@ -20,7 +20,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { FournisseurForm } from "@/components/FournisseurForm";
-import { Plus, Search, Edit, Trash2, FileText } from "lucide-react";
+import { FournisseurDetailsDialog } from "@/components/FournisseurDetailsDialog";
+import { Plus, Search, Edit, Trash2, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ExportToExcelButton } from "@/components/ExportToExcelButton";
 
@@ -29,6 +30,8 @@ export default function Fournisseurs() {
   const [selectedSecteur, setSelectedSecteur] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingFournisseur, setEditingFournisseur] = useState(null);
+  const [selectedFournisseur, setSelectedFournisseur] = useState(null);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -109,6 +112,11 @@ export default function Fournisseurs() {
     setEditingFournisseur(null);
   };
 
+  const handleViewDetails = (fournisseur) => {
+    setSelectedFournisseur(fournisseur);
+    setIsDetailsOpen(true);
+  };
+
   const getPerformanceColor = (note) => {
     if (!note) return "secondary";
     if (note >= 4) return "default";
@@ -158,6 +166,13 @@ export default function Fournisseurs() {
           </Dialog>
         </div>
       </div>
+
+      {/* Supplier Details Dialog */}
+      <FournisseurDetailsDialog
+        fournisseur={selectedFournisseur}
+        open={isDetailsOpen}
+        onOpenChange={setIsDetailsOpen}
+      />
 
       {/* Filters */}
       <div className="flex gap-4 items-center">
@@ -246,8 +261,12 @@ export default function Fournisseurs() {
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="sm">
-                        <FileText className="h-4 w-4" />
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => handleViewDetails(fournisseur)}
+                      >
+                        <Eye className="h-4 w-4" />
                       </Button>
                     </div>
                   </TableCell>
