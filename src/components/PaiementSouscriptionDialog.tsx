@@ -65,6 +65,13 @@ export function PaiementSouscriptionDialog({
     mutationFn: async (data: PaiementFormData) => {
       if (!souscription?.id) throw new Error("Souscription introuvable");
 
+      // Pré-contrôle du solde de caisse
+      const { data: canPay, error: canPayError } = await supabase.rpc('can_make_payment' as any, { amount: data.montant });
+      if (canPayError) throw canPayError;
+      if (!canPay) {
+        throw new Error("Solde de caisse insuffisant pour effectuer ce paiement");
+      }
+
       // 1) Paiement via caisse (sortie + journal)
       const { data: paiementId, error } = await supabase.rpc("pay_souscription_with_cash" as any, {
         p_souscription_id: souscription.id,
