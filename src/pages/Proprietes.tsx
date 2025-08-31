@@ -248,10 +248,10 @@ export default function Proprietes() {
       propriete.adresse?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       propriete.zone?.toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesStatus = !statusFilter || propriete.statut === statusFilter;
-    const matchesUsage = !usageFilter || propriete.usage === usageFilter;
-    const matchesType = !typeFilter || propriete.type_id === typeFilter;
-    const matchesZone = !zoneFilter || propriete.zone === zoneFilter;
+    const matchesStatus = !statusFilter || statusFilter === "all" || propriete.statut === statusFilter;
+    const matchesUsage = !usageFilter || usageFilter === "all" || propriete.usage === usageFilter;
+    const matchesType = !typeFilter || typeFilter === "all" || propriete.type_id === typeFilter;
+    const matchesZone = !zoneFilter || zoneFilter === "all" || propriete.zone === zoneFilter;
     
     return matchesSearch && matchesStatus && matchesUsage && matchesType && matchesZone;
   }) || [];
@@ -353,7 +353,7 @@ export default function Proprietes() {
                       <SelectValue placeholder="Tous les statuts" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Tous les statuts</SelectItem>
+                      <SelectItem value="all">Tous les statuts</SelectItem>
                       <SelectItem value="Libre">Libre</SelectItem>
                       <SelectItem value="Occupé">Occupé</SelectItem>
                       <SelectItem value="En travaux">En travaux</SelectItem>
@@ -370,7 +370,7 @@ export default function Proprietes() {
                       <SelectValue placeholder="Tous les usages" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Tous les usages</SelectItem>
+                      <SelectItem value="all">Tous les usages</SelectItem>
                       <SelectItem value="Location">Location</SelectItem>
                       <SelectItem value="Bail">Bail</SelectItem>
                     </SelectContent>
@@ -385,7 +385,7 @@ export default function Proprietes() {
                       <SelectValue placeholder="Tous les types" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Tous les types</SelectItem>
+                      <SelectItem value="all">Tous les types</SelectItem>
                       {typesProprietes.map((type) => (
                         <SelectItem key={type.id} value={type.id}>
                           {type.nom}
@@ -403,7 +403,7 @@ export default function Proprietes() {
                       <SelectValue placeholder="Toutes les zones" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Toutes les zones</SelectItem>
+                      <SelectItem value="all">Toutes les zones</SelectItem>
                       {uniqueZones.map((zone) => (
                         <SelectItem key={zone} value={zone}>
                           {zone}
@@ -417,7 +417,7 @@ export default function Proprietes() {
               {/* Results count */}
               <div className="mt-4 text-sm text-muted-foreground">
                 {filteredProprietes.length} propriété{filteredProprietes.length !== 1 ? 's' : ''} trouvée{filteredProprietes.length !== 1 ? 's' : ''}
-                {(searchTerm || statusFilter || usageFilter || typeFilter || zoneFilter) && (
+                {(searchTerm || (statusFilter && statusFilter !== "all") || (usageFilter && usageFilter !== "all") || (typeFilter && typeFilter !== "all") || (zoneFilter && zoneFilter !== "all")) && (
                   <span> sur {proprietes?.length || 0} au total</span>
                 )}
               </div>
@@ -441,13 +441,13 @@ export default function Proprietes() {
             <div className="text-center py-10">
               <Building className="mx-auto h-12 w-12 text-muted-foreground" />
               <h3 className="mt-2 text-sm font-semibold">
-                {(searchTerm || statusFilter || usageFilter || typeFilter || zoneFilter) 
+                {(searchTerm || (statusFilter && statusFilter !== "all") || (usageFilter && usageFilter !== "all") || (typeFilter && typeFilter !== "all") || (zoneFilter && zoneFilter !== "all")) 
                   ? "Aucune propriété trouvée" 
                   : "Aucune propriété"
                 }
               </h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                {(searchTerm || statusFilter || usageFilter || typeFilter || zoneFilter)
+                {(searchTerm || (statusFilter && statusFilter !== "all") || (usageFilter && usageFilter !== "all") || (typeFilter && typeFilter !== "all") || (zoneFilter && zoneFilter !== "all"))
                   ? "Essayez de modifier vos filtres de recherche."
                   : "Commencez par créer votre première propriété."
                 }
