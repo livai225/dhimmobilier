@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 export interface ReceiptData {
   clientId: string;
   referenceId: string;
-  typeOperation: "caution_location" | "apport_souscription" | "droit_terre" | "paiement_facture" | "location" | "paiement_souscription";
+  typeOperation: "caution_location" | "apport_souscription" | "droit_terre" | "paiement_facture" | "location" | "paiement_souscription" | "versement_agent";
   montantTotal: number;
   periodeDebut?: string;
   periodeFin?: string;
@@ -24,7 +24,8 @@ export class ReceiptGenerator {
       droit_terre: "REC-DTER",
       paiement_facture: "REC-FACT",
       location: "REC-LOC",
-      paiement_souscription: "REC-PAYS"
+      paiement_souscription: "REC-PAYS",
+      versement_agent: "REC-VERS"
     };
     
     return `${prefixes[type] || "REC-GEN"}-${year}${month}${day}-${random}`;

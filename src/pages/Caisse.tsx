@@ -141,7 +141,28 @@ export default function Caisse() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: async (transactionId) => {
+      // Generate receipt for agent deposits
+      if (tab === "entree" && form.agent_id) {
+        try {
+          const { ReceiptGenerator } = await import("@/utils/receiptGenerator");
+          await ReceiptGenerator.createReceipt({
+            clientId: "00000000-0000-0000-0000-000000000000", // Placeholder for agent deposits
+            referenceId: transactionId,
+            typeOperation: "versement_agent",
+            montantTotal: Number(form.montant),
+            datePaiement: form.date_transaction
+          });
+        } catch (receiptError) {
+          console.error("Erreur lors de la génération du reçu:", receiptError);
+          toast({ 
+            title: "Avertissement", 
+            description: "Transaction enregistrée mais le reçu n'a pas pu être généré.",
+            variant: "destructive"
+          });
+        }
+      }
+
       setForm({
         agent_id: "",
         montant: "",

@@ -4,6 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { Download, Eye, Printer } from "lucide-react";
 import { ReceiptWithDetails } from "@/hooks/useReceipts";
 import { downloadReceiptPDF, printReceiptPDF } from "@/utils/pdfGenerator";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 interface ReceiptDetailsDialogProps {
   receipt: ReceiptWithDetails | null;
@@ -16,6 +18,37 @@ export function ReceiptDetailsDialog({
   open, 
   onOpenChange 
 }: ReceiptDetailsDialogProps) {
+  // Fetch agent details for versement_agent receipts
+  const { data: agentDetails } = useQuery({
+    queryKey: ["agent-for-receipt", receipt?.reference_id],
+    queryFn: async () => {
+      if (!receipt || receipt.type_operation !== "versement_agent") return null;
+      
+      const { data: transaction, error } = await supabase
+        .from("cash_transactions")
+        .select(`
+          agent_id,
+          description,
+          piece_justificative,
+          date_transaction,
+          heure_transaction,
+          agents_recouvrement (
+            nom,
+            prenom,
+            code_agent,
+            telephone,
+            email
+          )
+        `)
+        .eq("id", receipt.reference_id)
+        .single();
+      
+      if (error) throw error;
+      return transaction;
+    },
+    enabled: !!receipt && receipt.type_operation === "versement_agent"
+  });
+
   if (!receipt) return null;
 
   const operationTypes = {
@@ -23,7 +56,8 @@ export function ReceiptDetailsDialog({
     caution_location: { label: "Caution de location", color: "bg-green-500" },
     apport_souscription: { label: "Apport de souscription", color: "bg-purple-500" },
     droit_terre: { label: "Droit de terre", color: "bg-orange-500" },
-    paiement_facture: { label: "Paiement de facture", color: "bg-red-500" }
+    paiement_facture: { label: "Paiement de facture", color: "bg-red-500" },
+    versement_agent: { label: "Versement agent", color: "bg-indigo-500" }
   };
 
   const operation = operationTypes[receipt.type_operation] || { 
@@ -66,19 +100,38 @@ export function ReceiptDetailsDialog({
             </p>
           </div>
 
-          {/* Client Info */}
+          {/* Client Info or Agent Info */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-2">
-                Informations Client
+                {receipt.type_operation === "versement_agent" ? "Informations Agent" : "Informations Client"}
               </h3>
               <div className="space-y-1">
-                <p className="font-medium">{clientName}</p>
-                {receipt.client?.email && (
-                  <p className="text-sm text-muted-foreground">{receipt.client.email}</p>
-                )}
-                {receipt.client?.telephone_principal && (
-                  <p className="text-sm text-muted-foreground">{receipt.client.telephone_principal}</p>
+                {receipt.type_operation === "versement_agent" && agentDetails?.agents_recouvrement ? (
+                  <>
+                    <p className="font-medium">
+                      {agentDetails.agents_recouvrement.prenom} {agentDetails.agents_recouvrement.nom}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Code: {agentDetails.agents_recouvrement.code_agent}
+                    </p>
+                    {agentDetails.agents_recouvrement.email && (
+                      <p className="text-sm text-muted-foreground">{agentDetails.agents_recouvrement.email}</p>
+                    )}
+                    {agentDetails.agents_recouvrement.telephone && (
+                      <p className="text-sm text-muted-foreground">{agentDetails.agents_recouvrement.telephone}</p>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <p className="font-medium">{clientName}</p>
+                    {receipt.client?.email && (
+                      <p className="text-sm text-muted-foreground">{receipt.client.email}</p>
+                    )}
+                    {receipt.client?.telephone_principal && (
+                      <p className="text-sm text-muted-foreground">{receipt.client.telephone_principal}</p>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -104,17 +157,41 @@ export function ReceiptDetailsDialog({
                     </span>
                   </div>
                 )}
-                {receipt.periode_debut && (
-                  <div>
-                    <p className="text-sm font-medium">Période:</p>
-                    <p className="text-sm text-muted-foreground">
-                      {new Date(receipt.periode_debut).toLocaleDateString("fr-FR")}
-                      {receipt.periode_fin && 
-                        ` au ${new Date(receipt.periode_fin).toLocaleDateString("fr-FR")}`
-                      }
-                    </p>
-                  </div>
-                )}
+                 {receipt.periode_debut && (
+                   <div>
+                     <p className="text-sm font-medium">Période:</p>
+                     <p className="text-sm text-muted-foreground">
+                       {new Date(receipt.periode_debut).toLocaleDateString("fr-FR")}
+                       {receipt.periode_fin && 
+                         ` au ${new Date(receipt.periode_fin).toLocaleDateString("fr-FR")}`
+                       }
+                     </p>
+                   </div>
+                 )}
+                 {receipt.type_operation === "versement_agent" && agentDetails && (
+                   <>
+                     <div>
+                       <p className="text-sm font-medium">Date et heure:</p>
+                       <p className="text-sm text-muted-foreground">
+                         {new Date(agentDetails.date_transaction).toLocaleDateString("fr-FR")} à {agentDetails.heure_transaction?.slice(0, 5)}
+                       </p>
+                     </div>
+                     {agentDetails.description && (
+                       <div>
+                         <p className="text-sm font-medium">Description:</p>
+                         <p className="text-sm text-muted-foreground">{agentDetails.description}</p>
+                       </div>
+                     )}
+                     {agentDetails.piece_justificative && (
+                       <div>
+                         <p className="text-sm font-medium">Pièce justificative:</p>
+                         <p className="text-sm text-primary cursor-pointer hover:underline">
+                           Document disponible
+                         </p>
+                       </div>
+                     )}
+                   </>
+                 )}
               </div>
             </div>
           </div>

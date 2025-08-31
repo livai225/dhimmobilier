@@ -50,7 +50,8 @@ export const generateReceiptPDF = (receipt: ReceiptWithDetails, logoDataUrl?: st
     caution_location: "Caution de location",
     apport_souscription: "Apport de souscription",
     droit_terre: "Droit de terre",
-    paiement_facture: "Paiement de facture"
+    paiement_facture: "Paiement de facture",
+    versement_agent: "Versement agent"
   };
   
   doc.text(`Type: ${operationTypes[receipt.type_operation] || receipt.type_operation}`, 20, 140);
