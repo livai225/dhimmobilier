@@ -163,6 +163,34 @@ export default function Caisse() {
         }
       }
 
+      // Generate receipt for expenses
+      if (tab === "depense") {
+        try {
+          const { ReceiptGenerator } = await import("@/utils/receiptGenerator");
+          
+          // Map expense type to receipt operation type
+          const operationTypeMap = {
+            "depense_entreprise": "paiement_facture",
+            "autre": "versement_agent"
+          };
+          
+          await ReceiptGenerator.createReceipt({
+            clientId: "00000000-0000-0000-0000-000000000000", // Placeholder for company expenses
+            referenceId: transactionId,
+            typeOperation: operationTypeMap[form.type_operation] || "versement_agent",
+            montantTotal: Number(form.montant),
+            datePaiement: form.date_transaction
+          });
+        } catch (receiptError) {
+          console.error("Erreur lors de la génération du reçu:", receiptError);
+          toast({ 
+            title: "Avertissement", 
+            description: "Transaction enregistrée mais le reçu n'a pas pu être généré.",
+            variant: "destructive"
+          });
+        }
+      }
+
       setForm({
         agent_id: "",
         montant: "",

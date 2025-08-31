@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { ReceiptDetailsDialog } from "./ReceiptDetailsDialog";
 import {
   Dialog,
   DialogContent,
@@ -27,6 +28,8 @@ export function AgentOperationsDialog({ agent, isOpen, onClose }: AgentOperation
   const [periodFilter, setPeriodFilter] = useState<string>("all");
   const [customStart, setCustomStart] = useState<string>("");
   const [customEnd, setCustomEnd] = useState<string>("");
+  const [selectedReceipt, setSelectedReceipt] = useState<any>(null);
+  const [isReceiptDialogOpen, setIsReceiptDialogOpen] = useState(false);
 
   const periodRange = () => {
     const now = new Date();
@@ -91,11 +94,57 @@ export function AgentOperationsDialog({ agent, isOpen, onClose }: AgentOperation
     enabled: !!agent?.id,
   });
 
+  // Fetch receipts for agent operations
+  const { data: receipts = [] } = useQuery({
+    queryKey: ["agent_receipts", agent?.id, periodRange()],
+    queryFn: async () => {
+      if (!agent?.id) return [];
+      
+      const range = periodRange();
+      
+      // Get all cash transactions for this agent in the period
+      const { data: transactions, error: transError } = await supabase
+        .from("cash_transactions")
+        .select("id")
+        .eq("agent_id", agent.id)
+        .gte("date_transaction", range.start)
+        .lte("date_transaction", range.end);
+      
+      if (transError) throw transError;
+      if (!transactions?.length) return [];
+      
+      // Get receipts that reference these transactions
+      const transactionIds = transactions.map(t => t.id);
+      const { data: receipts, error: receiptError } = await supabase
+        .from("recus")
+        .select(`
+          *,
+          clients:client_id (
+            nom,
+            prenom
+          )
+        `)
+        .in("reference_id", transactionIds);
+      
+      if (receiptError) throw receiptError;
+      return receipts || [];
+    },
+    enabled: !!agent?.id,
+  });
+
   const filteredOperations = operations.filter((op) =>
     op.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     op.beneficiaire?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     op.type_operation?.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const handleViewReceipt = (operation: any) => {
+    const receipt = receipts.find(r => r.reference_id === operation.id);
+    if (receipt) {
+      setSelectedReceipt(receipt);
+      setIsReceiptDialogOpen(true);
+    }
+  };
 
   if (!agent) return null;
 
@@ -259,22 +308,23 @@ export function AgentOperationsDialog({ agent, isOpen, onClose }: AgentOperation
                       <TableHead>Montant</TableHead>
                       <TableHead>Bénéficiaire</TableHead>
                       <TableHead>Description</TableHead>
+                      <TableHead>Reçu</TableHead>
                       <TableHead>Solde après</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {isLoading ? (
-                      <TableRow>
-                        <TableCell colSpan={8} className="text-center py-6">
-                          Chargement...
-                        </TableCell>
-                      </TableRow>
-                    ) : filteredOperations.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={8} className="text-center py-6 text-muted-foreground">
-                          Aucune opération trouvée pour cette période
-                        </TableCell>
-                      </TableRow>
+                     {isLoading ? (
+                       <TableRow>
+                         <TableCell colSpan={9} className="text-center py-6">
+                           Chargement...
+                         </TableCell>
+                       </TableRow>
+                     ) : filteredOperations.length === 0 ? (
+                       <TableRow>
+                         <TableCell colSpan={9} className="text-center py-6 text-muted-foreground">
+                           Aucune opération trouvée pour cette période
+                         </TableCell>
+                       </TableRow>
                     ) : (
                       filteredOperations.map((operation) => (
                         <TableRow key={operation.id}>
@@ -302,6 +352,20 @@ export function AgentOperationsDialog({ agent, isOpen, onClose }: AgentOperation
                           <TableCell className="max-w-[200px] truncate">
                             {operation.description || "-"}
                           </TableCell>
+                          <TableCell>
+                            {receipts.find(r => r.reference_id === operation.id) ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleViewReceipt(operation)}
+                                className="text-xs"
+                              >
+                                Voir reçu
+                              </Button>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">-</span>
+                            )}
+                          </TableCell>
                           <TableCell className="font-medium">
                             {Number(operation.solde_apres).toLocaleString()} FCFA
                           </TableCell>
@@ -314,6 +378,13 @@ export function AgentOperationsDialog({ agent, isOpen, onClose }: AgentOperation
             </CardContent>
           </Card>
         </div>
+
+        {/* Receipt Details Dialog */}
+        <ReceiptDetailsDialog
+          receipt={selectedReceipt}
+          open={isReceiptDialogOpen}
+          onOpenChange={setIsReceiptDialogOpen}
+        />
       </DialogContent>
     </Dialog>
   );
