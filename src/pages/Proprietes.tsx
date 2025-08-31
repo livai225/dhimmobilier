@@ -9,13 +9,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Combobox } from "@/components/ui/combobox";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, Edit, Trash2, Building } from "lucide-react";
+import { Plus, Edit, Trash2, Building, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { PropertyDetailsDialog } from "@/components/PropertyDetailsDialog";
 import { PropertyForm } from "@/components/PropertyForm";
 import { ExportToExcelButton } from "@/components/ExportToExcelButton";
 import { PropertiesDashboard } from "@/components/PropertiesDashboard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface Propriete {
   id: string;
@@ -41,6 +42,11 @@ interface TypePropriete {
 export default function Proprietes() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPropriete, setEditingPropriete] = useState<Propriete | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [usageFilter, setUsageFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
+  const [zoneFilter, setZoneFilter] = useState("");
   const [formData, setFormData] = useState({
     nom: "",
     adresse: "",
@@ -235,6 +241,24 @@ export default function Proprietes() {
     }
   };
 
+  // Filter properties based on search and filters
+  const filteredProprietes = proprietes?.filter((propriete) => {
+    const matchesSearch = 
+      propriete.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      propriete.adresse?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      propriete.zone?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = !statusFilter || propriete.statut === statusFilter;
+    const matchesUsage = !usageFilter || propriete.usage === usageFilter;
+    const matchesType = !typeFilter || propriete.type_id === typeFilter;
+    const matchesZone = !zoneFilter || propriete.zone === zoneFilter;
+    
+    return matchesSearch && matchesStatus && matchesUsage && matchesType && matchesZone;
+  }) || [];
+
+  // Get unique zones for filter
+  const uniqueZones = [...new Set(proprietes?.map(p => p.zone).filter(Boolean))] as string[];
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col space-y-4 lg:flex-row lg:items-center lg:justify-between lg:space-y-0">
@@ -299,6 +323,107 @@ export default function Proprietes() {
         </TabsContent>
 
         <TabsContent value="list">
+          {/* Filters Section */}
+          <Card className="mb-4">
+            <CardHeader>
+              <CardTitle className="text-lg">Filtres</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+                {/* Search */}
+                <div className="col-span-1 md:col-span-2">
+                  <Label htmlFor="search">Rechercher</Label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                    <Input
+                      id="search"
+                      placeholder="Nom, adresse, zone..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+
+                {/* Status Filter */}
+                <div>
+                  <Label htmlFor="status">Statut</Label>
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Tous les statuts" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Tous les statuts</SelectItem>
+                      <SelectItem value="Libre">Libre</SelectItem>
+                      <SelectItem value="Occupé">Occupé</SelectItem>
+                      <SelectItem value="En travaux">En travaux</SelectItem>
+                      <SelectItem value="En vente">En vente</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Usage Filter */}
+                <div>
+                  <Label htmlFor="usage">Usage</Label>
+                  <Select value={usageFilter} onValueChange={setUsageFilter}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Tous les usages" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Tous les usages</SelectItem>
+                      <SelectItem value="Location">Location</SelectItem>
+                      <SelectItem value="Bail">Bail</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Type Filter */}
+                <div>
+                  <Label htmlFor="type">Type</Label>
+                  <Select value={typeFilter} onValueChange={setTypeFilter}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Tous les types" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Tous les types</SelectItem>
+                      {typesProprietes.map((type) => (
+                        <SelectItem key={type.id} value={type.id}>
+                          {type.nom}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Zone Filter */}
+                <div>
+                  <Label htmlFor="zone">Zone</Label>
+                  <Select value={zoneFilter} onValueChange={setZoneFilter}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Toutes les zones" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Toutes les zones</SelectItem>
+                      {uniqueZones.map((zone) => (
+                        <SelectItem key={zone} value={zone}>
+                          {zone}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              
+              {/* Results count */}
+              <div className="mt-4 text-sm text-muted-foreground">
+                {filteredProprietes.length} propriété{filteredProprietes.length !== 1 ? 's' : ''} trouvée{filteredProprietes.length !== 1 ? 's' : ''}
+                {(searchTerm || statusFilter || usageFilter || typeFilter || zoneFilter) && (
+                  <span> sur {proprietes?.length || 0} au total</span>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
           <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -312,12 +437,20 @@ export default function Proprietes() {
         <CardContent>
           {isLoading ? (
             <p>Chargement...</p>
-          ) : proprietes?.length === 0 ? (
+          ) : filteredProprietes.length === 0 ? (
             <div className="text-center py-10">
               <Building className="mx-auto h-12 w-12 text-muted-foreground" />
-              <h3 className="mt-2 text-sm font-semibold">Aucune propriété</h3>
+              <h3 className="mt-2 text-sm font-semibold">
+                {(searchTerm || statusFilter || usageFilter || typeFilter || zoneFilter) 
+                  ? "Aucune propriété trouvée" 
+                  : "Aucune propriété"
+                }
+              </h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                Commencez par créer votre première propriété.
+                {(searchTerm || statusFilter || usageFilter || typeFilter || zoneFilter)
+                  ? "Essayez de modifier vos filtres de recherche."
+                  : "Commencez par créer votre première propriété."
+                }
               </p>
             </div>
           ) : (
@@ -336,7 +469,7 @@ export default function Proprietes() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {proprietes?.map((propriete) => (
+                {filteredProprietes.map((propriete) => (
                   <TableRow key={propriete.id}>
                     <TableCell className="font-medium">{propriete.nom}</TableCell>
                     <TableCell>{propriete.types_proprietes?.nom || "-"}</TableCell>
