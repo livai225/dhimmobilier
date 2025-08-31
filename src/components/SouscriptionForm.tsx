@@ -35,6 +35,7 @@ const souscriptionSchema = z.object({
   type_bien: z.string().optional(),
   statut: z.string().default("active"),
   paiement_immediat: z.boolean().default(false),
+  mode_paiement: z.string().optional(),
 });
 
 type SouscriptionFormData = z.infer<typeof souscriptionSchema>;
@@ -63,6 +64,7 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
       type_bien: souscription?.type_bien || "",
       statut: souscription?.statut || "active",
       paiement_immediat: false,
+      mode_paiement: "especes",
     },
   });
 
@@ -203,7 +205,7 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
               souscription_id: result.data.id,
               montant: processedData.apport_initial,
               date_paiement: processedData.date_debut,
-              mode_paiement: 'especes',
+              mode_paiement: data.mode_paiement || 'especes',
               reference: `${description} - ${result.data.id}`
             });
 
@@ -438,6 +440,34 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
                 )}
               />
             )}
+
+            {(watchedValues.apport_initial && parseFloat(watchedValues.apport_initial) > 0) || watchedValues.paiement_immediat ? (
+              <FormField
+                control={form.control}
+                name="mode_paiement"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Mode de paiement</FormLabel>
+                    <FormControl>
+                      <Combobox
+                        options={[
+                          { value: "especes", label: "Espèces" },
+                          { value: "cheque", label: "Chèque" },
+                          { value: "virement", label: "Virement bancaire" },
+                          { value: "mobile_money", label: "Mobile Money" },
+                          { value: "carte_bancaire", label: "Carte bancaire" }
+                        ]}
+                        value={field.value}
+                        onChange={field.onChange}
+                        placeholder="Sélectionner un mode de paiement"
+                        buttonClassName="w-full justify-start"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            ) : null}
 
             <FormField
               control={form.control}

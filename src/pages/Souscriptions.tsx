@@ -10,8 +10,9 @@ import { SouscriptionForm } from "@/components/SouscriptionForm";
 import { SouscriptionDetailsDialog } from "@/components/SouscriptionDetailsDialog";
 import { PaiementSouscriptionEcheanceDialog } from "@/components/PaiementSouscriptionEcheanceDialog";
 import { PaiementDroitTerreDialog } from "@/components/PaiementDroitTerreDialog";
+import { SouscriptionsDashboard } from "@/components/SouscriptionsDashboard";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Eye, CreditCard, Calendar, Trash2, Coins } from "lucide-react";
+import { Plus, Eye, CreditCard, Calendar, Trash2, Coins, BarChart3 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -25,6 +26,7 @@ export default function Souscriptions() {
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
   const [isDroitTerreDialogOpen, setIsDroitTerreDialogOpen] = useState(false);
+  const [showDashboard, setShowDashboard] = useState(true);
 
   const { data: souscriptions, isLoading, refetch } = useQuery({
     queryKey: ["souscriptions"],
@@ -136,6 +138,13 @@ export default function Souscriptions() {
       <div className="flex flex-col space-y-4 lg:flex-row lg:items-center lg:justify-between lg:space-y-0 mb-6">
         <h1 className="text-2xl md:text-3xl font-bold">Gestion des Souscriptions</h1>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setShowDashboard(!showDashboard)}
+          >
+            <BarChart3 className="mr-2 h-4 w-4" />
+            {showDashboard ? "Masquer" : "Afficher"} le tableau de bord
+          </Button>
           <ExportToExcelButton
             filename={`souscriptions_${new Date().toISOString().slice(0,10)}`}
             rows={filteredSouscriptions || []}
@@ -172,6 +181,9 @@ export default function Souscriptions() {
           </Dialog>
         </div>
       </div>
+
+      {/* Dashboard */}
+      {showDashboard && <SouscriptionsDashboard />}
 
       {/* Filters */}
       <div className="flex gap-4 mb-6">
