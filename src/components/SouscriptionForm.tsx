@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Checkbox } from "@/components/ui/checkbox";
 import { format } from "date-fns";
 import { ReceiptGenerator } from "@/utils/receiptGenerator";
 import {
@@ -33,6 +34,7 @@ const souscriptionSchema = z.object({
   periode_finition_mois: z.string().optional(),
   type_bien: z.string().optional(),
   statut: z.string().default("active"),
+  paiement_immediat: z.boolean().default(false),
 });
 
 type SouscriptionFormData = z.infer<typeof souscriptionSchema>;
@@ -60,6 +62,7 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
       periode_finition_mois: souscription?.periode_finition_mois?.toString() || "9",
       type_bien: souscription?.type_bien || "",
       statut: souscription?.statut || "active",
+      paiement_immediat: false,
     },
   });
 
@@ -113,15 +116,20 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
 
   const mutation = useMutation({
     mutationFn: async (data: SouscriptionFormData) => {
+      // Handle immediate payment logic
+      const apportAmount = data.paiement_immediat 
+        ? parseFloat(data.montant_souscris) 
+        : parseFloat(data.apport_initial || "0");
+
       const processedData = {
         client_id: data.client_id,
         propriete_id: data.propriete_id,
         montant_souscris: parseFloat(data.montant_souscris),
         prix_total: parseFloat(data.montant_souscris), // Keep for backward compatibility
         montant_droit_terre_mensuel: parseFloat(data.montant_droit_terre_mensuel || "0"),
-        apport_initial: parseFloat(data.apport_initial || "0"),
+        apport_initial: apportAmount,
         periode_finition_mois: parseInt(data.periode_finition_mois || "9"),
-        solde_restant: parseFloat(data.montant_souscris) - (parseFloat(data.apport_initial || "0")),
+        solde_restant: data.paiement_immediat ? 0 : parseFloat(data.montant_souscris) - apportAmount,
         date_debut: data.date_debut,
         type_souscription: data.type_souscription,
         type_bien: data.type_bien || null,
@@ -154,15 +162,21 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
           .select()
           .single();
         
-        // Generate receipt and record cash transaction for initial payment if apport_initial > 0
+        // Generate receipt and record cash transaction for payment
         if (processedData.apport_initial > 0 && result.data) {
-          // Record cash transaction for the initial payment
+          // Determine operation type based on payment type
+          const operationType = data.paiement_immediat ? 'paiement_souscription' : 'apport_souscription';
+          const description = data.paiement_immediat 
+            ? 'Paiement intégral de souscription' 
+            : 'Apport initial pour souscription';
+
+          // Record cash transaction
           const { error: cashError } = await supabase.rpc('record_cash_transaction', {
             p_montant: processedData.apport_initial,
             p_type_transaction: 'entree',
-            p_type_operation: 'apport_souscription',
+            p_type_operation: operationType,
             p_beneficiaire: `Souscription - ${result.data.id}`,
-            p_description: `Apport initial pour souscription`,
+            p_description: description,
             p_reference_operation: result.data.id,
             p_agent_id: null,
             p_piece_justificative: null
@@ -173,10 +187,28 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
             throw new Error('Erreur lors de l\'enregistrement de la transaction caisse');
           }
 
+          // If immediate payment, also record in paiements_souscriptions
+          if (data.paiement_immediat) {
+            const { error: paiementError } = await supabase
+              .from('paiements_souscriptions')
+              .insert({
+                souscription_id: result.data.id,
+                montant: processedData.apport_initial,
+                date_paiement: processedData.date_debut,
+                mode_paiement: 'especes',
+                reference: `Paiement intégral - ${result.data.id}`
+              });
+
+            if (paiementError) {
+              console.error('Error recording subscription payment:', paiementError);
+              throw new Error('Erreur lors de l\'enregistrement du paiement de souscription');
+            }
+          }
+
           receipt = await ReceiptGenerator.createReceipt({
             clientId: processedData.client_id,
             referenceId: result.data.id,
-            typeOperation: "apport_souscription",
+            typeOperation: operationType,
             montantTotal: processedData.apport_initial,
             periodeDebut: processedData.date_debut,
             datePaiement: processedData.date_debut
@@ -192,7 +224,7 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
       const message = souscription 
         ? "Souscription modifiée avec succès" 
         : receipt 
-          ? `Souscription créée avec succès. Reçu d'apport généré: ${receipt.numero}`
+          ? `Souscription créée avec succès. Reçu généré: ${receipt.numero}`
           : "Souscription créée avec succès";
 
       toast({
@@ -244,6 +276,16 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
 
   const watchedValues = form.watch();
   const selectedBareme = baremes?.find(b => b.type_bien === watchedValues.type_bien);
+
+  // Handle immediate payment checkbox change
+  const handlePaiementImmediatChange = (checked: boolean) => {
+    form.setValue("paiement_immediat", checked);
+    if (checked && watchedValues.montant_souscris) {
+      form.setValue("apport_initial", watchedValues.montant_souscris);
+    } else if (!checked) {
+      form.setValue("apport_initial", "");
+    }
+  };
 
   return (
     <Form {...form}>
@@ -359,6 +401,34 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
               />
             </div>
 
+            {!souscription && (
+              <FormField
+                control={form.control}
+                name="paiement_immediat"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={(checked) => {
+                          field.onChange(checked);
+                          handlePaiementImmediatChange(checked as boolean);
+                        }}
+                      />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel>
+                        Paiement immédiat du montant total
+                      </FormLabel>
+                      <FormDescription>
+                        Cocher cette case pour payer le montant total de la souscription immédiatement et déduire le montant de la caisse.
+                      </FormDescription>
+                    </div>
+                  </FormItem>
+                )}
+              />
+            )}
+
             <FormField
               control={form.control}
               name="apport_initial"
@@ -366,8 +436,19 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
                 <FormItem>
                   <FormLabel>Apport initial (FCFA)</FormLabel>
                   <FormControl>
-                    <Input type="number" placeholder="Montant de l'apport initial" {...field} />
+                    <Input 
+                      type="number" 
+                      placeholder="Montant de l'apport initial" 
+                      readOnly={watchedValues.paiement_immediat}
+                      className={watchedValues.paiement_immediat ? "bg-muted cursor-not-allowed" : ""}
+                      {...field} 
+                    />
                   </FormControl>
+                  {watchedValues.paiement_immediat && (
+                    <FormDescription>
+                      Le montant est automatiquement défini au montant total de la souscription.
+                    </FormDescription>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}
