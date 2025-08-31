@@ -335,9 +335,10 @@ export default function Caisse() {
                     onChange={(e) => setTypeOperationFilter(e.target.value)}
                   >
                     <option value="">Tous les types</option>
-                    <option value="versement_agent">Versement agent</option>
-                    <option value="depense_entreprise">Dépense entreprise</option>
-                    <option value="autre">Autre opération</option>
+                     <option value="versement_agent">Versement agent</option>
+                     <option value="paiement_caution">Paiement caution</option>
+                     <option value="depense_entreprise">Dépense entreprise</option>
+                     <option value="autre">Autre opération</option>
                   </select>
                 </div>
                 <div className="flex gap-2">

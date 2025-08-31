@@ -113,7 +113,10 @@ export function LocationForm({ onClose, onSuccess }: LocationFormProps) {
           p_description: 'Versement caution location'
         });
 
-      if (cashError) throw cashError;
+      if (cashError) {
+        console.error('Cash transaction error:', cashError);
+        throw new Error(`Erreur lors de l'enregistrement de la caution: ${cashError.message}`);
+      }
 
       // Generate caution receipt automatically
       const receipt = await ReceiptGenerator.createReceipt({
@@ -134,10 +137,11 @@ export function LocationForm({ onClose, onSuccess }: LocationFormProps) {
       });
       onSuccess();
     },
-    onError: (error) => {
+    onError: (error: any) => {
+      console.error('Location creation error:', error);
       toast({
         title: "Erreur",
-        description: "Impossible de créer la location.",
+        description: error?.message || "Impossible de créer la location.",
         variant: "destructive",
       });
     },
