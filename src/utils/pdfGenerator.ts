@@ -66,14 +66,28 @@ export const generateReceiptPDF = (receipt: ReceiptWithDetails, logoDataUrl?: st
   // Amount
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
-  const formatCurrency = (amount: number) => new Intl.NumberFormat("fr-FR", { style: "currency", currency: "XOF", minimumFractionDigits: 0 }).format(amount || 0);
+  const formatCurrency = (amount: number) => {
+    const formattedNumber = new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 0 }).format(amount || 0);
+    return `${formattedNumber} F CFA`;
+  };
   doc.text(`MONTANT: ${formatCurrency(Number(receipt.montant_total))}`, 20, 170);
+  
+  // Signature section
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.text("Signature Client", 30, 200);
+  doc.text("Signature Caisse", 130, 200);
+  
+  // Signature lines
+  doc.setFont("helvetica", "normal");
+  doc.line(20, 210, 80, 210); // Client signature line
+  doc.line(120, 210, 180, 210); // Caisse signature line
   
   // Footer
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
-  doc.text("Ce reçu fait foi de paiement.", 105, 200, { align: "center" });
-  doc.text("Merci pour votre confiance.", 105, 210, { align: "center" });
+  doc.text("Ce reçu fait foi de paiement.", 105, 230, { align: "center" });
+  doc.text("Merci pour votre confiance.", 105, 240, { align: "center" });
   
   return doc;
 };
