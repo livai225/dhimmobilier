@@ -12,6 +12,31 @@ export interface ReceiptWithDetails {
   periode_debut: string | null;
   periode_fin: string | null;
   mode_paiement?: string | null;
+  // Détails enrichis pour l'affichage sur le reçu
+  details_type?: 'location' | 'souscription' | 'droit_terre';
+
+  // Location
+  loyer_mensuel?: number | null;
+  location_total_paye?: number | null;
+  location_dette_restante?: number | null;
+  location_avances?: {
+    garantie_2_mois?: number | null;
+    loyer_avance_2_mois?: number | null;
+    frais_agence_1_mois?: number | null;
+    caution_totale?: number | null;
+  } | null;
+
+  // Souscription
+  souscription_prix_total?: number | null;
+  souscription_apport_initial?: number | null;
+  souscription_total_paye?: number | null;
+  souscription_solde_restant?: number | null;
+  montant_mensuel?: number | null;
+
+  // Droit de terre
+  droit_terre_mensuel?: number | null;
+  droit_terre_total_paye?: number | null;
+  droit_terre_solde_restant?: number | null;
   client: {
     nom: string;
     prenom: string | null;
@@ -62,71 +87,155 @@ export const useReceipts = (filters?: {
 
       if (error) throw error;
 
-      // Enrichir les reçus avec le mode de paiement
-      const enrichedReceipts = await Promise.all(
-        data.map(async (receipt) => {
-          let mode_paiement = null;
+// Enrichir les reçus avec le mode de paiement et les détails de contexte
+const enrichedReceipts = await Promise.all(
+  data.map(async (receipt) => {
+    let mode_paiement: string | null = null;
+    const extras: any = {};
 
-          try {
-            // Récupérer le mode de paiement selon le type d'opération
-            switch (receipt.type_operation) {
-              case 'location':
-                // Pour les locations, chercher le paiement le plus proche de la date de génération du reçu
-                const receiptDate = new Date(receipt.date_generation);
-                const { data: locationPayments } = await supabase
-                  .from('paiements_locations')
-                  .select('mode_paiement, montant, date_paiement, created_at')
-                  .eq('location_id', receipt.reference_id)
-                  .eq('montant', receipt.montant_total);
-                
-                if (locationPayments && locationPayments.length > 0) {
-                  // Trouver le paiement avec la date la plus proche de la génération du reçu
-                  const closestPayment = locationPayments.reduce((closest, current) => {
-                    const currentDiff = Math.abs(new Date(current.date_paiement).getTime() - receiptDate.getTime());
-                    const closestDiff = Math.abs(new Date(closest.date_paiement).getTime() - receiptDate.getTime());
-                    return currentDiff < closestDiff ? current : closest;
-                  });
-                  mode_paiement = closestPayment.mode_paiement;
-                }
-                break;
-
-              case 'paiement_facture':
-                const { data: facturePayment } = await supabase
-                  .from('paiements_factures')
-                  .select('mode_paiement')
-                  .eq('id', receipt.reference_id)
-                  .single();
-                mode_paiement = facturePayment?.mode_paiement;
-                break;
-
-              case 'apport_souscription':
-                const { data: souscriptionPayment } = await supabase
-                  .from('paiements_souscriptions')
-                  .select('mode_paiement')
-                  .eq('id', receipt.reference_id)
-                  .single();
-                mode_paiement = souscriptionPayment?.mode_paiement;
-                break;
-
-              case 'droit_terre':
-                const { data: droitTerrePayment } = await supabase
-                  .from('paiements_droit_terre')
-                  .select('mode_paiement')
-                  .eq('id', receipt.reference_id)
-                  .single();
-                mode_paiement = droitTerrePayment?.mode_paiement;
-                break;
-            }
-          } catch (error) {
-            console.log('Mode de paiement non trouvé pour le reçu:', receipt.numero, error);
+    try {
+      // Récupérer informations selon le type d'opération
+      switch (receipt.type_operation) {
+        case 'location': {
+          // Mode de paiement le plus proche
+          const receiptDate = new Date(receipt.date_generation);
+          const { data: locationPayments } = await supabase
+            .from('paiements_locations')
+            .select('mode_paiement, montant, date_paiement, created_at')
+            .eq('location_id', receipt.reference_id)
+            .eq('montant', receipt.montant_total);
+          if (locationPayments && locationPayments.length > 0) {
+            const closestPayment = locationPayments.reduce((closest: any, current: any) => {
+              const currentDiff = Math.abs(new Date(current.date_paiement).getTime() - receiptDate.getTime());
+              const closestDiff = Math.abs(new Date(closest.date_paiement).getTime() - receiptDate.getTime());
+              return currentDiff < closestDiff ? current : closest;
+            });
+            mode_paiement = closestPayment.mode_paiement;
           }
 
-          return {
-            ...receipt,
-            mode_paiement
-          } as ReceiptWithDetails;
-        })
-      );
+          // Détails location
+          const { data: location } = await supabase
+            .from('locations')
+            .select('loyer_mensuel, dette_totale, garantie_2_mois, loyer_avance_2_mois, frais_agence_1_mois, caution_totale')
+            .eq('id', receipt.reference_id)
+            .single();
+
+          const { data: allLocPays } = await supabase
+            .from('paiements_locations')
+            .select('montant')
+            .eq('location_id', receipt.reference_id);
+          const total_paye = (allLocPays || []).reduce((s: number, p: any) => s + Number(p.montant || 0), 0);
+
+          Object.assign(extras, {
+            details_type: 'location',
+            loyer_mensuel: location?.loyer_mensuel ?? null,
+            location_total_paye: total_paye,
+            location_dette_restante: location?.dette_totale ?? null,
+            location_avances: {
+              garantie_2_mois: location?.garantie_2_mois ?? null,
+              loyer_avance_2_mois: location?.loyer_avance_2_mois ?? null,
+              frais_agence_1_mois: location?.frais_agence_1_mois ?? null,
+              caution_totale: location?.caution_totale ?? null,
+            },
+          });
+          break;
+        }
+
+        case 'apport_souscription': {
+          // Trouver la souscription liée et ses totaux
+          const { data: pay } = await supabase
+            .from('paiements_souscriptions')
+            .select('souscription_id, mode_paiement')
+            .eq('id', receipt.reference_id)
+            .single();
+          mode_paiement = pay?.mode_paiement ?? mode_paiement;
+
+          const souscriptionId = pay?.souscription_id;
+          if (souscriptionId) {
+            const { data: sous } = await supabase
+              .from('souscriptions')
+              .select('prix_total, apport_initial, solde_restant, montant_mensuel')
+              .eq('id', souscriptionId)
+              .single();
+
+            const { data: allPays } = await supabase
+              .from('paiements_souscriptions')
+              .select('montant')
+              .eq('souscription_id', souscriptionId);
+            const total_paye = (allPays || []).reduce((s: number, p: any) => s + Number(p.montant || 0), 0);
+
+            Object.assign(extras, {
+              details_type: 'souscription',
+              souscription_prix_total: sous?.prix_total ?? null,
+              souscription_apport_initial: sous?.apport_initial ?? null,
+              souscription_total_paye: total_paye,
+              souscription_solde_restant: sous?.solde_restant ?? null,
+              montant_mensuel: sous?.montant_mensuel ?? null,
+            });
+          }
+          break;
+        }
+
+        case 'droit_terre': {
+          // Paiement et souscription liée
+          const { data: pay } = await supabase
+            .from('paiements_droit_terre')
+            .select('souscription_id, mode_paiement')
+            .eq('id', receipt.reference_id)
+            .single();
+          mode_paiement = pay?.mode_paiement ?? mode_paiement;
+
+          const souscriptionId = pay?.souscription_id;
+          if (souscriptionId) {
+            const { data: sous } = await supabase
+              .from('souscriptions')
+              .select('montant_droit_terre_mensuel')
+              .eq('id', souscriptionId)
+              .single();
+
+            const { data: allPays } = await supabase
+              .from('paiements_droit_terre')
+              .select('montant')
+              .eq('souscription_id', souscriptionId);
+            const total_paye = (allPays || []).reduce((s: number, p: any) => s + Number(p.montant || 0), 0);
+
+            let solde_droit_terre: number | null = null;
+            try {
+              const { data: solde } = await supabase.rpc('calculate_solde_droit_terre', { souscription_uuid: souscriptionId });
+              solde_droit_terre = (solde as unknown as number) ?? null;
+            } catch {}
+
+            Object.assign(extras, {
+              details_type: 'droit_terre',
+              droit_terre_mensuel: sous?.montant_droit_terre_mensuel ?? null,
+              droit_terre_total_paye: total_paye,
+              droit_terre_solde_restant: solde_droit_terre,
+            });
+          }
+          break;
+        }
+
+        case 'paiement_facture': {
+          const { data: facturePayment } = await supabase
+            .from('paiements_factures')
+            .select('mode_paiement')
+            .eq('id', receipt.reference_id)
+            .single();
+          mode_paiement = facturePayment?.mode_paiement ?? mode_paiement;
+          break;
+        }
+      }
+    } catch (error) {
+      console.log('Enrichissement reçu échoué:', receipt.numero, error);
+    }
+
+    return {
+      ...receipt,
+      mode_paiement,
+      ...extras,
+    } as ReceiptWithDetails;
+  })
+);
 
       let results = enrichedReceipts;
 

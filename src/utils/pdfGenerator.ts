@@ -71,23 +71,73 @@ export const generateReceiptPDF = (receipt: ReceiptWithDetails, logoDataUrl?: st
     return `${formattedNumber} F CFA`;
   };
   doc.text(`MONTANT: ${formatCurrency(Number(receipt.montant_total))}`, 20, 170);
-  
-  // Signature section
+
+  // Détails du paiement
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.text("DÉTAIL DU PAIEMENT", 20, 185);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+
+  let y = 195;
+  const addLine = (label: string, value?: number | null) => {
+    if (value !== undefined && value !== null && !isNaN(Number(value))) {
+      doc.text(`${label}: ${formatCurrency(Number(value))}`, 20, y);
+      y += 8;
+    }
+  };
+
+  if (receipt.type_operation === 'location') {
+    addLine('Loyer mensuel', (receipt as any).loyer_mensuel);
+    const av = (receipt as any).location_avances || {};
+    const avValues = [
+      { label: 'Garantie 2 mois', value: av.garantie_2_mois },
+      { label: 'Loyer d’avance 2 mois', value: av.loyer_avance_2_mois },
+      { label: 'Frais agence 1 mois', value: av.frais_agence_1_mois },
+      { label: 'Caution totale', value: av.caution_totale },
+    ].filter(i => i.value && Number(i.value) > 0);
+
+    if (avValues.length > 0) {
+      doc.text("Avances initiales:", 20, y);
+      y += 8;
+      avValues.forEach(i => addLine(`- ${i.label}`, i.value));
+    }
+
+    addLine('Paiements cumulés', (receipt as any).location_total_paye);
+    addLine('Ce paiement', Number(receipt.montant_total));
+    addLine('Reste à payer (estimé)', (receipt as any).location_dette_restante);
+  } else if (receipt.type_operation === 'apport_souscription') {
+    addLine('Prix total', (receipt as any).souscription_prix_total);
+    addLine('Apport initial', (receipt as any).souscription_apport_initial);
+    addLine('Paiements cumulés', (receipt as any).souscription_total_paye);
+    addLine('Ce paiement', Number(receipt.montant_total));
+    addLine('Solde restant', (receipt as any).souscription_solde_restant);
+  } else if (receipt.type_operation === 'droit_terre') {
+    addLine('Mensualité droit de terre', (receipt as any).droit_terre_mensuel);
+    addLine('Paiements cumulés', (receipt as any).droit_terre_total_paye);
+    addLine('Ce paiement', Number(receipt.montant_total));
+    addLine('Solde restant', (receipt as any).droit_terre_solde_restant);
+  }
+
+  // Section signatures (position dynamique)
+  const signatureY = Math.min(Math.max(y + 10, 200), 260);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
-  doc.text("Signature Client", 30, 200);
-  doc.text("Signature Caisse", 130, 200);
-  
-  // Signature lines
+  doc.text("Signature Client", 30, signatureY);
+  doc.text("Signature Caisse", 130, signatureY);
+
+  // Lignes de signature
   doc.setFont("helvetica", "normal");
-  doc.line(20, 210, 80, 210); // Client signature line
-  doc.line(120, 210, 180, 210); // Caisse signature line
-  
+  doc.line(20, signatureY + 10, 80, signatureY + 10);
+  doc.line(120, signatureY + 10, 180, signatureY + 10);
+
   // Footer
+  const footerY1 = signatureY + 30;
+  const footerY2 = signatureY + 40;
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
-  doc.text("Ce reçu fait foi de paiement.", 105, 230, { align: "center" });
-  doc.text("Merci pour votre confiance.", 105, 240, { align: "center" });
+  doc.text("Ce reçu fait foi de paiement.", 105, footerY1, { align: "center" });
+  doc.text("Merci pour votre confiance.", 105, footerY2, { align: "center" });
   
   return doc;
 };
