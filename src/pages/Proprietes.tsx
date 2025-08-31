@@ -14,6 +14,8 @@ import { useToast } from "@/hooks/use-toast";
 import { PropertyDetailsDialog } from "@/components/PropertyDetailsDialog";
 import { PropertyForm } from "@/components/PropertyForm";
 import { ExportToExcelButton } from "@/components/ExportToExcelButton";
+import { PropertiesDashboard } from "@/components/PropertiesDashboard";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface Propriete {
   id: string;
@@ -285,7 +287,19 @@ export default function Proprietes() {
           </Dialog>
         </div>
       </div>
-      <Card>
+
+      <Tabs defaultValue="dashboard" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="dashboard">Tableau de Bord</TabsTrigger>
+          <TabsTrigger value="list">Liste des Propriétés</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="dashboard">
+          <PropertiesDashboard />
+        </TabsContent>
+
+        <TabsContent value="list">
+          <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Building className="h-5 w-5" />
@@ -381,6 +395,8 @@ export default function Proprietes() {
           )}
         </CardContent>
       </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
