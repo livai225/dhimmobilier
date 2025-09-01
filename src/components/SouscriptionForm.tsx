@@ -173,54 +173,34 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
           .select()
           .single();
         
-        // Generate receipt and record cash transaction for payment
-        if (processedData.apport_initial > 0 && result.data) {
-          // Déterminer les libellés (type_operation unifié)
+        // Enregistrer le paiement via la fonction RPC pour déduire la caisse
+        if (apportAmount > 0 && result.data) {
           const operationType = 'paiement_souscription';
-          const description = data.paiement_immediat 
-            ? 'Paiement intégral de souscription' 
+          const description = data.paiement_immediat
+            ? 'Paiement intégral de souscription'
             : 'Apport initial pour souscription';
 
-          // Record cash transaction
-          const { error: cashError } = await supabase.rpc('record_cash_transaction', {
-            p_montant: processedData.apport_initial,
-            p_type_transaction: 'sortie',
-            p_type_operation: operationType,
-            p_beneficiaire: `Souscription - ${result.data.id}`,
+          const { data: txId, error: payError } = await supabase.rpc('pay_souscription_with_cash' as any, {
+            p_souscription_id: result.data.id,
+            p_montant: apportAmount,
+            p_date_paiement: processedData.date_debut,
+            p_mode_paiement: data.mode_paiement || 'especes',
+            p_reference: `${description} - ${result.data.id}`,
             p_description: description,
-            p_reference_operation: result.data.id,
-            p_agent_id: null,
-            p_piece_justificative: null
           });
 
-          if (cashError) {
-            console.error('Error recording cash transaction:', cashError);
-            throw new Error('Erreur lors de l\'enregistrement de la transaction caisse');
-          }
-
-          // Enregistrer le paiement dans paiements_souscriptions (apport initial ou paiement intégral)
-          const { error: paiementError } = await supabase
-            .from('paiements_souscriptions')
-            .insert({
-              souscription_id: result.data.id,
-              montant: processedData.apport_initial,
-              date_paiement: processedData.date_debut,
-              mode_paiement: data.mode_paiement || 'especes',
-              reference: `${description} - ${result.data.id}`
-            });
-
-          if (paiementError) {
-            console.error('Error recording subscription payment:', paiementError);
-            throw new Error("Erreur lors de l'enregistrement du paiement de souscription");
+          if (payError) {
+            console.error('Error paying subscription with cash:', payError);
+            throw new Error("Erreur lors de l'enregistrement du paiement et de la déduction de caisse");
           }
 
           receipt = await ReceiptGenerator.createReceipt({
             clientId: processedData.client_id,
             referenceId: result.data.id,
             typeOperation: operationType,
-            montantTotal: processedData.apport_initial,
+            montantTotal: apportAmount,
             periodeDebut: processedData.date_debut,
-            datePaiement: processedData.date_debut
+            datePaiement: processedData.date_debut,
           });
         }
       }
