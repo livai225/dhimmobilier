@@ -49,7 +49,7 @@ export default function Dashboard() {
       const totalRevenuLocations = paiementsLocations.data?.reduce((sum, p) => sum + (p.montant || 0), 0) || 0;
       const totalRevenuSouscriptions = paiementsSouscriptions.data?.reduce((sum, p) => sum + (p.montant || 0), 0) || 0;
       const totalRevenuDroitTerre = paiementsDroitTerre.data?.reduce((sum, p) => sum + (p.montant || 0), 0) || 0;
-      const totalRevenuCaution = cashTransactions.data?.filter((t: any) => t.type_transaction === 'entree' && t.type_operation === 'paiement_caution').reduce((sum: number, t: any) => sum + (t.montant || 0), 0) || 0;
+      const totalRevenuCaution = cashTransactions.data?.filter((t: any) => t.type_operation === 'paiement_caution').reduce((sum: number, t: any) => sum + (t.montant || 0), 0) || 0;
       
       // Chiffre d'affaires = revenus encaissés (locations + souscriptions + droits de terre + cautions)
       const chiffreAffaires = totalRevenuLocations + totalRevenuSouscriptions + totalRevenuDroitTerre + totalRevenuCaution;
