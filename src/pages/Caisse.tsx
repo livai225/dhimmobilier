@@ -511,12 +511,32 @@ export default function Caisse() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Bilan</CardTitle>
+            <CardTitle>Bilan de la période</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2">
+          <CardContent className="space-y-3">
             <div className="flex justify-between text-sm">
               <span>Solde d'ouverture</span>
               <span className="font-medium">{totals.ouverture.toLocaleString()} FCFA</span>
+            </div>
+            <Separator />
+            <div className="flex justify-between text-sm">
+              <span className="text-green-600">Total entrées</span>
+              <span className="font-medium text-green-600">+{totals.entrees.toLocaleString()} FCFA</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-red-600">Total sorties</span>
+              <span className="font-medium text-red-600">-{totals.sorties.toLocaleString()} FCFA</span>
+            </div>
+            <Separator />
+            <div className="flex justify-between text-sm">
+              <span>Mouvement net</span>
+              <span className={`font-medium ${totals.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {totals.net >= 0 ? '+' : ''}{totals.net.toLocaleString()} FCFA
+              </span>
+            </div>
+            <div className="flex justify-between text-sm border-t pt-2">
+              <span className="font-semibold">Solde de clôture</span>
+              <span className="font-bold text-lg">{totals.cloture.toLocaleString()} FCFA</span>
             </div>
           </CardContent>
         </Card>
