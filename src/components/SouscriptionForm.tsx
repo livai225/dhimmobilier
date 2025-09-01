@@ -138,7 +138,7 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
         montant_souscris: parseFloat(data.montant_souscris),
         prix_total: parseFloat(data.montant_souscris), // Keep for backward compatibility
         montant_droit_terre_mensuel: parseFloat(data.montant_droit_terre_mensuel || "0"),
-        apport_initial: apportAmount,
+        apport_initial: 0, // Don't store in subscription record to avoid double counting
         periode_finition_mois: parseInt(data.periode_finition_mois || "9"),
         solde_restant: data.paiement_immediat ? 0 : parseFloat(data.montant_souscris) - apportAmount,
         date_debut: data.date_debut,

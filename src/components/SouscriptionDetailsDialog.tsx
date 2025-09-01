@@ -78,10 +78,9 @@ export function SouscriptionDetailsDialog({
 
   if (!souscription) return null;
 
-  // Include apport initial in total paid calculation
+  // Calculate total paid from payments only (apport initial is already included in payments)
   const paiementsTotal = paiements?.reduce((sum, p) => sum + Number(p.montant), 0) || 0;
-  const apportInitial = Number(souscription.apport_initial || 0);
-  const totalPaye = paiementsTotal + apportInitial;
+  const totalPaye = paiementsTotal;
   const soldeRestant = Number(souscription.prix_total || souscription.montant_souscris || 0) - totalPaye;
   
   // Calculate work progress
@@ -245,8 +244,8 @@ export function SouscriptionDetailsDialog({
                     <p className="font-bold text-lg">{(souscription.prix_total || souscription.montant_souscris || 0).toLocaleString()} FCFA</p>
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Apport initial</p>
-                    <p className="font-medium">{(souscription.apport_initial || 0).toLocaleString()} FCFA</p>
+                    <p className="text-sm text-muted-foreground">Premier paiement</p>
+                    <p className="font-medium">{paiements?.[paiements.length - 1]?.montant?.toLocaleString() || '0'} FCFA</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Total payé</p>
@@ -400,29 +399,6 @@ export function SouscriptionDetailsDialog({
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {/* Apport initial */}
-                      {apportInitial > 0 && (
-                        <TableRow className="bg-muted/50">
-                          <TableCell className="text-sm">
-                            {format(new Date(souscription.date_debut || souscription.created_at), "dd/MM/yyyy")}
-                          </TableCell>
-                          <TableCell className="text-sm font-medium">
-                            {apportInitial.toLocaleString()} FCFA
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            -
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            <Badge variant="secondary">Apport initial</Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Button variant="ghost" size="sm">
-                              <Printer className="h-3 w-3" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      )}
-                      
                       {/* Autres paiements */}
                       {paiements?.map((paiement) => (
                         <TableRow key={paiement.id}>
@@ -447,7 +423,7 @@ export function SouscriptionDetailsDialog({
                       ))}
                       
                       {/* Affichage si aucun paiement */}
-                      {(!paiements || paiements.length === 0) && apportInitial === 0 && (
+                      {(!paiements || paiements.length === 0) && (
                         <TableRow>
                           <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                             <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
