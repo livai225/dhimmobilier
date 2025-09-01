@@ -209,9 +209,9 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
       return { result, receipt };
     },
     onSuccess: ({ receipt }) => {
-      queryClient.invalidateQueries({ queryKey: ["souscriptions"] });
-      queryClient.invalidateQueries({ queryKey: ["cash_transactions"] });
-      queryClient.invalidateQueries({ queryKey: ["cash_balance"] });
+        queryClient.invalidateQueries({ queryKey: ["souscriptions"] });
+        queryClient.invalidateQueries({ queryKey: ["cash_transactions"] });
+        queryClient.invalidateQueries({ queryKey: ["cash_balance"] });
       queryClient.invalidateQueries({ queryKey: ["recus"] });
       const message = souscription 
         ? "Souscription modifiée avec succès" 

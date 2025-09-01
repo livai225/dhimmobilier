@@ -59,7 +59,7 @@ export function LocationForm({ onClose, onSuccess }: LocationFormProps) {
 
   // Solde de caisse actuel
   const { data: cashBalance } = useQuery({
-    queryKey: ["cash-balance"],
+    queryKey: ["cash_balance"],
     queryFn: async () => {
       const { data, error } = await supabase.rpc("get_current_cash_balance");
       if (error) throw error;
