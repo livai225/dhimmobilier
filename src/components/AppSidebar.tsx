@@ -61,7 +61,7 @@ const menuItems = [
     icon: Home,
   },
   {
-    title: "Caisse",
+    title: "Solde caisse versement",
     url: "/caisse",
     icon: Wallet,
   },

@@ -871,6 +871,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: number
       }
+      get_solde_caisse_entreprise: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
       pay_caution_with_cash: {
         Args: {
           p_date_paiement: string

@@ -26,8 +26,8 @@ export default function Dashboard() {
         paiementsSouscriptions,
         paiementsDroitTerre,
         echeances,
-        cashBalance,
-        cashTransactions
+        soldeCaisseEntreprise,
+        soldeCaisseVersement
       ] = await Promise.all([
         supabase.from('clients').select('*', { count: 'exact' }),
         supabase.from('proprietes').select('*'),
@@ -39,26 +39,22 @@ export default function Dashboard() {
         supabase.from('paiements_souscriptions').select('*'),
         supabase.from('paiements_droit_terre').select('*'),
         supabase.from('echeances_droit_terre').select('*'),
-        supabase.rpc('get_current_cash_balance'),
-        supabase.from('cash_transactions').select('montant, date_transaction, type_transaction, type_operation')
+        supabase.rpc('get_solde_caisse_entreprise'),
+        supabase.rpc('get_current_cash_balance')
       ]);
 
       // Calculate main KPIs
       const totalFactures = factures.data?.reduce((sum, f) => sum + (f.montant_total || 0), 0) || 0;
       const totalPaiementsFactures = paiementsFactures.data?.reduce((sum, p) => sum + (p.montant || 0), 0) || 0;
-      const totalRevenuLocations = paiementsLocations.data?.reduce((sum, p) => sum + (p.montant || 0), 0) || 0;
-      const totalRevenuSouscriptions = paiementsSouscriptions.data?.reduce((sum, p) => sum + (p.montant || 0), 0) || 0;
-      const totalRevenuDroitTerre = paiementsDroitTerre.data?.reduce((sum, p) => sum + (p.montant || 0), 0) || 0;
-      const totalRevenuCaution = cashTransactions.data?.filter((t: any) => t.type_operation === 'paiement_caution').reduce((sum: number, t: any) => sum + (t.montant || 0), 0) || 0;
       
-      // Chiffre d'affaires = revenus encaissés (locations + souscriptions + droits de terre + cautions)
-      const chiffreAffaires = totalRevenuLocations + totalRevenuSouscriptions + totalRevenuDroitTerre + totalRevenuCaution;
+      // Solde de caisse (ex-chiffre d'affaires) = revenus - dépenses entreprise
+      const soldeCaisse = Number(soldeCaisseEntreprise.data || 0);
       
       // Dépenses = paiements de factures fournisseurs
       const totalDepenses = totalPaiementsFactures;
       
-      // Solde de caisse actuel
-      const soldeCaisse = Number(cashBalance.data || 0);
+      // Solde de caisse versement (ancien solde caisse)
+      const soldeCaisseVersementMontant = Number(soldeCaisseVersement.data || 0);
       
       const facturesImpayees = factures.data?.reduce((sum, f) => sum + (f.solde || 0), 0) || 0;
       const dettesLocations = locations.data?.reduce((sum, l) => sum + (l.dette_totale || 0), 0) || 0;
@@ -75,11 +71,16 @@ export default function Dashboard() {
       const proprietesLibres = proprietes.data?.filter(p => p.statut === 'Libre').length || 0;
       const proprietesOccupees = proprietes.data?.filter(p => p.statut === 'Occupé').length || 0;
 
+      // Calculate revenue details for charts
+      const totalRevenuLocations = paiementsLocations.data?.reduce((sum, p) => sum + (p.montant || 0), 0) || 0;
+      const totalRevenuSouscriptions = paiementsSouscriptions.data?.reduce((sum, p) => sum + (p.montant || 0), 0) || 0;
+      const totalRevenuDroitTerre = paiementsDroitTerre.data?.reduce((sum, p) => sum + (p.montant || 0), 0) || 0;
+
       // Revenue breakdown
       const revenueBreakdown = [
         { name: 'Locations', value: totalRevenuLocations, color: '#8b5cf6' },
         { name: 'Souscriptions', value: totalRevenuSouscriptions, color: '#06b6d4' },
-        { name: 'Cautions', value: totalRevenuCaution, color: '#10b981' },
+        { name: 'Droit de terre', value: totalRevenuDroitTerre, color: '#10b981' },
       ];
 
       // Monthly revenue trend (last 6 months)
@@ -107,9 +108,9 @@ export default function Dashboard() {
 
       return {
         // Main KPIs
-        chiffreAffaires,
-        totalDepenses,
         soldeCaisse,
+        totalDepenses,
+        soldeCaisseVersement: soldeCaisseVersementMontant,
         creancesImpayees,
         contratsActifs,
         proprietesDisponibles: proprietesLibres,
@@ -211,15 +212,15 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Chiffre d'affaires</CardTitle>
+            <CardTitle className="text-sm font-medium">Solde de caisse</CardTitle>
             <TrendingUp className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              {formatCurrency(stats?.chiffreAffaires || 0)}
+              {formatCurrency(stats?.soldeCaisse || 0)}
             </div>
             <p className="text-xs text-muted-foreground">
-              Revenus encaissés
+              Revenus - dépenses
             </p>
           </CardContent>
         </Card>
@@ -241,15 +242,15 @@ export default function Dashboard() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Solde caisse</CardTitle>
+            <CardTitle className="text-sm font-medium">Solde caisse versement</CardTitle>
             <DollarSign className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-600">
-              {formatCurrency(stats?.soldeCaisse || 0)}
+              {formatCurrency(stats?.soldeCaisseVersement || 0)}
             </div>
             <p className="text-xs text-muted-foreground">
-              Disponible
+              Caisse disponible
             </p>
           </CardContent>
         </Card>
@@ -363,7 +364,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              {stats?.contratsActifs > 0 ? Math.round((stats?.chiffreAffaires || 0) / ((stats?.chiffreAffaires || 0) + (stats?.creancesImpayees || 0)) * 100) : 0}%
+              {stats?.contratsActifs > 0 ? Math.round((stats?.soldeCaisse || 0) / ((stats?.soldeCaisse || 0) + (stats?.creancesImpayees || 0)) * 100) : 0}%
             </div>
             <p className="text-xs text-muted-foreground">
               Taux recouvrement

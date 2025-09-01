@@ -28,10 +28,21 @@ export default function Caisse() {
     document.title = "Caisse - Solde et opérations";
   }, []);
 
-  const { data: balance = 0 } = useQuery({
+  // Solde caisse versement (pour les versements agents)
+  const { data: soldeCaisseVersement = 0 } = useQuery({
     queryKey: ["cash_balance"],
     queryFn: async () => {
       const { data, error } = await supabase.rpc("get_current_cash_balance");
+      if (error) throw error;
+      return Number(data || 0);
+    },
+  });
+
+  // Solde de caisse entreprise (revenus - dépenses)
+  const { data: soldeCaisseEntreprise = 0 } = useQuery({
+    queryKey: ["solde_caisse_entreprise"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("get_solde_caisse_entreprise");
       if (error) throw error;
       return Number(data || 0);
     },
@@ -99,10 +110,10 @@ export default function Caisse() {
       .filter((t: any) => t.type_transaction === "sortie")
       .reduce((s: number, t: any) => s + Number(t.montant), 0);
     const net = entrees - sorties;
-    const ouverture = balance - net;
-    const cloture = balance;
+    const ouverture = soldeCaisseVersement - net;
+    const cloture = soldeCaisseVersement;
     return { entrees, sorties, net, ouverture, cloture };
-  }, [transactions, balance]);
+  }, [transactions, soldeCaisseVersement]);
 
   const [form, setForm] = useState({
     agent_id: "",
@@ -274,15 +285,29 @@ export default function Caisse() {
   return (
     <div className="container mx-auto p-2 sm:p-4">
       <div className="flex items-start justify-between gap-4 flex-col sm:flex-row">
-        <Card className="flex-1 min-w-[260px]">
-          <CardHeader>
-            <CardTitle>Solde actuel</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{balance.toLocaleString()} FCFA</div>
-            <p className="text-sm text-muted-foreground">Mise à jour en temps réel après chaque opération</p>
-          </CardContent>
-        </Card>
+        <div className="flex flex-col gap-4 flex-1">
+          {/* Solde caisse versement (affiché en principal) */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Solde caisse versement</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-blue-600">{soldeCaisseVersement.toLocaleString()} FCFA</div>
+              <p className="text-sm text-muted-foreground">Versements agents - paiements effectués</p>
+            </CardContent>
+          </Card>
+
+          {/* Solde de caisse (ex-chiffre d'affaires) */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Solde de caisse entreprise</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-600">{soldeCaisseEntreprise.toLocaleString()} FCFA</div>
+              <p className="text-sm text-muted-foreground">Revenus totaux - dépenses entreprise</p>
+            </CardContent>
+          </Card>
+        </div>
 
         <Card className="w-full sm:max-w-md">
           <CardHeader>
