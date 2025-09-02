@@ -23,6 +23,7 @@ export default function Caisse() {
   const [file, setFile] = useState<File | null>(null);
   const [typeOperationFilter, setTypeOperationFilter] = useState<string>("");
   const [isExporting, setIsExporting] = useState(false);
+  const [journalTab, setJournalTab] = useState<"versement" | "entreprise">("versement");
 
   useEffect(() => {
     document.title = "Caisse - Solde et opérations";
@@ -80,20 +81,14 @@ export default function Caisse() {
     return { start: startStr, end: endStr };
   }, [period, customStart, customEnd]);
 
-  const { data: transactions = [], isLoading } = useQuery({
-    queryKey: ["cash_transactions", periodRange, typeOperationFilter],
+  const { data: allTransactions = [], isLoading } = useQuery({
+    queryKey: ["cash_transactions", periodRange],
     queryFn: async () => {
-      let query = supabase
+      const { data, error } = await supabase
         .from("cash_transactions")
         .select("*")
         .gte("date_transaction", periodRange.start)
-        .lte("date_transaction", periodRange.end);
-      
-      if (typeOperationFilter) {
-        query = query.eq("type_operation", typeOperationFilter);
-      }
-      
-      const { data, error } = await query
+        .lte("date_transaction", periodRange.end)
         .order("date_transaction", { ascending: false })
         .order("heure_transaction", { ascending: false });
       
@@ -102,18 +97,55 @@ export default function Caisse() {
     },
   });
 
+  // Filter transactions based on current journal tab
+  const transactions = useMemo(() => {
+    if (!allTransactions) return [];
+    
+    let filtered = allTransactions;
+    
+    if (journalTab === "versement") {
+      // Caisse versement: physical cash operations
+      filtered = allTransactions.filter((t: any) => 
+        t.type_operation === "versement_agent" ||
+        t.type_operation === "paiement_souscription" ||
+        t.type_operation === "paiement_loyer" ||
+        t.type_operation === "paiement_droit_terre" ||
+        t.type_operation === "paiement_caution"
+      );
+    } else {
+      // Caisse entreprise: company expenses only
+      filtered = allTransactions.filter((t: any) => 
+        t.type_operation === "depense_entreprise"
+      );
+    }
+    
+    // Apply type operation filter if set
+    if (typeOperationFilter) {
+      filtered = filtered.filter((t: any) => t.type_operation === typeOperationFilter);
+    }
+    
+    return filtered;
+  }, [allTransactions, journalTab, typeOperationFilter]);
+
   const totals = useMemo(() => {
-    const entrees = transactions
-      .filter((t: any) => t.type_transaction === "entree")
-      .reduce((s: number, t: any) => s + Number(t.montant), 0);
-    const sorties = transactions
-      .filter((t: any) => t.type_transaction === "sortie")
-      .reduce((s: number, t: any) => s + Number(t.montant), 0);
-    const net = entrees - sorties;
-    const ouverture = soldeCaisseVersement - net;
-    const cloture = soldeCaisseVersement;
-    return { entrees, sorties, net, ouverture, cloture };
-  }, [transactions, soldeCaisseVersement]);
+    if (journalTab === "versement") {
+      const entrees = transactions
+        .filter((t: any) => t.type_transaction === "entree")
+        .reduce((s: number, t: any) => s + Number(t.montant), 0);
+      const sorties = transactions
+        .filter((t: any) => t.type_transaction === "sortie")
+        .reduce((s: number, t: any) => s + Number(t.montant), 0);
+      const net = entrees - sorties;
+      const ouverture = soldeCaisseVersement - net;
+      const cloture = soldeCaisseVersement;
+      return { entrees, sorties, net, ouverture, cloture };
+    } else {
+      // For company expenses, only show total expenses
+      const totalDepenses = transactions
+        .reduce((s: number, t: any) => s + Number(t.montant), 0);
+      return { entrees: 0, sorties: totalDepenses, net: -totalDepenses, ouverture: 0, cloture: 0 };
+    }
+  }, [transactions, soldeCaisseVersement, journalTab]);
 
   const [form, setForm] = useState({
     agent_id: "",
@@ -226,33 +258,53 @@ export default function Caisse() {
     setIsExporting(true);
     
     try {
-      // Préparer les données pour l'export
-      const dataToExport = transactions.map((t: any) => ({
-        'Date': format(new Date(t.date_transaction), 'dd/MM/yyyy'),
-        'Heure': t.heure_transaction?.toString().slice(0,5) || '',
-        'Type': t.type_transaction === 'entree' ? 'Entrée' : 'Sortie',
-        'Opération': t.type_operation,
-        'Montant (FCFA)': Number(t.montant).toLocaleString(),
-        'Solde avant': Number(t.solde_avant).toLocaleString(),
-        'Solde après': Number(t.solde_apres).toLocaleString(),
-        'Bénéficiaire': t.beneficiaire || '',
-        'Description': t.description || '',
-        'Agent': t.agent_nom || ''
-      }));
+      // Préparer les données pour l'export selon l'onglet actif
+      const dataToExport = transactions.map((t: any) => {
+        const baseData = {
+          'Date': format(new Date(t.date_transaction), 'dd/MM/yyyy'),
+          'Heure': t.heure_transaction?.toString().slice(0,5) || '',
+          'Type': t.type_transaction === 'entree' ? 'Entrée' : 'Sortie',
+          'Opération': t.type_operation,
+          'Montant (FCFA)': Number(t.montant).toLocaleString(),
+          'Bénéficiaire': t.beneficiaire || '',
+          'Description': t.description || '',
+          'Agent': t.agent_nom || ''
+        };
+
+        // Add balance columns only for versement tab
+        if (journalTab === "versement") {
+          return {
+            ...baseData,
+            'Solde avant': Number(t.solde_avant).toLocaleString(),
+            'Solde après': Number(t.solde_apres).toLocaleString(),
+          };
+        }
+        
+        return baseData;
+      });
 
       // Créer un nouveau classeur et une feuille
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.json_to_sheet(dataToExport);
 
-      // Définir la largeur des colonnes
-      const wscols = [
+      // Définir la largeur des colonnes selon l'onglet
+      const wscols = journalTab === "versement" ? [
         { wch: 12 }, // Date
         { wch: 8 },  // Heure
         { wch: 10 }, // Type
         { wch: 20 }, // Opération
         { wch: 15 }, // Montant
+        { wch: 20 }, // Bénéficiaire
+        { wch: 30 }, // Description
+        { wch: 25 }, // Agent
         { wch: 15 }, // Solde avant
         { wch: 15 }, // Solde après
+      ] : [
+        { wch: 12 }, // Date
+        { wch: 8 },  // Heure
+        { wch: 10 }, // Type
+        { wch: 20 }, // Opération
+        { wch: 15 }, // Montant
         { wch: 20 }, // Bénéficiaire
         { wch: 30 }, // Description
         { wch: 25 }  // Agent
@@ -260,11 +312,12 @@ export default function Caisse() {
       ws['!cols'] = wscols;
 
       // Ajouter la feuille au classeur
-      XLSX.utils.book_append_sheet(wb, ws, 'Transactions');
+      XLSX.utils.book_append_sheet(wb, ws, journalTab === "versement" ? 'Caisse Versement' : 'Caisse Entreprise');
 
-      // Générer le fichier Excel
+      // Générer le fichier Excel avec nom spécifique
       const dateStr = format(new Date(), 'yyyy-MM-dd');
-      XLSX.writeFile(wb, `transactions_${dateStr}.xlsx`);
+      const fileName = journalTab === "versement" ? `caisse_versement_${dateStr}.xlsx` : `caisse_entreprise_${dateStr}.xlsx`;
+      XLSX.writeFile(wb, fileName);
       
       toast({
         title: 'Export réussi',
@@ -393,119 +446,183 @@ export default function Caisse() {
             <CardTitle>Journal des opérations</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-col sm:flex-row gap-4 mb-3 items-start">
-              <div className="flex gap-2 flex-wrap">
-                <Button variant={period === "day" ? "default" : "outline"} onClick={() => setPeriod("day")}>Jour</Button>
-                <Button variant={period === "week" ? "default" : "outline"} onClick={() => setPeriod("week")}>Semaine</Button>
-                <Button variant={period === "month" ? "default" : "outline"} onClick={() => setPeriod("month")}>Mois</Button>
-                <Button variant={period === "year" ? "default" : "outline"} onClick={() => setPeriod("year")}>Année</Button>
-              </div>
-              <div className="flex-1 flex flex-col sm:flex-row gap-2">
-                <div className="flex-1">
-                  <label className="text-sm block mb-1">Type d'opération</label>
-                  <select
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    value={typeOperationFilter}
-                    onChange={(e) => setTypeOperationFilter(e.target.value)}
-                  >
-                    <option value="">Tous les types</option>
-                     <option value="versement_agent">Versement agent</option>
-                     <option value="paiement_caution">Paiement caution</option>
-                     <option value="depense_entreprise">Dépense entreprise</option>
-                     <option value="autre">Autre opération</option>
-                  </select>
+            <Tabs value={journalTab} onValueChange={(v: any) => setJournalTab(v)} className="space-y-4">
+              <TabsList className="grid grid-cols-2">
+                <TabsTrigger value="versement">Caisse Versement</TabsTrigger>
+                <TabsTrigger value="entreprise">Caisse Entreprise</TabsTrigger>
+              </TabsList>
+              
+              <div className="flex flex-col sm:flex-row gap-4 mb-3 items-start">
+                <div className="flex gap-2 flex-wrap">
+                  <Button variant={period === "day" ? "default" : "outline"} onClick={() => setPeriod("day")}>Jour</Button>
+                  <Button variant={period === "week" ? "default" : "outline"} onClick={() => setPeriod("week")}>Semaine</Button>
+                  <Button variant={period === "month" ? "default" : "outline"} onClick={() => setPeriod("month")}>Mois</Button>
+                  <Button variant={period === "year" ? "default" : "outline"} onClick={() => setPeriod("year")}>Année</Button>
                 </div>
-                <div className="flex gap-2">
-                  <div>
-                    <label className="text-sm block mb-1">Début</label>
-                    <Input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} />
+                <div className="flex-1 flex flex-col sm:flex-row gap-2">
+                  <div className="flex-1">
+                    <label className="text-sm block mb-1">Type d'opération</label>
+                    <select
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      value={typeOperationFilter}
+                      onChange={(e) => setTypeOperationFilter(e.target.value)}
+                    >
+                      <option value="">Tous les types</option>
+                      {journalTab === "versement" ? (
+                        <>
+                          <option value="versement_agent">Versement agent</option>
+                          <option value="paiement_caution">Paiement caution</option>
+                          <option value="paiement_souscription">Paiement souscription</option>
+                          <option value="paiement_loyer">Paiement loyer</option>
+                          <option value="paiement_droit_terre">Paiement droit de terre</option>
+                        </>
+                       ) : (
+                         <option value="depense_entreprise">Dépense entreprise</option>
+                       )}
+                       <option value="autre">Autre opération</option>
+                    </select>
                   </div>
-                  <div>
-                    <label className="text-sm block mb-1">Fin</label>
-                    <Input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} />
+                  <div className="flex gap-2">
+                    <div>
+                      <label className="text-sm block mb-1">Début</label>
+                      <Input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="text-sm block mb-1">Fin</label>
+                      <Input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} />
+                    </div>
                   </div>
                 </div>
               </div>
-              <Button 
-                variant="outline" 
-                onClick={exportToExcel}
-                disabled={isExporting || transactions.length === 0}
-                className="self-end"
-              >
-                {isExporting ? 'Export en cours...' : 'Exporter en Excel'}
-              </Button>
-            </div>
+              
+              <div className="flex justify-between items-center">
+                <Button 
+                  variant="outline" 
+                  onClick={exportToExcel}
+                  disabled={isExporting || transactions.length === 0}
+                >
+                  {isExporting ? 'Export en cours...' : 'Exporter en Excel'}
+                </Button>
+              </div>
 
-            <div className="rounded-md border overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Heure</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Opération</TableHead>
-                    <TableHead>Agent</TableHead>
-                    <TableHead>Montant</TableHead>
-                    <TableHead>Reçu</TableHead>
-                    <TableHead>Solde avant</TableHead>
-                    <TableHead>Solde après</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {transactions.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={9} className="text-center py-6 text-muted-foreground">
-                        Aucune opération pour cette période
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    transactions.map((t: any) => {
-                      const agent = agents.find(a => a.id === t.agent_id);
-                      return (
-                        <TableRow key={t.id}>
-                          <TableCell>{format(new Date(t.date_transaction), "dd/MM/yyyy")}</TableCell>
-                          <TableCell>{t.heure_transaction?.toString().slice(0,5)}</TableCell>
-                          <TableCell>
-                            <Badge variant={t.type_transaction === "entree" ? "secondary" : "outline"}>
-                              {t.type_transaction}
-                            </Badge>
+              <TabsContent value="versement">
+                <div className="rounded-md border overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Heure</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Opération</TableHead>
+                        <TableHead>Agent</TableHead>
+                        <TableHead>Montant</TableHead>
+                        <TableHead>Reçu</TableHead>
+                        <TableHead>Solde avant</TableHead>
+                        <TableHead>Solde après</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {transactions.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={9} className="text-center py-6 text-muted-foreground">
+                            Aucune opération pour cette période
                           </TableCell>
-                          <TableCell>
-                            <Badge variant="outline">{t.type_operation}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            {agent ? (
-                              <div className="text-xs">
-                                <div className="font-medium">{agent.prenom} {agent.nom}</div>
-                                <div className="text-muted-foreground">{agent.code_agent}</div>
-                              </div>
-                            ) : t.agent_id ? (
-                              <span className="text-xs text-muted-foreground">Agent supprimé</span>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">-</span>
-                            )}
-                          </TableCell>
-                          <TableCell className={t.type_transaction === "entree" ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
-                            {t.type_transaction === "entree" ? "+" : "-"}{Number(t.montant).toLocaleString()} FCFA
-                          </TableCell>
-                          <TableCell>
-                            {t.reference_operation ? (
-                              <Button variant="outline" size="sm" className="h-7 text-xs">
-                                📄 Voir reçu
-                              </Button>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">-</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-sm">{Number(t.solde_avant).toLocaleString()}</TableCell>
-                          <TableCell className="text-sm font-medium">{Number(t.solde_apres).toLocaleString()}</TableCell>
                         </TableRow>
-                      );
-                    })
-                  )}
-                </TableBody>
-              </Table>
-            </div>
+                      ) : (
+                        transactions.map((t: any) => {
+                          const agent = agents.find(a => a.id === t.agent_id);
+                          return (
+                            <TableRow key={t.id}>
+                              <TableCell>{format(new Date(t.date_transaction), "dd/MM/yyyy")}</TableCell>
+                              <TableCell>{t.heure_transaction?.toString().slice(0,5)}</TableCell>
+                              <TableCell>
+                                <Badge variant={t.type_transaction === "entree" ? "secondary" : "outline"}>
+                                  {t.type_transaction}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline">{t.type_operation}</Badge>
+                              </TableCell>
+                              <TableCell>
+                                {agent ? (
+                                  <div className="text-xs">
+                                    <div className="font-medium">{agent.prenom} {agent.nom}</div>
+                                    <div className="text-muted-foreground">{agent.code_agent}</div>
+                                  </div>
+                                ) : t.agent_id ? (
+                                  <span className="text-xs text-muted-foreground">Agent supprimé</span>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">-</span>
+                                )}
+                              </TableCell>
+                              <TableCell className={t.type_transaction === "entree" ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
+                                {t.type_transaction === "entree" ? "+" : "-"}{Number(t.montant).toLocaleString()} FCFA
+                              </TableCell>
+                              <TableCell>
+                                {t.reference_operation ? (
+                                  <Button variant="outline" size="sm" className="h-7 text-xs">
+                                    📄 Voir reçu
+                                  </Button>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">-</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-sm">{Number(t.solde_avant).toLocaleString()}</TableCell>
+                              <TableCell className="text-sm font-medium">{Number(t.solde_apres).toLocaleString()}</TableCell>
+                            </TableRow>
+                          );
+                        })
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="entreprise">
+                <div className="rounded-md border overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Heure</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Opération</TableHead>
+                        <TableHead>Bénéficiaire</TableHead>
+                        <TableHead>Montant</TableHead>
+                        <TableHead>Description</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {transactions.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">
+                            Aucune dépense pour cette période
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        transactions.map((t: any) => (
+                          <TableRow key={t.id}>
+                            <TableCell>{format(new Date(t.date_transaction), "dd/MM/yyyy")}</TableCell>
+                            <TableCell>{t.heure_transaction?.toString().slice(0,5)}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline">Sortie</Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{t.type_operation}</Badge>
+                            </TableCell>
+                            <TableCell>{t.beneficiaire || "-"}</TableCell>
+                            <TableCell className="text-red-600 font-medium">
+                              -{Number(t.montant).toLocaleString()} FCFA
+                            </TableCell>
+                            <TableCell className="text-sm">{t.description || "-"}</TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </TabsContent>
+            </Tabs>
           </CardContent>
         </Card>
 
