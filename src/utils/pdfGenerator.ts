@@ -40,50 +40,71 @@ export const generateReceiptPDF = (receipt: ReceiptWithDetails, logoDataUrl?: st
     doc.text(`Téléphone: ${receipt.client.telephone_principal}`, 20, 105);
   }
   
-  // Operation details
+  // Context info  
+  let yPos = 125;
   doc.setFont("helvetica", "bold");
-  doc.text("DÉTAILS DE L'OPÉRATION", 20, 125);
+  doc.text("CONTEXTE DE L'OPÉRATION", 20, yPos);
   doc.setFont("helvetica", "normal");
+  yPos += 15;
   
   const operationTypes: Record<string, string> = {
     location: "Paiement de loyer",
-    caution_location: "Caution de location",
-    apport_souscription: "Apport de souscription",
+    caution_location: "Caution de location", 
+    apport_souscription: "Paiement souscription",
     droit_terre: "Droit de terre",
     paiement_facture: "Paiement de facture",
     versement_agent: "Versement agent"
   };
   
-  doc.text(`Type: ${operationTypes[receipt.type_operation] || receipt.type_operation}`, 20, 140);
+  const baseLabel = operationTypes[receipt.type_operation] || receipt.type_operation;
+  let contextualLabel = baseLabel;
   
-  if (receipt.periode_debut) {
-    doc.text(`Période: ${new Date(receipt.periode_debut).toLocaleDateString("fr-FR")}`, 20, 150);
-    if (receipt.periode_fin) {
-      doc.text(` au ${new Date(receipt.periode_fin).toLocaleDateString("fr-FR")}`, 60, 150);
-    }
+  if (receipt.property_name) {
+    contextualLabel += ` - ${receipt.property_name}`;
   }
   
+  if (receipt.type_bien) {
+    contextualLabel += ` (${receipt.type_bien})`;
+  }
+  
+  if (receipt.phase_souscription && receipt.phase_souscription !== 'souscription') {
+    contextualLabel += ` - Phase: ${receipt.phase_souscription}`;
+  }
+  
+  doc.text(`Type: ${contextualLabel}`, 20, yPos);
+  yPos += 10;
+
+  if (receipt.periode_debut) {
+    doc.text(`Période: ${new Date(receipt.periode_debut).toLocaleDateString("fr-FR")}`, 20, yPos);
+    if (receipt.periode_fin) {
+      doc.text(` au ${new Date(receipt.periode_fin).toLocaleDateString("fr-FR")}`, 60, yPos);
+    }
+    yPos += 10;
+  }
+
   // Amount
+  yPos += 5;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
   const formatCurrency = (amount: number) => {
     const formattedNumber = new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 0 }).format(amount || 0);
     return `${formattedNumber} F CFA`;
   };
-  doc.text(`MONTANT: ${formatCurrency(Number(receipt.montant_total))}`, 20, 170);
+  doc.text(`MONTANT: ${formatCurrency(Number(receipt.montant_total))}`, 20, yPos);
 
-  // Détails du paiement
+  // Récapitulatif financier
+  yPos += 20;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
-  doc.text("DÉTAIL DU PAIEMENT", 20, 185);
+  doc.text("RÉCAPITULATIF FINANCIER", 20, yPos);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(11);
+  yPos += 10;
 
-  let y = 195;
   const addLine = (label: string, value?: number | null) => {
     if (value !== undefined && value !== null && !isNaN(Number(value))) {
-      doc.text(`${label}: ${formatCurrency(Number(value))}`, 20, y);
-      y += 8;
+      doc.text(`${label}: ${formatCurrency(Number(value))}`, 20, yPos);
+      yPos += 8;
     }
   };
 
@@ -92,20 +113,20 @@ export const generateReceiptPDF = (receipt: ReceiptWithDetails, logoDataUrl?: st
     const av = (receipt as any).location_avances || {};
     const avValues = [
       { label: 'Garantie 2 mois', value: av.garantie_2_mois },
-      { label: 'Loyer d’avance 2 mois', value: av.loyer_avance_2_mois },
+      { label: 'Loyer avance 2 mois', value: av.loyer_avance_2_mois },
       { label: 'Frais agence 1 mois', value: av.frais_agence_1_mois },
       { label: 'Caution totale', value: av.caution_totale },
     ].filter(i => i.value && Number(i.value) > 0);
 
     if (avValues.length > 0) {
-      doc.text("Avances initiales:", 20, y);
-      y += 8;
+      doc.text("Avances initiales:", 20, yPos);
+      yPos += 8;
       avValues.forEach(i => addLine(`- ${i.label}`, i.value));
     }
 
     addLine('Paiements cumulés', (receipt as any).location_total_paye);
     addLine('Ce paiement', Number(receipt.montant_total));
-    addLine('Reste à payer (estimé)', (receipt as any).location_dette_restante);
+    addLine('Reste à payer', (receipt as any).location_dette_restante);
   } else if (receipt.type_operation === 'apport_souscription') {
     addLine('Prix total', (receipt as any).souscription_prix_total);
     addLine('Apport initial', (receipt as any).souscription_apport_initial);
@@ -119,8 +140,63 @@ export const generateReceiptPDF = (receipt: ReceiptWithDetails, logoDataUrl?: st
     addLine('Solde restant', (receipt as any).droit_terre_solde_restant);
   }
 
+  // Historique des paiements
+  if (receipt.payment_history && receipt.payment_history.length > 0) {
+    yPos += 10;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.text("HISTORIQUE DES PAIEMENTS", 20, yPos);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    yPos += 10;
+
+    const maxHistoryLines = Math.min(receipt.payment_history.length, 8); // Limiter pour l'espace
+    for (let i = 0; i < maxHistoryLines; i++) {
+      const payment = receipt.payment_history[i];
+      const dateStr = new Date(payment.date).toLocaleDateString("fr-FR");
+      const amountStr = formatCurrency(payment.montant);
+      const currentIndicator = payment.is_current ? " ← ce paiement" : "";
+      const modeStr = payment.mode ? ` (${payment.mode})` : "";
+      
+      doc.text(`${dateStr} - ${amountStr}${modeStr}${currentIndicator}`, 20, yPos);
+      yPos += 6;
+    }
+
+    if (receipt.payment_history.length > maxHistoryLines) {
+      doc.text(`+ ${receipt.payment_history.length - maxHistoryLines} autres paiements`, 20, yPos);
+      yPos += 6;
+    }
+  }
+
+  // Échéances enregistrées (seulement pour droit de terre)
+  if (receipt.type_operation === 'droit_terre' && receipt.echeances && receipt.echeances.length > 0) {
+    yPos += 10;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.text("ÉCHÉANCES ENREGISTRÉES", 20, yPos);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    yPos += 10;
+
+    const maxEcheances = Math.min(receipt.echeances.length, 5); // Limiter pour l'espace
+    for (let i = 0; i < maxEcheances; i++) {
+      const echeance = receipt.echeances[i];
+      const dateStr = new Date(echeance.date).toLocaleDateString("fr-FR");
+      const amountStr = formatCurrency(echeance.montant);
+      const statutStr = echeance.statut === 'paye' ? ' ✓' : ' •';
+      
+      doc.text(`Éch. ${echeance.numero} - ${dateStr} - ${amountStr}${statutStr}`, 20, yPos);
+      yPos += 6;
+    }
+
+    if (receipt.echeances.length > maxEcheances) {
+      doc.text(`+ ${receipt.echeances.length - maxEcheances} autres échéances`, 20, yPos);
+      yPos += 6;
+    }
+  }
+
   // Section signatures (position dynamique)
-  const signatureY = Math.min(Math.max(y + 10, 200), 260);
+  const signatureY = Math.min(Math.max(yPos + 15, 230), 260);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
   doc.text("Signature Client", 30, signatureY);

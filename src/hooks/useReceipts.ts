@@ -15,6 +15,26 @@ export interface ReceiptWithDetails {
   // Détails enrichis pour l'affichage sur le reçu
   details_type?: 'location' | 'souscription' | 'droit_terre';
 
+  // Nouvelles données contextuelles pour la traçabilité
+  property_name?: string | null;
+  type_bien?: string | null;
+  phase_souscription?: string | null;
+  payment_history?: Array<{
+    id: string;
+    date: string;
+    montant: number;
+    mode?: string | null;
+    label?: string | null;
+    is_current?: boolean;
+  }>;
+  echeances?: Array<{
+    numero: number;
+    date: string;
+    montant: number;
+    statut: string;
+    date_paiement?: string | null;
+  }>;
+
   // Location
   loyer_mensuel?: number | null;
   location_total_paye?: number | null;
@@ -101,7 +121,7 @@ const enrichedReceipts = await Promise.all(
           const receiptDate = new Date(receipt.date_generation);
           const { data: locationPayments } = await supabase
             .from('paiements_locations')
-            .select('mode_paiement, montant, date_paiement, created_at')
+            .select('id, mode_paiement, montant, date_paiement, created_at')
             .eq('location_id', receipt.reference_id)
             .eq('montant', receipt.montant_total);
           if (locationPayments && locationPayments.length > 0) {
@@ -113,21 +133,44 @@ const enrichedReceipts = await Promise.all(
             mode_paiement = closestPayment.mode_paiement;
           }
 
-          // Détails location
+          // Détails location avec propriété
           const { data: location } = await supabase
             .from('locations')
-            .select('loyer_mensuel, dette_totale, garantie_2_mois, loyer_avance_2_mois, frais_agence_1_mois, caution_totale')
+            .select(`
+              loyer_mensuel, 
+              dette_totale, 
+              garantie_2_mois, 
+              loyer_avance_2_mois, 
+              frais_agence_1_mois, 
+              caution_totale,
+              proprietes!inner(nom, zone)
+            `)
             .eq('id', receipt.reference_id)
             .single();
 
+          // Historique complet des paiements
           const { data: allLocPays } = await supabase
             .from('paiements_locations')
-            .select('montant')
-            .eq('location_id', receipt.reference_id);
+            .select('id, montant, date_paiement, mode_paiement, created_at')
+            .eq('location_id', receipt.reference_id)
+            .order('date_paiement', { ascending: true });
+          
           const total_paye = (allLocPays || []).reduce((s: number, p: any) => s + Number(p.montant || 0), 0);
+
+          // Créer l'historique des paiements
+          const payment_history = (allLocPays || []).map((pay, index) => ({
+            id: pay.id,
+            date: pay.date_paiement,
+            montant: Number(pay.montant),
+            mode: pay.mode_paiement,
+            label: `Paiement loyer ${index + 1}`,
+            is_current: pay.id === receipt.reference_id
+          }));
 
           Object.assign(extras, {
             details_type: 'location',
+            property_name: location?.proprietes?.nom ?? null,
+            payment_history,
             loyer_mensuel: location?.loyer_mensuel ?? null,
             location_total_paye: total_paye,
             location_dette_restante: location?.dette_totale ?? null,
@@ -154,18 +197,43 @@ const enrichedReceipts = await Promise.all(
           if (souscriptionId) {
             const { data: sous } = await supabase
               .from('souscriptions')
-              .select('prix_total, apport_initial, solde_restant, montant_mensuel')
+              .select(`
+                prix_total, 
+                apport_initial, 
+                solde_restant, 
+                montant_mensuel,
+                type_bien,
+                phase_actuelle,
+                proprietes!inner(nom, zone)
+              `)
               .eq('id', souscriptionId)
               .single();
 
+            // Historique complet des paiements souscription
             const { data: allPays } = await supabase
               .from('paiements_souscriptions')
-              .select('montant')
-              .eq('souscription_id', souscriptionId);
+              .select('id, montant, date_paiement, mode_paiement, created_at')
+              .eq('souscription_id', souscriptionId)
+              .order('date_paiement', { ascending: true });
+            
             const total_paye = (allPays || []).reduce((s: number, p: any) => s + Number(p.montant || 0), 0);
+
+            // Créer l'historique des paiements
+            const payment_history = (allPays || []).map((pay, index) => ({
+              id: pay.id,
+              date: pay.date_paiement,
+              montant: Number(pay.montant),
+              mode: pay.mode_paiement,
+              label: index === 0 ? 'Apport initial' : `Échéance ${index}`,
+              is_current: pay.id === receipt.reference_id
+            }));
 
             Object.assign(extras, {
               details_type: 'souscription',
+              property_name: sous?.proprietes?.nom ?? null,
+              type_bien: sous?.type_bien ?? null,
+              phase_souscription: sous?.phase_actuelle ?? null,
+              payment_history,
               souscription_prix_total: sous?.prix_total ?? null,
               souscription_apport_initial: sous?.apport_initial ?? null,
               souscription_total_paye: total_paye,
@@ -189,15 +257,40 @@ const enrichedReceipts = await Promise.all(
           if (souscriptionId) {
             const { data: sous } = await supabase
               .from('souscriptions')
-              .select('montant_droit_terre_mensuel')
+              .select(`
+                montant_droit_terre_mensuel,
+                type_bien,
+                proprietes!inner(nom, zone)
+              `)
               .eq('id', souscriptionId)
               .single();
 
+            // Historique complet des paiements droit de terre
             const { data: allPays } = await supabase
               .from('paiements_droit_terre')
-              .select('montant')
-              .eq('souscription_id', souscriptionId);
+              .select('id, montant, date_paiement, mode_paiement, created_at')
+              .eq('souscription_id', souscriptionId)
+              .order('date_paiement', { ascending: true });
+            
             const total_paye = (allPays || []).reduce((s: number, p: any) => s + Number(p.montant || 0), 0);
+
+            // Créer l'historique des paiements
+            const payment_history = (allPays || []).map((pay, index) => ({
+              id: pay.id,
+              date: pay.date_paiement,
+              montant: Number(pay.montant),
+              mode: pay.mode_paiement,
+              label: `Droit de terre mois ${index + 1}`,
+              is_current: pay.id === receipt.reference_id
+            }));
+
+            // Échéances enregistrées (seulement celles en base)
+            const { data: echeances } = await supabase
+              .from('echeances_droit_terre')
+              .select('numero_echeance, date_echeance, montant, statut, date_paiement')
+              .eq('souscription_id', souscriptionId)
+              .order('numero_echeance', { ascending: true })
+              .limit(20); // Limiter pour éviter un trop grand nombre
 
             let solde_droit_terre: number | null = null;
             try {
@@ -207,6 +300,17 @@ const enrichedReceipts = await Promise.all(
 
             Object.assign(extras, {
               details_type: 'droit_terre',
+              property_name: sous?.proprietes?.nom ?? null,
+              type_bien: sous?.type_bien ?? null,
+              phase_souscription: 'droit_terre',
+              payment_history,
+              echeances: echeances?.map(e => ({
+                numero: e.numero_echeance,
+                date: e.date_echeance,
+                montant: Number(e.montant),
+                statut: e.statut,
+                date_paiement: e.date_paiement
+              })) ?? [],
               droit_terre_mensuel: sous?.montant_droit_terre_mensuel ?? null,
               droit_terre_total_paye: total_paye,
               droit_terre_solde_restant: solde_droit_terre,

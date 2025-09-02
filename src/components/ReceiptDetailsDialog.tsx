@@ -136,14 +136,29 @@ export function ReceiptDetailsDialog({
               </div>
             </div>
 
+          {/* Context and Financial Summary */}
+          <div className="grid grid-cols-2 gap-4">
             <div>
               <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-2">
-                Détails de l'opération
+                Contexte de l'opération
               </h3>
               <div className="space-y-2">
                 <Badge className={`${operation.color} text-white`}>
                   {operation.label}
+                  {receipt.property_name && ` - ${receipt.property_name}`}
                 </Badge>
+                {receipt.type_bien && (
+                  <div>
+                    <p className="text-sm font-medium">Type de bien:</p>
+                    <p className="text-sm text-muted-foreground">{receipt.type_bien}</p>
+                  </div>
+                )}
+                {receipt.phase_souscription && receipt.phase_souscription !== 'souscription' && (
+                  <div>
+                    <p className="text-sm font-medium">Phase:</p>
+                    <p className="text-sm text-muted-foreground capitalize">{receipt.phase_souscription}</p>
+                  </div>
+                )}
                 {receipt.mode_paiement && (
                   <div>
                     <p className="text-sm font-medium">Mode de paiement:</p>
@@ -168,32 +183,153 @@ export function ReceiptDetailsDialog({
                      </p>
                    </div>
                  )}
-                 {receipt.type_operation === "versement_agent" && agentDetails && (
-                   <>
-                     <div>
-                       <p className="text-sm font-medium">Date et heure:</p>
-                       <p className="text-sm text-muted-foreground">
-                         {new Date(agentDetails.date_transaction).toLocaleDateString("fr-FR")} à {agentDetails.heure_transaction?.slice(0, 5)}
-                       </p>
-                     </div>
-                     {agentDetails.description && (
-                       <div>
-                         <p className="text-sm font-medium">Description:</p>
-                         <p className="text-sm text-muted-foreground">{agentDetails.description}</p>
-                       </div>
-                     )}
-                     {agentDetails.piece_justificative && (
-                       <div>
-                         <p className="text-sm font-medium">Pièce justificative:</p>
-                         <p className="text-sm text-primary cursor-pointer hover:underline">
-                           Document disponible
-                         </p>
-                       </div>
-                     )}
-                   </>
-                 )}
               </div>
             </div>
+
+            <div>
+              <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-2">
+                Récapitulatif financier
+              </h3>
+              <div className="space-y-2">
+                {receipt.type_operation === 'apport_souscription' && (
+                  <>
+                    {receipt.souscription_prix_total && (
+                      <div className="flex justify-between text-sm">
+                        <span>Prix total:</span>
+                        <span className="font-medium">{receipt.souscription_prix_total.toLocaleString("fr-FR")} FCFA</span>
+                      </div>
+                    )}
+                    {receipt.souscription_total_paye && (
+                      <div className="flex justify-between text-sm">
+                        <span>Déjà payé:</span>
+                        <span className="font-medium">{receipt.souscription_total_paye.toLocaleString("fr-FR")} FCFA</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-sm">
+                      <span>Ce paiement:</span>
+                      <span className="font-medium text-primary">{receipt.montant_total.toLocaleString("fr-FR")} FCFA</span>
+                    </div>
+                    {receipt.souscription_solde_restant && (
+                      <div className="flex justify-between text-sm border-t pt-2">
+                        <span>Solde restant:</span>
+                        <span className="font-medium">{receipt.souscription_solde_restant.toLocaleString("fr-FR")} FCFA</span>
+                      </div>
+                    )}
+                  </>
+                )}
+                {receipt.type_operation === 'location' && (
+                  <>
+                    {receipt.loyer_mensuel && (
+                      <div className="flex justify-between text-sm">
+                        <span>Loyer mensuel:</span>
+                        <span className="font-medium">{receipt.loyer_mensuel.toLocaleString("fr-FR")} FCFA</span>
+                      </div>
+                    )}
+                    {receipt.location_total_paye && (
+                      <div className="flex justify-between text-sm">
+                        <span>Déjà payé:</span>
+                        <span className="font-medium">{receipt.location_total_paye.toLocaleString("fr-FR")} FCFA</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-sm">
+                      <span>Ce paiement:</span>
+                      <span className="font-medium text-primary">{receipt.montant_total.toLocaleString("fr-FR")} FCFA</span>
+                    </div>
+                  </>
+                )}
+                {receipt.type_operation === 'droit_terre' && (
+                  <>
+                    {receipt.droit_terre_mensuel && (
+                      <div className="flex justify-between text-sm">
+                        <span>Mensualité:</span>
+                        <span className="font-medium">{receipt.droit_terre_mensuel.toLocaleString("fr-FR")} FCFA</span>
+                      </div>
+                    )}
+                    {receipt.droit_terre_total_paye && (
+                      <div className="flex justify-between text-sm">
+                        <span>Déjà payé:</span>
+                        <span className="font-medium">{receipt.droit_terre_total_paye.toLocaleString("fr-FR")} FCFA</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-sm">
+                      <span>Ce paiement:</span>
+                      <span className="font-medium text-primary">{receipt.montant_total.toLocaleString("fr-FR")} FCFA</span>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Payment History */}
+          {receipt.payment_history && receipt.payment_history.length > 0 && (
+            <div>
+              <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-3">
+                Historique des paiements
+              </h3>
+              <div className="space-y-2 max-h-40 overflow-y-auto">
+                {receipt.payment_history.slice(0, 10).map((payment, index) => (
+                  <div key={payment.id} className={`flex items-center justify-between text-sm p-2 rounded ${
+                    payment.is_current ? 'bg-primary/10 border border-primary/20' : 'bg-muted/50'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">
+                        {new Date(payment.date).toLocaleDateString("fr-FR")}
+                      </span>
+                      {payment.mode && (
+                        <span className="text-xs text-muted-foreground">({payment.mode})</span>
+                      )}
+                      {payment.is_current && (
+                        <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded">
+                          ce paiement
+                        </span>
+                      )}
+                    </div>
+                    <span className="font-medium">
+                      {payment.montant.toLocaleString("fr-FR")} FCFA
+                    </span>
+                  </div>
+                ))}
+                {receipt.payment_history.length > 10 && (
+                  <div className="text-center text-sm text-muted-foreground">
+                    + {receipt.payment_history.length - 10} autres paiements
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Échéances for droit de terre */}
+          {receipt.type_operation === 'droit_terre' && receipt.echeances && receipt.echeances.length > 0 && (
+            <div>
+              <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-3">
+                Échéances enregistrées
+              </h3>
+              <div className="space-y-2 max-h-40 overflow-y-auto">
+                {receipt.echeances.slice(0, 8).map((echeance) => (
+                  <div key={echeance.numero} className="flex items-center justify-between text-sm p-2 rounded bg-muted/50">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">Éch. {echeance.numero}</span>
+                      <span className="text-muted-foreground">
+                        {new Date(echeance.date).toLocaleDateString("fr-FR")}
+                      </span>
+                      {echeance.statut === 'paye' && (
+                        <span className="text-green-600 text-xs">✓ Payée</span>
+                      )}
+                    </div>
+                    <span className="font-medium">
+                      {echeance.montant.toLocaleString("fr-FR")} FCFA
+                    </span>
+                  </div>
+                ))}
+                {receipt.echeances.length > 8 && (
+                  <div className="text-center text-sm text-muted-foreground">
+                    + {receipt.echeances.length - 8} autres échéances
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
           </div>
 
           {/* Amount */}
