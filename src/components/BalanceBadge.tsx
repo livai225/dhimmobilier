@@ -7,10 +7,19 @@ import { Skeleton } from "@/components/ui/skeleton";
 export function BalanceBadge() {
   const queryClient = useQueryClient();
 
-  const { data: balance = 0, isLoading } = useQuery({
+  const { data: balanceVersement = 0, isLoading: isLoadingVersement } = useQuery({
     queryKey: ["cash_balance"],
     queryFn: async () => {
       const { data, error } = await supabase.rpc("get_current_cash_balance");
+      if (error) throw error;
+      return Number(data || 0);
+    },
+  });
+
+  const { data: balanceEntreprise = 0, isLoading: isLoadingEntreprise } = useQuery({
+    queryKey: ["entreprise_balance"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("get_solde_caisse_entreprise");
       if (error) throw error;
       return Number(data || 0);
     },
@@ -29,6 +38,7 @@ export function BalanceBadge() {
         },
         () => {
           queryClient.invalidateQueries({ queryKey: ["cash_balance"] });
+          queryClient.invalidateQueries({ queryKey: ["entreprise_balance"] });
         }
       )
       .subscribe();
@@ -38,14 +48,19 @@ export function BalanceBadge() {
     };
   }, [queryClient]);
 
-  if (isLoading) {
-    return <Skeleton className="h-6 w-28" />;
+  if (isLoadingVersement || isLoadingEntreprise) {
+    return <Skeleton className="h-6 w-48" />;
   }
 
   return (
-    <Badge variant="secondary" className="text-xs">
-      Solde caisse: {balance.toLocaleString()} FCFA
-    </Badge>
+    <div className="flex items-center gap-2">
+      <Badge variant="secondary" className="text-xs">
+        Caisse Versement: {balanceVersement.toLocaleString()} FCFA
+      </Badge>
+      <Badge variant="outline" className="text-xs">
+        Caisse Entreprise: {balanceEntreprise.toLocaleString()} FCFA
+      </Badge>
+    </div>
   );
 }
 
