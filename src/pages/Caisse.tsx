@@ -12,6 +12,8 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from "date-fns";
 import * as XLSX from 'xlsx';
+import { ReceiptDetailsDialog } from "@/components/ReceiptDetailsDialog";
+import { ReceiptWithDetails } from "@/hooks/useReceipts";
 
 export default function Caisse() {
   const { toast } = useToast();
@@ -24,6 +26,10 @@ export default function Caisse() {
   const [typeOperationFilter, setTypeOperationFilter] = useState<string>("");
   const [isExporting, setIsExporting] = useState(false);
   const [journalTab, setJournalTab] = useState<"versement" | "entreprise">("versement");
+  
+  // Receipt dialog state
+  const [selectedReceipt, setSelectedReceipt] = useState<ReceiptWithDetails | null>(null);
+  const [isReceiptDialogOpen, setIsReceiptDialogOpen] = useState(false);
 
   useEffect(() => {
     document.title = "Caisse - Solde et opérations";
@@ -335,6 +341,61 @@ export default function Caisse() {
     }
   };
 
+  // Handle viewing receipt for a transaction
+  const handleViewReceipt = async (transactionId: string) => {
+    try {
+      // Search for receipt by reference_id (transaction ID)
+      const { data: receipts, error } = await supabase
+        .from("recus")
+        .select(`
+          *,
+          clients:client_id (
+            nom,
+            prenom,
+            email,
+            telephone_principal
+          )
+        `)
+        .eq("reference_id", transactionId)
+        .maybeSingle();
+
+      if (error) throw error;
+      
+      if (!receipts) {
+        toast({
+          title: "Reçu introuvable",
+          description: "Aucun reçu n'a été trouvé pour cette transaction.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Transform the data to match ReceiptWithDetails interface
+      const receiptWithDetails: ReceiptWithDetails = {
+        id: receipts.id,
+        numero: receipts.numero,
+        date_generation: receipts.date_generation,
+        client_id: receipts.client_id,
+        reference_id: receipts.reference_id,
+        type_operation: receipts.type_operation,
+        montant_total: receipts.montant_total,
+        periode_debut: receipts.periode_debut,
+        periode_fin: receipts.periode_fin,
+        client: receipts.clients
+      };
+
+      setSelectedReceipt(receiptWithDetails);
+      setIsReceiptDialogOpen(true);
+    } catch (error) {
+      console.error("Erreur lors de la récupération du reçu:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de récupérer le reçu.",
+        variant: "destructive"
+      });
+    }
+  };
+
   return (
     <div className="container mx-auto p-2 sm:p-4">
       <div className="flex items-start justify-between gap-4 flex-col sm:flex-row">
@@ -559,13 +620,14 @@ export default function Caisse() {
                                 {t.type_transaction === "entree" ? "+" : "-"}{Number(t.montant).toLocaleString()} FCFA
                               </TableCell>
                               <TableCell>
-                                {t.reference_operation ? (
-                                  <Button variant="outline" size="sm" className="h-7 text-xs">
-                                    📄 Voir reçu
-                                  </Button>
-                                ) : (
-                                  <span className="text-xs text-muted-foreground">-</span>
-                                )}
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  className="h-7 text-xs"
+                                  onClick={() => handleViewReceipt(t.id)}
+                                >
+                                  📄 Voir reçu
+                                </Button>
                               </TableCell>
                               <TableCell className="text-sm">{Number(t.solde_avant).toLocaleString()}</TableCell>
                               <TableCell className="text-sm font-medium">{Number(t.solde_apres).toLocaleString()}</TableCell>
@@ -658,6 +720,12 @@ export default function Caisse() {
           </CardContent>
         </Card>
       </div>
+
+      <ReceiptDetailsDialog
+        receipt={selectedReceipt}
+        open={isReceiptDialogOpen}
+        onOpenChange={setIsReceiptDialogOpen}
+      />
     </div>
   );
 }
