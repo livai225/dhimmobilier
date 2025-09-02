@@ -930,6 +930,10 @@ export type Database = {
         }
         Returns: string
       }
+      recalculate_cash_balances: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       record_cash_transaction: {
         Args: {
           p_agent_id?: string
