@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { setQueryClient } from "@/integrations/supabase/client";
 import { Layout } from "@/components/Layout";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import Index from "./pages/Index";
@@ -20,7 +21,17 @@ import Agents from "./pages/Agents";
 
 import Settings from "./pages/Settings";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30000, // 30 seconds - prevent excessive refetching
+      refetchOnWindowFocus: false, // Disable automatic refetch on focus
+    },
+  },
+});
+
+// Configure the queryClient for Realtime invalidations
+setQueryClient(queryClient);
 
 const App = () => (
   <QueryClientProvider client={queryClient}>

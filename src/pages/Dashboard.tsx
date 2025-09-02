@@ -444,7 +444,7 @@ export default function Dashboard() {
                     data={stats?.revenueBreakdown || []}
                     cx="50%"
                     cy="50%"
-                    outerRadius={window.innerWidth > 640 ? 70 : 50}
+                    outerRadius={60}
                     dataKey="value"
                     label={false}
                   >
