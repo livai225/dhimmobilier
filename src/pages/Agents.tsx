@@ -10,6 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { AgentOperationsDialog } from "@/components/AgentOperationsDialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { MobileCard } from "@/components/MobileCard";
+import { Plus, Eye, Trash2, Users, Phone, Mail, Calendar } from "lucide-react";
 
 export default function Agents() {
   const { toast } = useToast();
@@ -87,155 +89,302 @@ export default function Agents() {
   });
 
   return (
-    <div className="container mx-auto p-2 sm:p-4">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Card className="lg:col-span-2">
+    <div className="container mx-auto p-2 sm:p-4 space-y-4">
+      {/* Header */}
+      <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
+        <div>
+          <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Agents de recouvrement</h2>
+          <p className="text-muted-foreground">
+            Gérez vos agents et suivez leurs performances
+          </p>
+        </div>
+        <Button className="w-full sm:w-auto">
+          <Plus className="h-4 w-4 mr-2" />
+          Nouvel agent
+        </Button>
+      </div>
+
+      {/* Statistics selector */}
+      <div className="max-w-sm">
+        <Combobox
+          options={agents.map((a: any) => ({ value: a.id, label: `${a.prenom} ${a.nom} (${a.code_agent})` }))}
+          value={selectedAgent}
+          onChange={setSelectedAgent}
+          placeholder="Voir les statistiques d'un agent"
+        />
+      </div>
+
+      {/* Statistics cards when agent selected */}
+      {selectedAgent && stats && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 animate-fade-in">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">Total versé</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-xl font-bold">{Number(stats.total_verse || 0).toLocaleString()} FCFA</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">Versements</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-xl font-bold">{stats.nombre_versements || 0}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">Moyenne</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-xl font-bold">{Number(stats.moyenne_versement || 0).toLocaleString()} FCFA</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">Dernier</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-xl font-bold">{stats.dernier_versement || '-'}</div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+        {/* Agents List */}
+        <Card className="lg:col-span-3">
           <CardHeader>
-            <CardTitle>Liste des agents</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Liste des agents
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="mb-3 max-w-sm">
-              <Combobox
-                options={agents.map((a: any) => ({ value: a.id, label: `${a.prenom} ${a.nom} (${a.code_agent})` }))}
-                value={selectedAgent}
-                onChange={setSelectedAgent}
-                placeholder="Voir les statistiques d'un agent"
-              />
-            </div>
-
-            <div className="rounded-md border overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Code</TableHead>
-                    <TableHead>Nom</TableHead>
-                    <TableHead>Téléphone</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Statut</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {agents.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
-                        Aucun agent enregistré
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    agents.map((a: any) => (
-                      <TableRow key={a.id}>
-                        <TableCell className="font-medium">{a.code_agent}</TableCell>
-                        <TableCell>{a.prenom} {a.nom}</TableCell>
-                        <TableCell>{a.telephone || '-'}</TableCell>
-                        <TableCell>{a.email || '-'}</TableCell>
-                        <TableCell>
-                          <Badge variant={a.statut === 'actif' ? 'secondary' : 'outline'}>{a.statut}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-1">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedAgentForOperations(a);
-                                setShowOperationsDialog(true);
-                              }}
-                            >
-                              📊 Fiche détaillée
-                            </Button>
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button variant="destructive" size="sm">
-                                  Supprimer
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Êtes-vous sûr de vouloir supprimer l'agent {a.prenom} {a.nom} ({a.code_agent}) ?
-                                    Cette action est irréversible.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Annuler</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => deleteAgent.mutate(a.id)}
-                                    disabled={deleteAgent.isPending}
-                                  >
-                                    {deleteAgent.isPending ? "Suppression..." : "Supprimer"}
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-
-            {selectedAgent && stats && (
-              <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
-                <Card>
-                  <CardHeader className="py-3"><CardTitle className="text-sm">Total versé</CardTitle></CardHeader>
-                  <CardContent className="text-xl font-bold">{Number(stats.total_verse || 0).toLocaleString()} FCFA</CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="py-3"><CardTitle className="text-sm">Versements</CardTitle></CardHeader>
-                  <CardContent className="text-xl font-bold">{stats.nombre_versements || 0}</CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="py-3"><CardTitle className="text-sm">Moyenne</CardTitle></CardHeader>
-                  <CardContent className="text-xl font-bold">{Number(stats.moyenne_versement || 0).toLocaleString()} FCFA</CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="py-3"><CardTitle className="text-sm">Dernier</CardTitle></CardHeader>
-                  <CardContent className="text-xl font-bold">{stats.dernier_versement || '-'}</CardContent>
-                </Card>
+            {isLoading ? (
+              <p className="text-center py-6">Chargement...</p>
+            ) : agents.length === 0 ? (
+              <div className="text-center py-10">
+                <Users className="mx-auto h-12 w-12 text-muted-foreground" />
+                <h3 className="mt-2 text-sm font-semibold">Aucun agent</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Commencez par créer votre premier agent.
+                </p>
               </div>
+            ) : (
+              <>
+                {/* Mobile Cards (visible on small screens) */}
+                <div className="block md:hidden space-y-3">
+                  {agents.map((agent: any) => (
+                    <MobileCard
+                      key={agent.id}
+                      title={`${agent.prenom} ${agent.nom}`}
+                      subtitle={agent.code_agent}
+                      badge={{
+                        text: agent.statut,
+                        variant: agent.statut === 'actif' ? 'secondary' : 'outline'
+                      }}
+                      fields={[
+                        {
+                          label: "Téléphone",
+                          value: agent.telephone ? (
+                            <div className="flex items-center gap-1">
+                              <Phone className="h-3 w-3" />
+                              {agent.telephone}
+                            </div>
+                          ) : '-'
+                        },
+                        {
+                          label: "Email",
+                          value: agent.email ? (
+                            <div className="flex items-center gap-1">
+                              <Mail className="h-3 w-3" />
+                              {agent.email}
+                            </div>
+                          ) : '-'
+                        },
+                        {
+                          label: "Embauche",
+                          value: agent.date_embauche ? (
+                            <div className="flex items-center gap-1">
+                              <Calendar className="h-3 w-3" />
+                              {new Date(agent.date_embauche).toLocaleDateString('fr-FR')}
+                            </div>
+                          ) : '-'
+                        },
+                        {
+                          label: "Statut",
+                          value: <Badge variant={agent.statut === 'actif' ? 'secondary' : 'outline'}>{agent.statut}</Badge>
+                        }
+                      ]}
+                      actions={[
+                        {
+                          label: "Fiche détaillée",
+                          icon: <Eye className="h-4 w-4" />,
+                          onClick: () => {
+                            setSelectedAgentForOperations(agent);
+                            setShowOperationsDialog(true);
+                          },
+                          variant: "outline"
+                        },
+                        {
+                          label: "Supprimer",
+                          icon: <Trash2 className="h-4 w-4" />,
+                          onClick: () => {
+                            if (confirm(`Êtes-vous sûr de vouloir supprimer l'agent ${agent.prenom} ${agent.nom} ?`)) {
+                              deleteAgent.mutate(agent.id);
+                            }
+                          },
+                          variant: "destructive"
+                        }
+                      ]}
+                    />
+                  ))}
+                </div>
+
+                {/* Desktop Table (hidden on small screens) */}
+                <div className="hidden md:block">
+                  <div className="rounded-md border overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Code</TableHead>
+                          <TableHead>Nom</TableHead>
+                          <TableHead>Téléphone</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Statut</TableHead>
+                          <TableHead>Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {agents.map((a: any) => (
+                          <TableRow key={a.id}>
+                            <TableCell className="font-medium">{a.code_agent}</TableCell>
+                            <TableCell>{a.prenom} {a.nom}</TableCell>
+                            <TableCell>{a.telephone || '-'}</TableCell>
+                            <TableCell>{a.email || '-'}</TableCell>
+                            <TableCell>
+                              <Badge variant={a.statut === 'actif' ? 'secondary' : 'outline'}>{a.statut}</Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex gap-1">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedAgentForOperations(a);
+                                    setShowOperationsDialog(true);
+                                  }}
+                                >
+                                  <Eye className="h-4 w-4 mr-1" />
+                                  Fiche détaillée
+                                </Button>
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button variant="destructive" size="sm">
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        Êtes-vous sûr de vouloir supprimer l'agent {a.prenom} {a.nom} ({a.code_agent}) ?
+                                        Cette action est irréversible.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Annuler</AlertDialogCancel>
+                                      <AlertDialogAction
+                                        onClick={() => deleteAgent.mutate(a.id)}
+                                        disabled={deleteAgent.isPending}
+                                      >
+                                        {deleteAgent.isPending ? "Suppression..." : "Supprimer"}
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
 
+        {/* Create Agent Form */}
         <Card>
           <CardHeader>
             <CardTitle>Nouvel agent</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div>
-              <label className="text-sm">Prénom</label>
-              <Input value={form.prenom} onChange={(e) => setForm({ ...form, prenom: e.target.value })} />
-            </div>
-            <div>
-              <label className="text-sm">Nom</label>
-              <Input value={form.nom} onChange={(e) => setForm({ ...form, nom: e.target.value })} />
-            </div>
-            <div>
-              <label className="text-sm">Code agent</label>
-              <Input value={form.code_agent} onChange={(e) => setForm({ ...form, code_agent: e.target.value })} placeholder="Ex: AGT-001" />
-            </div>
-            <div>
-              <label className="text-sm">Téléphone</label>
-              <Input value={form.telephone} onChange={(e) => setForm({ ...form, telephone: e.target.value })} />
-            </div>
-            <div>
-              <label className="text-sm">Email</label>
-              <Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-            </div>
-            <div>
-              <label className="text-sm">Statut</label>
-              <Combobox
-                options={[{ value: 'actif', label: 'Actif' }, { value: 'inactif', label: 'Inactif' }, { value: 'suspendu', label: 'Suspendu' }]}
-                value={form.statut}
-                onChange={(v) => setForm({ ...form, statut: v })}
-                placeholder="Sélectionner un statut"
+              <label className="text-sm font-medium">Prénom</label>
+              <Input 
+                value={form.prenom} 
+                onChange={(e) => setForm({ ...form, prenom: e.target.value })} 
+                className="mt-1"
               />
             </div>
-            <Button className="w-full" onClick={() => createAgent.mutate()} disabled={createAgent.isPending}>
+            <div>
+              <label className="text-sm font-medium">Nom</label>
+              <Input 
+                value={form.nom} 
+                onChange={(e) => setForm({ ...form, nom: e.target.value })} 
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Code agent</label>
+              <Input 
+                value={form.code_agent} 
+                onChange={(e) => setForm({ ...form, code_agent: e.target.value })} 
+                placeholder="Ex: AGT-001" 
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Téléphone</label>
+              <Input 
+                value={form.telephone} 
+                onChange={(e) => setForm({ ...form, telephone: e.target.value })} 
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Email</label>
+              <Input 
+                value={form.email} 
+                onChange={(e) => setForm({ ...form, email: e.target.value })} 
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Statut</label>
+              <div className="mt-1">
+                <Combobox
+                  options={[
+                    { value: 'actif', label: 'Actif' }, 
+                    { value: 'inactif', label: 'Inactif' }, 
+                    { value: 'suspendu', label: 'Suspendu' }
+                  ]}
+                  value={form.statut}
+                  onChange={(v) => setForm({ ...form, statut: v })}
+                  placeholder="Sélectionner un statut"
+                />
+              </div>
+            </div>
+            <Button 
+              className="w-full mt-4" 
+              onClick={() => createAgent.mutate()} 
+              disabled={createAgent.isPending}
+            >
               {createAgent.isPending ? "Création..." : "Créer l'agent"}
             </Button>
           </CardContent>

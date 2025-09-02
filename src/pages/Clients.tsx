@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ClientForm } from "@/components/ClientForm";
 import { ExportToExcelButton } from "@/components/ExportToExcelButton";
 import { ClientDetailsDialog } from "@/components/ClientDetailsDialog";
+import { MobileCard } from "@/components/MobileCard";
 
 interface Client {
   id: string;
@@ -231,7 +232,7 @@ export default function Clients() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
       <div className="flex flex-col space-y-4 lg:flex-row lg:items-center lg:justify-between lg:space-y-0">
         <div>
@@ -240,7 +241,7 @@ export default function Clients() {
             Gérez vos clients et leurs informations
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col space-y-2 sm:flex-row sm:space-x-2 sm:space-y-0">
           <ExportToExcelButton
             filename={`clients_${new Date().toISOString().slice(0,10)}`}
             rows={filteredClients}
@@ -287,7 +288,7 @@ export default function Clients() {
       </div>
 
       {/* Dashboard Statistics */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Clients</CardTitle>
@@ -390,98 +391,176 @@ export default function Clients() {
               </p>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nom</TableHead>
-                  <TableHead>Contact</TableHead>
-                  <TableHead>Téléphones</TableHead>
-                  <TableHead>Urgence</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <>
+              {/* Mobile Cards (visible on small screens) */}
+              <div className="block md:hidden space-y-3">
                 {filteredClients.map((client) => (
-                  <TableRow key={client.id}>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">{client.nom} {client.prenom}</div>
-                        {client.adresse && (
-                          <div className="text-sm text-muted-foreground flex items-center gap-1">
-                            <MapPin className="h-3 w-3" />
-                            {client.adresse.substring(0, 30)}...
+                  <MobileCard
+                    key={client.id}
+                    title={`${client.nom} ${client.prenom || ''}`}
+                    subtitle={client.email || "Pas d'email"}
+                    badge={client.contact_urgence_nom ? {
+                      text: "Contact urgence",
+                      variant: "secondary"
+                    } : undefined}
+                    fields={[
+                      {
+                        label: "Téléphone principal",
+                        value: client.telephone_principal ? (
+                          <div className="flex items-center gap-1">
+                            <Phone className="h-3 w-3" />
+                            {client.telephone_principal}
                           </div>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        {client.email && (
-                          <div className="flex items-center gap-1 text-sm">
+                        ) : '-'
+                      },
+                      {
+                        label: "Email",
+                        value: client.email ? (
+                          <div className="flex items-center gap-1">
                             <Mail className="h-3 w-3" />
                             {client.email}
                           </div>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        {client.telephone_principal && (
-                          <div className="flex items-center gap-1 text-sm">
-                            <Phone className="h-3 w-3" />
-                            {formatPhone(client.telephone_principal)}
-                            <Badge variant="outline" className="ml-1 text-xs">Principal</Badge>
+                        ) : '-'
+                      },
+                      {
+                        label: "Adresse",
+                        value: client.adresse ? (
+                          <div className="flex items-center gap-1">
+                            <MapPin className="h-3 w-3" />
+                            <span className="text-xs">{client.adresse.substring(0, 40)}...</span>
                           </div>
-                        )}
-                        {client.telephone_secondaire_1 && (
-                          <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                            <Phone className="h-3 w-3" />
-                            {formatPhone(client.telephone_secondaire_1)}
+                        ) : '-'
+                      },
+                      {
+                        label: "Contact urgence",
+                        value: client.contact_urgence_nom ? (
+                          <div className="flex items-center gap-1">
+                            <AlertTriangle className="h-3 w-3 text-orange-500" />
+                            <span className="text-xs">{client.contact_urgence_nom}</span>
                           </div>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {client.contact_urgence_nom ? (
-                        <div className="flex items-center gap-1">
-                          <AlertTriangle className="h-4 w-4 text-orange-500" />
-                          <Badge variant="secondary" className="text-xs">
-                            {client.contact_urgence_nom}
-                          </Badge>
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setSelectedClient(client)}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEdit(client)}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDelete(client.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                        ) : '-'
+                      }
+                    ]}
+                    actions={[
+                      {
+                        label: "Voir",
+                        icon: <Eye className="h-4 w-4" />,
+                        onClick: () => setSelectedClient(client),
+                        variant: "outline"
+                      },
+                      {
+                        label: "Modifier",
+                        icon: <Edit className="h-4 w-4" />,
+                        onClick: () => handleEdit(client),
+                        variant: "outline"
+                      },
+                      {
+                        label: "Supprimer",
+                        icon: <Trash2 className="h-4 w-4" />,
+                        onClick: () => handleDelete(client.id),
+                        variant: "destructive"
+                      }
+                    ]}
+                  />
                 ))}
-              </TableBody>
-            </Table>
+              </div>
+
+              {/* Desktop Table (hidden on small screens) */}
+              <div className="hidden md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Nom</TableHead>
+                      <TableHead>Contact</TableHead>
+                      <TableHead>Téléphones</TableHead>
+                      <TableHead>Urgence</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredClients.map((client) => (
+                      <TableRow key={client.id}>
+                        <TableCell>
+                          <div>
+                            <div className="font-medium">{client.nom} {client.prenom}</div>
+                            {client.adresse && (
+                              <div className="text-sm text-muted-foreground flex items-center gap-1">
+                                <MapPin className="h-3 w-3" />
+                                {client.adresse.substring(0, 30)}...
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            {client.email && (
+                              <div className="flex items-center gap-1 text-sm">
+                                <Mail className="h-3 w-3" />
+                                {client.email}
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            {client.telephone_principal && (
+                              <div className="flex items-center gap-1 text-sm">
+                                <Phone className="h-3 w-3" />
+                                {formatPhone(client.telephone_principal)}
+                                <Badge variant="outline" className="ml-1 text-xs">Principal</Badge>
+                              </div>
+                            )}
+                            {client.telephone_secondaire_1 && (
+                              <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                                <Phone className="h-3 w-3" />
+                                {formatPhone(client.telephone_secondaire_1)}
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {client.contact_urgence_nom ? (
+                            <div className="flex items-center gap-1">
+                              <AlertTriangle className="h-4 w-4 text-orange-500" />
+                              <Badge variant="secondary" className="text-xs">
+                                {client.contact_urgence_nom}
+                              </Badge>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setSelectedClient(client)}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEdit(client)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDelete(client.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
