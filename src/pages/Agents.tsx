@@ -9,6 +9,7 @@ import { Combobox } from "@/components/ui/combobox";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { AgentOperationsDialog } from "@/components/AgentOperationsDialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 export default function Agents() {
   const { toast } = useToast();
@@ -66,6 +67,25 @@ export default function Agents() {
     onError: (e: any) => toast({ title: "Erreur", description: e.message, variant: "destructive" }),
   });
 
+  const deleteAgent = useMutation({
+    mutationFn: async (agentId: string) => {
+      const { error } = await supabase
+        .from("agents_recouvrement")
+        .delete()
+        .eq("id", agentId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["agents_recouvrement"] });
+      // Reset selected agent if it was the one being deleted
+      if (selectedAgent) {
+        setSelectedAgent("");
+      }
+      toast({ title: "Agent supprimé", description: "L'agent a été supprimé avec succès." });
+    },
+    onError: (e: any) => toast({ title: "Erreur", description: e.message, variant: "destructive" }),
+  });
+
   return (
     <div className="container mx-auto p-2 sm:p-4">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -113,16 +133,43 @@ export default function Agents() {
                           <Badge variant={a.statut === 'actif' ? 'secondary' : 'outline'}>{a.statut}</Badge>
                         </TableCell>
                         <TableCell>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedAgentForOperations(a);
-                              setShowOperationsDialog(true);
-                            }}
-                          >
-                            📊 Fiche détaillée
-                          </Button>
+                          <div className="flex gap-1">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedAgentForOperations(a);
+                                setShowOperationsDialog(true);
+                              }}
+                            >
+                              📊 Fiche détaillée
+                            </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="destructive" size="sm">
+                                  Supprimer
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Êtes-vous sûr de vouloir supprimer l'agent {a.prenom} {a.nom} ({a.code_agent}) ?
+                                    Cette action est irréversible.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Annuler</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => deleteAgent.mutate(a.id)}
+                                    disabled={deleteAgent.isPending}
+                                  >
+                                    {deleteAgent.isPending ? "Suppression..." : "Supprimer"}
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))
