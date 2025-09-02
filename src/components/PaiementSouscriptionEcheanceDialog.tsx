@@ -76,14 +76,8 @@ export function PaiementSouscriptionEcheanceDialog({
         throw new Error("Le montant ne peut pas dépasser le solde restant de la souscription");
       }
 
-      // 1) Pré-contrôle du solde de caisse
-      const { data: canPay, error: canPayError } = await supabase.rpc('can_make_payment' as any, { amount: montantPaiement });
-      if (canPayError) throw canPayError;
-      if (!canPay) {
-        throw new Error("Solde de caisse insuffisant pour effectuer ce paiement");
-      }
 
-      // 2) Paiement via caisse (sortie + journal)
+      // 2) Paiement via caisse (entree + journal)
       const { data: paiementId, error: rpcError } = await supabase.rpc("pay_souscription_with_cash" as any, {
         p_souscription_id: souscription.id,
         p_montant: montantPaiement,

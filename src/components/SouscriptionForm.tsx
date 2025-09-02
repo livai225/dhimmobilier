@@ -123,14 +123,6 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
         ? parseFloat(data.montant_souscris) 
         : parseFloat(data.apport_initial || "0");
 
-      // Pré-contrôle du solde de caisse pour éviter une erreur côté RPC
-      if (apportAmount > 0) {
-        const { data: canPay, error: canPayError } = await supabase.rpc('can_make_payment' as any, { amount: apportAmount });
-        if (canPayError) throw canPayError;
-        if (!canPay) {
-          throw new Error("Solde de caisse insuffisant pour effectuer ce paiement");
-        }
-      }
 
       const processedData = {
         client_id: data.client_id,
