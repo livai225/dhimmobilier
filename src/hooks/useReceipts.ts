@@ -272,9 +272,30 @@ export const useReceiptStats = () => {
         return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
       });
 
+      // Types d'opérations clients (encaissements réels)
+      const clientOperations = ['location', 'caution_location', 'apport_souscription', 'droit_terre'];
+      // Versements agents (dépôts en caisse)
+      const agentOperations = ['versement_agent'];
+      // Factures payées (dépenses)
+      const invoiceOperations = ['paiement_facture'];
+
+      const clientPaymentsThisMonth = thisMonth
+        .filter(r => clientOperations.includes(r.type_operation))
+        .reduce((sum, r) => sum + Number(r.montant_total), 0);
+
+      const agentDepositsThisMonth = thisMonth
+        .filter(r => agentOperations.includes(r.type_operation))
+        .reduce((sum, r) => sum + Number(r.montant_total), 0);
+
+      const invoicePaymentsThisMonth = thisMonth
+        .filter(r => invoiceOperations.includes(r.type_operation))
+        .reduce((sum, r) => sum + Number(r.montant_total), 0);
+
       const stats = {
         totalReceipts: data.length,
-        totalThisMonth: thisMonth.reduce((sum, r) => sum + Number(r.montant_total), 0),
+        clientPaymentsThisMonth,
+        agentDepositsThisMonth,
+        invoicePaymentsThisMonth,
         receiptsByType: data.reduce((acc, r) => {
           acc[r.type_operation] = (acc[r.type_operation] || 0) + 1;
           return acc;

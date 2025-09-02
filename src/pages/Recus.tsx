@@ -91,7 +91,7 @@ export default function Recus() {
 
       {/* Statistics Cards */}
       {stats && (
-        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Reçus</CardTitle>
@@ -104,13 +104,40 @@ export default function Recus() {
           
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Encaissements ce mois</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium">Paiements clients</CardTitle>
+              <TrendingUp className="h-4 w-4 text-green-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
-                {stats.totalThisMonth.toLocaleString("fr-FR")} FCFA
+              <div className="text-xl font-bold text-green-600">
+                {stats.clientPaymentsThisMonth.toLocaleString("fr-FR")} FCFA
               </div>
+              <p className="text-xs text-muted-foreground mt-1">Ce mois</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Versements agents</CardTitle>
+              <TrendingUp className="h-4 w-4 text-blue-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-xl font-bold text-blue-600">
+                {stats.agentDepositsThisMonth.toLocaleString("fr-FR")} FCFA
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">Ce mois</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Factures payées</CardTitle>
+              <TrendingUp className="h-4 w-4 text-red-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-xl font-bold text-red-600">
+                {stats.invoicePaymentsThisMonth.toLocaleString("fr-FR")} FCFA
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">Ce mois</p>
             </CardContent>
           </Card>
 
