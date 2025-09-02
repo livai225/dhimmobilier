@@ -87,7 +87,8 @@ export const generateReceiptPDF = (receipt: ReceiptWithDetails, logoDataUrl?: st
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
   const formatCurrency = (amount: number) => {
-    const formattedNumber = new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 0 }).format(amount || 0);
+    const formattedNumber = new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 0 }).format(amount || 0)
+      .replace(/\s/g, ' '); // Replace any spaces with regular spaces to avoid slash rendering in jsPDF
     return `${formattedNumber} F CFA`;
   };
   doc.text(`MONTANT: ${formatCurrency(Number(receipt.montant_total))}`, 20, yPos);
