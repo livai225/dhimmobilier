@@ -120,74 +120,69 @@ const enrichedReceipts = await Promise.all(
       // Récupérer informations selon le type d'opération
       switch (receipt.type_operation) {
         case 'location': {
-          // Mode de paiement le plus proche
-          const receiptDate = new Date(receipt.date_generation);
-          const { data: locationPayments } = await supabase
+          // Récupérer d'abord le paiement de location spécifique
+          const { data: paymentData } = await supabase
             .from('paiements_locations')
-            .select('id, mode_paiement, montant, date_paiement, created_at')
-            .eq('location_id', receipt.reference_id)
-            .eq('montant', receipt.montant_total);
-          if (locationPayments && locationPayments.length > 0) {
-            const closestPayment = locationPayments.reduce((closest: any, current: any) => {
-              const currentDiff = Math.abs(new Date(current.date_paiement).getTime() - receiptDate.getTime());
-              const closestDiff = Math.abs(new Date(closest.date_paiement).getTime() - receiptDate.getTime());
-              return currentDiff < closestDiff ? current : closest;
-            });
-            mode_paiement = closestPayment.mode_paiement;
-          }
-
-          // Détails location avec propriété
-          const { data: location } = await supabase
-            .from('locations')
-            .select(`
-              loyer_mensuel, 
-              dette_totale, 
-              garantie_2_mois, 
-              loyer_avance_2_mois, 
-              frais_agence_1_mois, 
-              caution_totale,
-              proprietes!inner(nom, zone, adresse, types_proprietes(nom))
-            `)
+            .select('*')
             .eq('id', receipt.reference_id)
             .single();
-
-          // Historique complet des paiements
-          const { data: allLocPays } = await supabase
-            .from('paiements_locations')
-            .select('id, montant, date_paiement, mode_paiement, created_at')
-            .eq('location_id', receipt.reference_id)
-            .order('date_paiement', { ascending: true });
           
-          const total_paye = (allLocPays || []).reduce((s: number, p: any) => s + Number(p.montant || 0), 0);
+          if (paymentData) {
+            mode_paiement = paymentData.mode_paiement;
+            
+            // Maintenant récupérer les détails de la location
+            const { data: location } = await supabase
+              .from('locations')
+              .select(`
+                loyer_mensuel, 
+                dette_totale, 
+                garantie_2_mois, 
+                loyer_avance_2_mois, 
+                frais_agence_1_mois, 
+                caution_totale,
+                proprietes!inner(nom, zone, adresse, types_proprietes(nom))
+              `)
+              .eq('id', paymentData.location_id)
+              .single();
 
-          // Créer l'historique des paiements
-          const payment_history = (allLocPays || []).map((pay, index) => ({
-            id: pay.id,
-            date: pay.date_paiement,
-            montant: Number(pay.montant),
-            mode: pay.mode_paiement,
-            label: `Paiement loyer ${index + 1}`,
-            is_current: pay.id === receipt.reference_id
-          }));
+            // Historique complet des paiements pour cette location
+            const { data: allLocPays } = await supabase
+              .from('paiements_locations')
+              .select('id, montant, date_paiement, mode_paiement, created_at')
+              .eq('location_id', paymentData.location_id)
+              .order('date_paiement', { ascending: true });
+            
+            const total_paye = (allLocPays || []).reduce((s: number, p: any) => s + Number(p.montant || 0), 0);
 
-          const remaining_balance = location?.dette_totale ?? 0;
-          Object.assign(extras, {
-            details_type: 'location',
-            property_name: location?.proprietes?.nom ?? null,
-            property_address: location?.proprietes?.adresse ?? null,
-            is_payment_complete: remaining_balance <= 0,
-            remaining_balance,
-            payment_history,
-            loyer_mensuel: location?.loyer_mensuel ?? null,
-            location_total_paye: total_paye,
-            location_dette_restante: remaining_balance,
-            location_avances: {
-              garantie_2_mois: location?.garantie_2_mois ?? null,
-              loyer_avance_2_mois: location?.loyer_avance_2_mois ?? null,
-              frais_agence_1_mois: location?.frais_agence_1_mois ?? null,
-              caution_totale: location?.caution_totale ?? null,
-            },
-          });
+            // Créer l'historique des paiements
+            const payment_history = (allLocPays || []).map((pay, index) => ({
+              id: pay.id,
+              date: pay.date_paiement,
+              montant: Number(pay.montant),
+              mode: pay.mode_paiement,
+              label: `Paiement loyer ${index + 1}`,
+              is_current: pay.id === receipt.reference_id
+            }));
+
+            const remaining_balance = location?.dette_totale ?? 0;
+            Object.assign(extras, {
+              details_type: 'location',
+              property_name: location?.proprietes?.nom ?? null,
+              property_address: location?.proprietes?.adresse ?? null,
+              is_payment_complete: remaining_balance <= 0,
+              remaining_balance,
+              payment_history,
+              loyer_mensuel: location?.loyer_mensuel ?? null,
+              location_total_paye: total_paye,
+              location_dette_restante: remaining_balance,
+              location_avances: {
+                garantie_2_mois: location?.garantie_2_mois ?? null,
+                loyer_avance_2_mois: location?.loyer_avance_2_mois ?? null,
+                frais_agence_1_mois: location?.frais_agence_1_mois ?? null,
+                caution_totale: location?.caution_totale ?? null,
+              },
+            });
+          }
           break;
         }
 
@@ -335,15 +330,15 @@ const enrichedReceipts = await Promise.all(
         }
 
         case 'caution_location': {
-          // Récupérer les détails de la location via cash_transactions
+          // Récupérer d'abord la transaction de caisse spécifique
           const { data: cashTransaction } = await supabase
             .from('cash_transactions')
-            .select('reference_operation')
+            .select('*')
             .eq('id', receipt.reference_id)
             .single();
 
           if (cashTransaction?.reference_operation) {
-            // Détails de la location avec propriété
+            // Maintenant récupérer les détails de la location
             const { data: location } = await supabase
               .from('locations')
               .select(`
@@ -359,7 +354,7 @@ const enrichedReceipts = await Promise.all(
             // Historique des paiements de caution pour cette location
             const { data: cautionTransactions } = await supabase
               .from('cash_transactions')
-              .select('id, montant, date_transaction, description')
+              .select('id, montant, date_transaction, description, piece_justificative')
               .eq('type_operation', 'paiement_caution')
               .eq('reference_operation', cashTransaction.reference_operation)
               .order('date_transaction', { ascending: true });
@@ -373,10 +368,13 @@ const enrichedReceipts = await Promise.all(
               id: trans.id,
               date: trans.date_transaction,
               montant: Number(trans.montant),
-              mode: null,
+              mode: trans.piece_justificative || 'Caisse',
               label: `Versement caution ${index + 1}`,
               is_current: trans.id === receipt.reference_id
             }));
+
+            // Mode de paiement du paiement actuel
+            mode_paiement = cashTransaction.piece_justificative || 'Caisse';
 
             Object.assign(extras, {
               details_type: 'caution_location',
@@ -400,12 +398,43 @@ const enrichedReceipts = await Promise.all(
         }
 
         case 'paiement_facture': {
+          // Récupérer d'abord le paiement de facture spécifique
           const { data: facturePayment } = await supabase
             .from('paiements_factures')
-            .select('mode_paiement')
+            .select('*')
             .eq('id', receipt.reference_id)
             .single();
-          mode_paiement = facturePayment?.mode_paiement ?? mode_paiement;
+          
+          if (facturePayment) {
+            mode_paiement = facturePayment.mode_paiement ?? mode_paiement;
+            
+            // Récupérer les détails de la facture
+            const { data: facture } = await supabase
+              .from('factures_fournisseurs')
+              .select(`
+                numero,
+                montant_total,
+                solde,
+                date_facture,
+                fournisseurs!inner(nom),
+                proprietes(nom, adresse)
+              `)
+              .eq('id', facturePayment.facture_id)
+              .single();
+            
+            if (facture) {
+              Object.assign(extras, {
+                details_type: 'facture',
+                property_name: facture.proprietes?.nom ?? null,
+                property_address: facture.proprietes?.adresse ?? null,
+                fournisseur_name: facture.fournisseurs.nom,
+                facture_numero: facture.numero,
+                facture_total: facture.montant_total,
+                facture_solde: facture.solde,
+                facture_date: facture.date_facture,
+              });
+            }
+          }
           break;
         }
       }

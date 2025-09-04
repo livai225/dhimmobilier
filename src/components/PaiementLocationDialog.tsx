@@ -100,14 +100,23 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
       });
       if (rpcError) throw rpcError;
 
-      // 2) Générer le reçu
+      // 2) Générer le reçu - utiliser l'ID du paiement, pas de la location
+      const { data: paiementData, error: paiementError } = await supabase
+        .from("paiements_locations")
+        .select("id")
+        .eq("location_id", location.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+      if (paiementError) throw paiementError;
+
       const receiptNumber = generateReceiptNumber();
       const { data: recu, error: recuError } = await supabase
         .from("recus")
         .insert({
           numero: receiptNumber,
           client_id: location.client_id,
-          reference_id: location.id,
+          reference_id: paiementData.id, // ID du paiement spécifique
           type_operation: "location",
           montant_total: amount,
           periode_debut: selectedMonth ? (selectedMonth + "-01") : null,

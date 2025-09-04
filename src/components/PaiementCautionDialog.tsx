@@ -92,10 +92,10 @@ export function PaiementCautionDialog({
       );
       if (transactionError) throw transactionError;
 
-      // 3) Generate receipt
+      // 3) Generate receipt - référencer l'ID de la transaction de caisse
       const receipt = await ReceiptGenerator.createReceipt({
         clientId: location.client_id,
-        referenceId: transactionId as string,
+        referenceId: transactionId as string, // ID de la transaction de caisse
         typeOperation: "caution_location",
         montantTotal: data.montant,
         datePaiement: data.date_paiement,

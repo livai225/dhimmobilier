@@ -103,10 +103,19 @@ export function PaiementFactureDialog({
       });
       if (error) throw error;
 
-      // 2) Générer le reçu (client système)
+      // 2) Récupérer l'ID du paiement facture créé et générer le reçu
+      const { data: paiementData, error: paiementDataError } = await supabase
+        .from("paiements_factures")
+        .select("id")
+        .eq("facture_id", facture.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+      if (paiementDataError) throw paiementDataError;
+
       const receipt = await ReceiptGenerator.createReceipt({
         clientId: "00000000-0000-0000-0000-000000000000",
-        referenceId: paiementId as unknown as string,
+        referenceId: paiementData.id, // ID du paiement de facture spécifique
         typeOperation: "paiement_facture",
         montantTotal: data.montant,
         datePaiement: data.date_paiement
