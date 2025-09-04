@@ -301,6 +301,32 @@ export function ReceiptDetailsDialog({
                     )}
                   </>
                 )}
+                {receipt.type_operation === 'caution_location' && (
+                  <>
+                    {(receipt as any).caution_totale && (
+                      <div className="flex justify-between text-sm">
+                        <span>Caution totale requise:</span>
+                        <span className="font-medium">{(receipt as any).caution_totale.toLocaleString("fr-FR")} FCFA</span>
+                      </div>
+                    )}
+                    {(receipt as any).caution_total_paye && (
+                      <div className="flex justify-between text-sm">
+                        <span>Déjà payé:</span>
+                        <span className="font-medium">{(receipt as any).caution_total_paye.toLocaleString("fr-FR")} FCFA</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-sm">
+                      <span>Ce paiement:</span>
+                      <span className="font-medium text-primary">{receipt.montant_total.toLocaleString("fr-FR")} FCFA</span>
+                    </div>
+                    {(receipt.remaining_balance !== undefined && receipt.remaining_balance !== null) && (
+                      <div className={`flex justify-between text-sm border-t pt-2 ${receipt.is_payment_complete ? 'text-green-600' : 'text-orange-600'}`}>
+                        <span className="font-medium">Solde caution restant:</span>
+                        <span className="font-bold">{receipt.remaining_balance.toLocaleString("fr-FR")} FCFA</span>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             </div>
           </div>

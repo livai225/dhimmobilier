@@ -146,7 +146,7 @@ const enrichedReceipts = await Promise.all(
               loyer_avance_2_mois, 
               frais_agence_1_mois, 
               caution_totale,
-              proprietes!inner(nom, zone, adresse)
+              proprietes!inner(nom, zone, adresse, types_proprietes(nom))
             `)
             .eq('id', receipt.reference_id)
             .single();
@@ -329,6 +329,71 @@ const enrichedReceipts = await Promise.all(
               droit_terre_mensuel: sous?.montant_droit_terre_mensuel ?? null,
               droit_terre_total_paye: total_paye,
               droit_terre_solde_restant: remaining_balance,
+            });
+          }
+          break;
+        }
+
+        case 'caution_location': {
+          // Récupérer les détails de la location via cash_transactions
+          const { data: cashTransaction } = await supabase
+            .from('cash_transactions')
+            .select('reference_operation')
+            .eq('id', receipt.reference_id)
+            .single();
+
+          if (cashTransaction?.reference_operation) {
+            // Détails de la location avec propriété
+            const { data: location } = await supabase
+              .from('locations')
+              .select(`
+                caution_totale,
+                garantie_2_mois,
+                loyer_avance_2_mois,
+                frais_agence_1_mois,
+                proprietes!inner(nom, zone, adresse, types_proprietes(nom))
+              `)
+              .eq('id', cashTransaction.reference_operation)
+              .single();
+
+            // Historique des paiements de caution pour cette location
+            const { data: cautionTransactions } = await supabase
+              .from('cash_transactions')
+              .select('id, montant, date_transaction, description')
+              .eq('type_operation', 'paiement_caution')
+              .eq('reference_operation', cashTransaction.reference_operation)
+              .order('date_transaction', { ascending: true });
+
+            const total_caution_paye = (cautionTransactions || []).reduce((s: number, t: any) => s + Number(t.montant || 0), 0);
+            const caution_totale = location?.caution_totale ?? 0;
+            const remaining_balance = Math.max(0, caution_totale - total_caution_paye);
+
+            // Créer l'historique des paiements de caution
+            const payment_history = (cautionTransactions || []).map((trans, index) => ({
+              id: trans.id,
+              date: trans.date_transaction,
+              montant: Number(trans.montant),
+              mode: null,
+              label: `Versement caution ${index + 1}`,
+              is_current: trans.id === receipt.reference_id
+            }));
+
+            Object.assign(extras, {
+              details_type: 'caution_location',
+              property_name: location?.proprietes?.nom ?? null,
+              property_address: location?.proprietes?.adresse ?? null,
+              type_bien: location?.proprietes?.types_proprietes?.nom ?? null,
+              is_payment_complete: remaining_balance <= 0,
+              remaining_balance,
+              payment_history,
+              caution_totale,
+              caution_total_paye: total_caution_paye,
+              location_avances: {
+                garantie_2_mois: location?.garantie_2_mois ?? null,
+                loyer_avance_2_mois: location?.loyer_avance_2_mois ?? null,
+                frais_agence_1_mois: location?.frais_agence_1_mois ?? null,
+                caution_totale: location?.caution_totale ?? null,
+              },
             });
           }
           break;

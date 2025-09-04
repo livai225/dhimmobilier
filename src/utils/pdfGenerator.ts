@@ -188,6 +188,15 @@ export const generateReceiptPDF = (receipt: ReceiptWithDetails, logoDataUrl?: st
       addLine('SOLDE DÛ', (receipt as any).remaining_balance);
       doc.setFont("helvetica", "normal");
     }
+  } else if (receipt.type_operation === 'caution_location') {
+    addLine('Caution totale requise', (receipt as any).caution_totale);
+    addLine('Paiements cumulés', (receipt as any).caution_total_paye);
+    addLine('Ce paiement', Number(receipt.montant_total));
+    if ((receipt as any).remaining_balance !== undefined) {
+      doc.setFont("helvetica", "bold");
+      addLine('SOLDE CAUTION RESTANT', (receipt as any).remaining_balance);
+      doc.setFont("helvetica", "normal");
+    }
   }
 
   // Historique des paiements
