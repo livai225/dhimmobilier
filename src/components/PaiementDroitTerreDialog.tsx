@@ -14,7 +14,7 @@ import { toast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { CreditCard, FileText, Calculator } from "lucide-react";
-import { ReceiptGenerator } from "@/utils/receiptGenerator";
+
 
 interface PaiementDroitTerreDialogProps {
   open: boolean;
@@ -93,18 +93,11 @@ export function PaiementDroitTerreDialog({ open, onOpenChange, souscription, onS
       });
       if (error) throw error;
 
-      // 2) Générer le reçu
-      const receipt = await ReceiptGenerator.createReceipt({
-        clientId: souscription.client_id,
-        referenceId: paiementId as unknown as string,
-        typeOperation: "droit_terre",
-        montantTotal: montantNum,
-        datePaiement: formData.date_paiement
-      });
+      // Le reçu sera généré automatiquement par trigger
 
       toast({
         title: "Succès",
-        description: `Paiement enregistré avec succès. Reçu généré: ${receipt.numero}`,
+        description: `Paiement enregistré avec succès.`,
       });
 
       setFormData({

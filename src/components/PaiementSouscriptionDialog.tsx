@@ -24,7 +24,7 @@ import { Combobox } from "@/components/ui/combobox";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { ReceiptGenerator } from "@/utils/receiptGenerator";
+
 
 const paiementSchema = z.object({
   montant: z.number().min(0.01, "Le montant doit être supérieur à 0"),
@@ -77,18 +77,9 @@ export function PaiementSouscriptionDialog({
       });
       if (error) throw error;
 
-      // 2) Génération du reçu
-      const receipt = await ReceiptGenerator.createReceipt({
-        clientId: souscription.client_id,
-        referenceId: paiementId as unknown as string,
-        typeOperation: "apport_souscription",
-        montantTotal: data.montant,
-        datePaiement: data.date_paiement
-      });
-
-      return { paiementId, receipt };
+      return { paiementId };
     },
-    onSuccess: ({ receipt }) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["souscriptions"] });
       queryClient.invalidateQueries({ queryKey: ["paiements"] });
       queryClient.invalidateQueries({ queryKey: ["cash_transactions"] });
@@ -97,7 +88,7 @@ export function PaiementSouscriptionDialog({
       form.reset();
       toast({
         title: "Succès",
-        description: `Paiement enregistré avec succès. Reçu généré: ${receipt.numero}`,
+        description: "Paiement enregistré et reçu généré.",
       });
       onSuccess();
     },

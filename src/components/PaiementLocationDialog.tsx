@@ -36,9 +36,9 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
     queryFn: async () => {
       const { data, error } = await supabase
         .from("recus")
-        .select("periode_debut")
-        .eq("reference_id", location.id)
+        .select("periode_debut, meta")
         .eq("type_operation", "location")
+        .eq("meta->>objet_id", location.id)
         .not("periode_debut", "is", null);
       
       if (error) throw error;
@@ -69,14 +69,6 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
     return months;
   };
 
-  const generateReceiptNumber = () => {
-    const now = new Date();
-    const year = now.getFullYear().toString().slice(-2);
-    const month = (now.getMonth() + 1).toString().padStart(2, '0');
-    const day = now.getDate().toString().padStart(2, '0');
-    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-    return `REC-LOC-${year}${month}${day}-${random}`;
-  };
 
   const createPaiementMutation = useMutation({
     mutationFn: async () => {
@@ -100,7 +92,7 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
       });
       if (rpcError) throw rpcError;
 
-      // 2) Générer le reçu - utiliser l'ID du paiement, pas de la location
+      // Mettre à jour le reçu créé par le trigger pour inclure la période (mois)
       const { data: paiementData, error: paiementError } = await supabase
         .from("paiements_locations")
         .select("id")
@@ -110,26 +102,18 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
         .single();
       if (paiementError) throw paiementError;
 
-      const receiptNumber = generateReceiptNumber();
-      const { data: recu, error: recuError } = await supabase
+      await supabase
         .from("recus")
-        .insert({
-          numero: receiptNumber,
-          client_id: location.client_id,
-          reference_id: paiementData.id, // ID du paiement spécifique
-          type_operation: "location",
-          montant_total: amount,
+        .update({
           periode_debut: selectedMonth ? (selectedMonth + "-01") : null,
           periode_fin: selectedMonth ? (selectedMonth + "-01") : null,
-          date_generation: datePaiement.toISOString().split('T')[0],
         })
-        .select()
-        .single();
-      if (recuError) throw recuError;
+        .eq("type_operation", "location")
+        .eq("reference_id", paiementData.id);
 
-      return { paiementId, recu };
+      return { paiementId };
     },
-    onSuccess: ({ recu }) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["locations"] });
       queryClient.invalidateQueries({ queryKey: ["paid_months", location.id] });
       queryClient.invalidateQueries({ queryKey: ["cash_transactions"] });
@@ -137,7 +121,7 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
 
       toast({
         title: "Paiement enregistré",
-        description: `Paiement enregistré avec succès. Reçu généré: ${recu.numero}`,
+        description: `Paiement enregistré avec succès.`,
       });
       onSuccess();
     },

@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
-import { ReceiptGenerator } from "@/utils/receiptGenerator";
+
 
 interface LocationFormProps {
   onClose: () => void;
@@ -123,22 +123,13 @@ export function LocationForm({ onClose, onSuccess }: LocationFormProps) {
         throw new Error(`Erreur lors de l'enregistrement de la caution: ${cashError.message}`);
       }
 
-      // Generate caution receipt automatically
-      const receipt = await ReceiptGenerator.createReceipt({
-        clientId: locationData.client_id,
-        referenceId: location.id,
-        typeOperation: "caution_location",
-        montantTotal: locationData.caution_totale,
-        periodeDebut: locationData.date_debut,
-        datePaiement: locationData.date_debut
-      });
+      // Le reçu de caution sera généré automatiquement par trigger sur cash_transactions
 
-      return { location, receipt, cashTransaction };
     },
     onSuccess: ({ receipt }) => {
       toast({
         title: "Location créée",
-        description: `Location créée avec succès. Reçu de caution généré: ${receipt.numero}`,
+        description: `Location créée avec succès.`,
       });
       onSuccess();
     },

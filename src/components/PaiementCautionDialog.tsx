@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/form";
 import { Combobox } from "@/components/ui/combobox";
 import { useToast } from "@/hooks/use-toast";
-import { ReceiptGenerator } from "@/utils/receiptGenerator";
+
 import BalanceBadge from "@/components/BalanceBadge";
 
 const paiementSchema = z.object({
@@ -92,18 +92,10 @@ export function PaiementCautionDialog({
       );
       if (transactionError) throw transactionError;
 
-      // 3) Generate receipt - référencer l'ID de la transaction de caisse
-      const receipt = await ReceiptGenerator.createReceipt({
-        clientId: location.client_id,
-        referenceId: transactionId as string, // ID de la transaction de caisse
-        typeOperation: "caution_location",
-        montantTotal: data.montant,
-        datePaiement: data.date_paiement,
-      });
-
-      return { transactionId, receipt };
+      // Le reçu sera généré automatiquement par trigger
+      return { transactionId };
     },
-    onSuccess: ({ receipt }) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["locations"] });
       queryClient.invalidateQueries({ queryKey: ["cash_transactions"] });
       queryClient.invalidateQueries({ queryKey: ["cash_balance"] });
@@ -111,7 +103,7 @@ export function PaiementCautionDialog({
       form.reset();
       toast({
         title: "Succès",
-        description: `Paiement de caution enregistré avec succès. Reçu généré: ${receipt.numero}`,
+        description: `Paiement de caution enregistré avec succès.`,
       });
       onSuccess();
     },

@@ -36,7 +36,7 @@ import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { AlertTriangle } from "lucide-react";
-import { ReceiptGenerator } from "@/utils/receiptGenerator";
+
 
 const paiementSchema = z.object({
   montant: z.number().min(0.01, "Le montant doit être supérieur à 0"),
@@ -103,27 +103,10 @@ export function PaiementFactureDialog({
       });
       if (error) throw error;
 
-      // 2) Récupérer l'ID du paiement facture créé et générer le reçu
-      const { data: paiementData, error: paiementDataError } = await supabase
-        .from("paiements_factures")
-        .select("id")
-        .eq("facture_id", facture.id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single();
-      if (paiementDataError) throw paiementDataError;
-
-      const receipt = await ReceiptGenerator.createReceipt({
-        clientId: "00000000-0000-0000-0000-000000000000",
-        referenceId: paiementData.id, // ID du paiement de facture spécifique
-        typeOperation: "paiement_facture",
-        montantTotal: data.montant,
-        datePaiement: data.date_paiement
-      });
-
-      return { paiementId, receipt };
+      // Le reçu sera généré automatiquement par trigger
+      return { paiementId };
     },
-    onSuccess: ({ receipt }) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["factures"] });
       queryClient.invalidateQueries({ queryKey: ["paiements"] });
       queryClient.invalidateQueries({ queryKey: ["recus"] });
@@ -133,7 +116,7 @@ export function PaiementFactureDialog({
       form.reset();
       toast({
         title: "Succès",
-        description: `Paiement enregistré avec succès. Reçu généré: ${receipt.numero}`,
+        description: `Paiement enregistré avec succès.`,
       });
       onSuccess();
     },

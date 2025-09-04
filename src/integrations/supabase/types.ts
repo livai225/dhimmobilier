@@ -644,12 +644,31 @@ export type Database = {
           },
         ]
       }
+      receipt_counters: {
+        Row: {
+          date_key: string
+          last_number: number
+          prefix: string
+        }
+        Insert: {
+          date_key: string
+          last_number?: number
+          prefix: string
+        }
+        Update: {
+          date_key?: string
+          last_number?: number
+          prefix?: string
+        }
+        Relationships: []
+      }
       recus: {
         Row: {
-          client_id: string
+          client_id: string | null
           created_at: string
           date_generation: string
           id: string
+          meta: Json | null
           montant_total: number
           numero: string
           periode_debut: string | null
@@ -658,10 +677,11 @@ export type Database = {
           type_operation: string
         }
         Insert: {
-          client_id: string
+          client_id?: string | null
           created_at?: string
           date_generation?: string
           id?: string
+          meta?: Json | null
           montant_total: number
           numero: string
           periode_debut?: string | null
@@ -670,10 +690,11 @@ export type Database = {
           type_operation: string
         }
         Update: {
-          client_id?: string
+          client_id?: string | null
           created_at?: string
           date_generation?: string
           id?: string
+          meta?: Json | null
           montant_total?: number
           numero?: string
           periode_debut?: string | null
@@ -856,6 +877,10 @@ export type Database = {
       }
       generate_facture_number: {
         Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      generate_receipt_number: {
+        Args: { p_type_operation: string }
         Returns: string
       }
       get_agent_statistics: {

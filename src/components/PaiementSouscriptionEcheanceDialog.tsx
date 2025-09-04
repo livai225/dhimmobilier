@@ -27,7 +27,7 @@ import { useToast } from "@/hooks/use-toast";
 import { CreditCard, User } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { ReceiptGenerator } from "@/utils/receiptGenerator";
+
 
 const paiementSchema = z.object({
   montant: z.string().min(1, "Le montant est requis"),
@@ -88,34 +88,14 @@ export function PaiementSouscriptionEcheanceDialog({
       });
       if (rpcError) throw rpcError;
 
-      // 2) Générer et enregistrer le reçu
-      const receiptData = {
-        numero: `PAY-${Date.now()}`,
-        client_id: souscription.client_id,
-        type_operation: "paiement_souscription",
-        montant_total: montantPaiement,
-        reference_id: paiementId as unknown as string,
-        periode_debut: data.date_paiement,
-        periode_fin: data.date_paiement,
-      };
-      const { error: receiptError } = await supabase
-        .from("recus")
-        .insert(receiptData);
-      if (receiptError) throw receiptError;
-
-      return { paiementId, receipt: receiptData };
+      return { paiementId };
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["souscriptions"] });
       queryClient.invalidateQueries({ queryKey: ["paiements_souscription"] });
       queryClient.invalidateQueries({ queryKey: ["paiements_souscription", souscription?.id] });
       queryClient.invalidateQueries({ queryKey: ["cash_transactions"] });
       queryClient.invalidateQueries({ queryKey: ["cash_balance"] });
-      
-      console.log("Paiement effectué - invalidation des queries:", {
-        souscriptionId: souscription?.id,
-        montant: (data as any).receipt.montant_total
-      });
       
       toast({
         title: "Paiement enregistré",
@@ -125,9 +105,6 @@ export function PaiementSouscriptionEcheanceDialog({
       form.reset();
       onOpenChange(false);
       onSuccess?.();
-
-      // Générer le PDF du reçu
-      ReceiptGenerator.generateSouscriptionPaymentReceipt((data as any).receipt, souscription);
     },
     onError: (error: any) => {
       console.error("Erreur lors du paiement:", error);
