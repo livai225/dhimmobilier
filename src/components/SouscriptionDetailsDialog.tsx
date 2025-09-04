@@ -9,6 +9,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { User, MapPin, CreditCard, Calendar, FileText, Printer, Coins } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
+import { useState } from "react";
+import { ReceiptDetailsDialog } from "./ReceiptDetailsDialog";
+import { ReceiptWithDetails } from "@/hooks/useReceipts";
 
 interface SouscriptionDetailsDialogProps {
   open: boolean;
@@ -27,6 +30,8 @@ export function SouscriptionDetailsDialog({
   onNewPayment,
   onNewDroitTerrePayment
 }: SouscriptionDetailsDialogProps) {
+  const [selectedReceipt, setSelectedReceipt] = useState<ReceiptWithDetails | null>(null);
+  const [isReceiptDialogOpen, setIsReceiptDialogOpen] = useState(false);
   const { data: client } = useQuery({
     queryKey: ["client", souscription?.client_id],
     queryFn: async () => {
@@ -117,6 +122,41 @@ export function SouscriptionDetailsDialog({
       case "droit_terre": return "Droit de terre";
       case "termine": return "Terminé";
       default: return phase;
+    }
+  };
+
+  const handleViewReceipt = async (paiementId: string) => {
+    try {
+      const { data: receipt, error } = await supabase
+        .from("recus")
+        .select("*")
+        .eq("reference_id", paiementId)
+        .eq("type_operation", "apport_souscription")
+        .single();
+
+      if (error || !receipt) {
+        console.error("Reçu non trouvé pour le paiement:", paiementId);
+        return;
+      }
+
+      // Enrichir le reçu avec les détails nécessaires
+      const enrichedReceipt: ReceiptWithDetails = {
+        ...receipt,
+        client: {
+          nom: client?.nom || "",
+          prenom: client?.prenom || "",
+          email: client?.email || null,
+          telephone_principal: client?.telephone_principal || null,
+        },
+        property_name: propriete?.nom || null,
+        property_address: propriete?.adresse || null,
+        souscription_prix_total: souscription?.prix_total || 0,
+      };
+
+      setSelectedReceipt(enrichedReceipt);
+      setIsReceiptDialogOpen(true);
+    } catch (error) {
+      console.error("Erreur lors de la récupération du reçu:", error);
     }
   };
 
@@ -415,7 +455,11 @@ export function SouscriptionDetailsDialog({
                             <Badge variant="outline">Paiement</Badge>
                           </TableCell>
                           <TableCell>
-                            <Button variant="ghost" size="sm">
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => handleViewReceipt(paiement.id)}
+                            >
                               <Printer className="h-3 w-3" />
                             </Button>
                           </TableCell>
@@ -444,6 +488,12 @@ export function SouscriptionDetailsDialog({
           </div>
         </div>
       </DialogContent>
+
+      <ReceiptDetailsDialog
+        receipt={selectedReceipt}
+        open={isReceiptDialogOpen}
+        onOpenChange={setIsReceiptDialogOpen}
+      />
     </Dialog>
   );
 }
