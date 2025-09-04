@@ -124,9 +124,9 @@ export function LocationForm({ onClose, onSuccess }: LocationFormProps) {
       }
 
       // Le reçu de caution sera généré automatiquement par trigger sur cash_transactions
-
+      return { location, cashTransaction };
     },
-    onSuccess: ({ receipt }) => {
+    onSuccess: () => {
       toast({
         title: "Location créée",
         description: `Location créée avec succès.`,

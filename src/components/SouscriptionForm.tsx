@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { format } from "date-fns";
-import { ReceiptGenerator } from "@/utils/receiptGenerator";
+
 import {
   Form,
   FormControl,
@@ -186,30 +186,21 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
             throw new Error("Erreur lors de l'enregistrement du paiement et de la déduction de caisse");
           }
 
-          receipt = await ReceiptGenerator.createReceipt({
-            clientId: processedData.client_id,
-            referenceId: result.data.id,
-            typeOperation: operationType,
-            montantTotal: apportAmount,
-            periodeDebut: processedData.date_debut,
-            datePaiement: processedData.date_debut,
-          });
+          // Le reçu sera généré automatiquement par trigger
         }
       }
 
       if (result.error) throw result.error;
       return { result, receipt };
     },
-    onSuccess: ({ receipt }) => {
+    onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ["souscriptions"] });
         queryClient.invalidateQueries({ queryKey: ["cash_transactions"] });
         queryClient.invalidateQueries({ queryKey: ["cash_balance"] });
       queryClient.invalidateQueries({ queryKey: ["recus"] });
       const message = souscription 
         ? "Souscription modifiée avec succès" 
-        : receipt 
-          ? `Souscription créée avec succès. Reçu généré: ${receipt.numero}`
-          : "Souscription créée avec succès";
+        : "Souscription créée avec succès";
 
       toast({
         title: "Succès",
