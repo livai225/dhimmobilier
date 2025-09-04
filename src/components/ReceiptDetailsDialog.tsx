@@ -136,6 +136,25 @@ export function ReceiptDetailsDialog({
               </div>
             </div>
 
+            {/* Propriété concernée */}
+            {receipt.property_name && receipt.type_operation !== "versement_agent" && (
+              <div>
+                <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-2">
+                  Propriété concernée
+                </h3>
+                <div className="space-y-1">
+                  <p className="font-medium text-primary">{receipt.property_name}</p>
+                  {receipt.property_address && (
+                    <p className="text-sm text-muted-foreground">{receipt.property_address}</p>
+                  )}
+                  {receipt.type_bien && (
+                    <p className="text-sm text-muted-foreground">Type: {receipt.type_bien}</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Context and Financial Summary */}
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -191,6 +210,19 @@ export function ReceiptDetailsDialog({
                 Récapitulatif financier
               </h3>
               <div className="space-y-2">
+                {/* Statut du paiement */}
+                {receipt.type_operation !== 'versement_agent' && (
+                  <div className="flex justify-between items-center p-2 rounded-lg bg-muted/50 border-l-4 border-l-primary">
+                    <span className="text-sm font-medium">Statut du paiement:</span>
+                    <Badge 
+                      variant={receipt.is_payment_complete ? "default" : "secondary"}
+                      className={receipt.is_payment_complete ? "bg-green-500 text-white" : "bg-orange-500 text-white"}
+                    >
+                      {receipt.is_payment_complete ? "COMPLET" : "PARTIEL"}
+                    </Badge>
+                  </div>
+                )}
+
                 {receipt.type_operation === 'apport_souscription' && (
                   <>
                     {receipt.souscription_prix_total && (
@@ -209,10 +241,10 @@ export function ReceiptDetailsDialog({
                       <span>Ce paiement:</span>
                       <span className="font-medium text-primary">{receipt.montant_total.toLocaleString("fr-FR")} FCFA</span>
                     </div>
-                    {receipt.souscription_solde_restant && (
-                      <div className="flex justify-between text-sm border-t pt-2">
-                        <span>Solde restant:</span>
-                        <span className="font-medium">{receipt.souscription_solde_restant.toLocaleString("fr-FR")} FCFA</span>
+                    {(receipt.remaining_balance !== undefined && receipt.remaining_balance !== null) && (
+                      <div className={`flex justify-between text-sm border-t pt-2 ${receipt.is_payment_complete ? 'text-green-600' : 'text-orange-600'}`}>
+                        <span className="font-medium">Solde restant:</span>
+                        <span className="font-bold">{receipt.remaining_balance.toLocaleString("fr-FR")} FCFA</span>
                       </div>
                     )}
                   </>
@@ -235,6 +267,12 @@ export function ReceiptDetailsDialog({
                       <span>Ce paiement:</span>
                       <span className="font-medium text-primary">{receipt.montant_total.toLocaleString("fr-FR")} FCFA</span>
                     </div>
+                    {(receipt.remaining_balance !== undefined && receipt.remaining_balance !== null) && (
+                      <div className={`flex justify-between text-sm border-t pt-2 ${receipt.is_payment_complete ? 'text-green-600' : 'text-orange-600'}`}>
+                        <span className="font-medium">Dette restante:</span>
+                        <span className="font-bold">{receipt.remaining_balance.toLocaleString("fr-FR")} FCFA</span>
+                      </div>
+                    )}
                   </>
                 )}
                 {receipt.type_operation === 'droit_terre' && (
@@ -255,6 +293,12 @@ export function ReceiptDetailsDialog({
                       <span>Ce paiement:</span>
                       <span className="font-medium text-primary">{receipt.montant_total.toLocaleString("fr-FR")} FCFA</span>
                     </div>
+                    {(receipt.remaining_balance !== undefined && receipt.remaining_balance !== null) && (
+                      <div className={`flex justify-between text-sm border-t pt-2 ${receipt.is_payment_complete ? 'text-green-600' : 'text-orange-600'}`}>
+                        <span className="font-medium">Solde dû:</span>
+                        <span className="font-bold">{receipt.remaining_balance.toLocaleString("fr-FR")} FCFA</span>
+                      </div>
+                    )}
                   </>
                 )}
               </div>
@@ -330,7 +374,6 @@ export function ReceiptDetailsDialog({
               </div>
             </div>
           )}
-          </div>
 
           {/* Amount */}
           <div className="bg-muted p-4 rounded-lg text-center">

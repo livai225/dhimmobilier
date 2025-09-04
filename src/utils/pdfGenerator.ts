@@ -25,23 +25,50 @@ export const generateReceiptPDF = (receipt: ReceiptWithDetails, logoDataUrl?: st
   doc.text(`Date: ${new Date(receipt.date_generation).toLocaleDateString("fr-FR")}`, 140, 50);
   
   // Client info
+  let yPos = 70;
   doc.setFont("helvetica", "bold");
-  doc.text("INFORMATIONS CLIENT", 20, 70);
+  doc.text("INFORMATIONS CLIENT", 20, yPos);
   doc.setFont("helvetica", "normal");
+  yPos += 15;
   
   const clientName = `${receipt.client?.nom || ""} ${receipt.client?.prenom || ""}`.trim();
-  doc.text(`Nom: ${clientName}`, 20, 85);
+  doc.text(`Nom: ${clientName}`, 20, yPos);
+  yPos += 10;
   
   if (receipt.client?.email) {
-    doc.text(`Email: ${receipt.client.email}`, 20, 95);
+    doc.text(`Email: ${receipt.client.email}`, 20, yPos);
+    yPos += 10;
   }
   
   if (receipt.client?.telephone_principal) {
-    doc.text(`Téléphone: ${receipt.client.telephone_principal}`, 20, 105);
+    doc.text(`Téléphone: ${receipt.client.telephone_principal}`, 20, yPos);
+    yPos += 10;
+  }
+
+  // Propriété concernée
+  if (receipt.property_name && receipt.type_operation !== "versement_agent") {
+    yPos += 5;
+    doc.setFont("helvetica", "bold");
+    doc.text("PROPRIÉTÉ CONCERNÉE", 20, yPos);
+    doc.setFont("helvetica", "normal");
+    yPos += 15;
+    
+    doc.text(`Propriété: ${receipt.property_name}`, 20, yPos);
+    yPos += 10;
+    
+    if (receipt.property_address) {
+      doc.text(`Adresse: ${receipt.property_address}`, 20, yPos);
+      yPos += 10;
+    }
+    
+    if (receipt.type_bien) {
+      doc.text(`Type: ${receipt.type_bien}`, 20, yPos);
+      yPos += 10;
+    }
   }
   
   // Context info  
-  let yPos = 125;
+  yPos += 5;
   doc.setFont("helvetica", "bold");
   doc.text("CONTEXTE DE L'OPÉRATION", 20, yPos);
   doc.setFont("helvetica", "normal");
@@ -102,6 +129,16 @@ export const generateReceiptPDF = (receipt: ReceiptWithDetails, logoDataUrl?: st
   doc.setFontSize(11);
   yPos += 10;
 
+  // Statut du paiement
+  if (receipt.type_operation !== 'versement_agent') {
+    const isComplete = receipt.is_payment_complete;
+    const statusText = isComplete ? "PAIEMENT COMPLET" : "PAIEMENT PARTIEL";
+    doc.setFont("helvetica", "bold");
+    doc.text(`STATUT: ${statusText}`, 20, yPos);
+    doc.setFont("helvetica", "normal");
+    yPos += 10;
+  }
+
   const addLine = (label: string, value?: number | null) => {
     if (value !== undefined && value !== null && !isNaN(Number(value))) {
       doc.text(`${label}: ${formatCurrency(Number(value))}`, 20, yPos);
@@ -127,18 +164,30 @@ export const generateReceiptPDF = (receipt: ReceiptWithDetails, logoDataUrl?: st
 
     addLine('Paiements cumulés', (receipt as any).location_total_paye);
     addLine('Ce paiement', Number(receipt.montant_total));
-    addLine('Reste à payer', (receipt as any).location_dette_restante);
+    if ((receipt as any).remaining_balance !== undefined) {
+      doc.setFont("helvetica", "bold");
+      addLine('DETTE RESTANTE', (receipt as any).remaining_balance);
+      doc.setFont("helvetica", "normal");
+    }
   } else if (receipt.type_operation === 'apport_souscription') {
     addLine('Prix total', (receipt as any).souscription_prix_total);
     addLine('Apport initial', (receipt as any).souscription_apport_initial);
     addLine('Paiements cumulés', (receipt as any).souscription_total_paye);
     addLine('Ce paiement', Number(receipt.montant_total));
-    addLine('Solde restant', (receipt as any).souscription_solde_restant);
+    if ((receipt as any).remaining_balance !== undefined) {
+      doc.setFont("helvetica", "bold");
+      addLine('SOLDE RESTANT', (receipt as any).remaining_balance);
+      doc.setFont("helvetica", "normal");
+    }
   } else if (receipt.type_operation === 'droit_terre') {
     addLine('Mensualité droit de terre', (receipt as any).droit_terre_mensuel);
     addLine('Paiements cumulés', (receipt as any).droit_terre_total_paye);
     addLine('Ce paiement', Number(receipt.montant_total));
-    addLine('Solde restant', (receipt as any).droit_terre_solde_restant);
+    if ((receipt as any).remaining_balance !== undefined) {
+      doc.setFont("helvetica", "bold");
+      addLine('SOLDE DÛ', (receipt as any).remaining_balance);
+      doc.setFont("helvetica", "normal");
+    }
   }
 
   // Historique des paiements

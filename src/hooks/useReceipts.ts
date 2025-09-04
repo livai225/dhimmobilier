@@ -17,8 +17,11 @@ export interface ReceiptWithDetails {
 
   // Nouvelles données contextuelles pour la traçabilité
   property_name?: string | null;
+  property_address?: string | null;
   type_bien?: string | null;
   phase_souscription?: string | null;
+  is_payment_complete?: boolean;
+  remaining_balance?: number | null;
   payment_history?: Array<{
     id: string;
     date: string;
@@ -143,7 +146,7 @@ const enrichedReceipts = await Promise.all(
               loyer_avance_2_mois, 
               frais_agence_1_mois, 
               caution_totale,
-              proprietes!inner(nom, zone)
+              proprietes!inner(nom, zone, adresse)
             `)
             .eq('id', receipt.reference_id)
             .single();
@@ -167,13 +170,17 @@ const enrichedReceipts = await Promise.all(
             is_current: pay.id === receipt.reference_id
           }));
 
+          const remaining_balance = location?.dette_totale ?? 0;
           Object.assign(extras, {
             details_type: 'location',
             property_name: location?.proprietes?.nom ?? null,
+            property_address: location?.proprietes?.adresse ?? null,
+            is_payment_complete: remaining_balance <= 0,
+            remaining_balance,
             payment_history,
             loyer_mensuel: location?.loyer_mensuel ?? null,
             location_total_paye: total_paye,
-            location_dette_restante: location?.dette_totale ?? null,
+            location_dette_restante: remaining_balance,
             location_avances: {
               garantie_2_mois: location?.garantie_2_mois ?? null,
               loyer_avance_2_mois: location?.loyer_avance_2_mois ?? null,
@@ -204,7 +211,7 @@ const enrichedReceipts = await Promise.all(
                 montant_mensuel,
                 type_bien,
                 phase_actuelle,
-                proprietes!inner(nom, zone)
+                proprietes!inner(nom, zone, adresse)
               `)
               .eq('id', souscriptionId)
               .single();
@@ -228,16 +235,20 @@ const enrichedReceipts = await Promise.all(
               is_current: pay.id === receipt.reference_id
             }));
 
+            const remaining_balance = sous?.solde_restant ?? 0;
             Object.assign(extras, {
               details_type: 'souscription',
               property_name: sous?.proprietes?.nom ?? null,
+              property_address: sous?.proprietes?.adresse ?? null,
               type_bien: sous?.type_bien ?? null,
               phase_souscription: sous?.phase_actuelle ?? null,
+              is_payment_complete: remaining_balance <= 0,
+              remaining_balance,
               payment_history,
               souscription_prix_total: sous?.prix_total ?? null,
               souscription_apport_initial: sous?.apport_initial ?? null,
               souscription_total_paye: total_paye,
-              souscription_solde_restant: sous?.solde_restant ?? null,
+              souscription_solde_restant: remaining_balance,
               montant_mensuel: sous?.montant_mensuel ?? null,
             });
           }
@@ -260,7 +271,7 @@ const enrichedReceipts = await Promise.all(
               .select(`
                 montant_droit_terre_mensuel,
                 type_bien,
-                proprietes!inner(nom, zone)
+                proprietes!inner(nom, zone, adresse)
               `)
               .eq('id', souscriptionId)
               .single();
@@ -298,11 +309,15 @@ const enrichedReceipts = await Promise.all(
               solde_droit_terre = (solde as unknown as number) ?? null;
             } catch {}
 
+            const remaining_balance = solde_droit_terre ?? 0;
             Object.assign(extras, {
               details_type: 'droit_terre',
               property_name: sous?.proprietes?.nom ?? null,
+              property_address: sous?.proprietes?.adresse ?? null,
               type_bien: sous?.type_bien ?? null,
               phase_souscription: 'droit_terre',
+              is_payment_complete: remaining_balance <= 0,
+              remaining_balance,
               payment_history,
               echeances: echeances?.map(e => ({
                 numero: e.numero_echeance,
@@ -313,7 +328,7 @@ const enrichedReceipts = await Promise.all(
               })) ?? [],
               droit_terre_mensuel: sous?.montant_droit_terre_mensuel ?? null,
               droit_terre_total_paye: total_paye,
-              droit_terre_solde_restant: solde_droit_terre,
+              droit_terre_solde_restant: remaining_balance,
             });
           }
           break;
