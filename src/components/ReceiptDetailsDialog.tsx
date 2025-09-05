@@ -293,16 +293,6 @@ export function ReceiptDetailsDialog({
                       <span>Montant de ce versement:</span>
                       <span className="font-medium text-primary">{receipt.montant_total.toLocaleString("fr-FR")} FCFA</span>
                     </div>
-                    {(receipt.remaining_balance !== undefined && receipt.remaining_balance !== null) && (
-                      <div className={`flex justify-between text-sm border-t pt-2 ${receipt.is_payment_complete ? 'text-green-600' : 'text-orange-600'}`}>
-                        <span className="font-medium">Solde droit de terre restant:</span>
-                        <span className="font-bold">{receipt.remaining_balance.toLocaleString("fr-FR")} FCFA</span>
-                      </div>
-                    )}
-                    <div className="mt-2 p-2 bg-blue-50 rounded text-xs text-blue-700">
-                      <div className="font-medium mb-1">ℹ️ Information:</div>
-                      <div>Les droits de terre peuvent être payés librement, pas forcément chaque mois. Le montant affiché correspond au montant de référence mensuel.</div>
-                    </div>
                   </>
                 )}
                 {receipt.type_operation === 'caution_location' && (
