@@ -100,11 +100,13 @@ export function ReceiptDetailsDialog({
             </p>
           </div>
 
-          {/* Client Info or Agent Info */}
+          {/* Client Info, Agent Info, or Supplier Info */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-2">
-                {receipt.type_operation === "versement_agent" ? "Informations Agent" : "Informations Client"}
+                {receipt.type_operation === "versement_agent" ? "Informations Agent" : 
+                 receipt.type_operation === "paiement_facture" ? "Informations Fournisseur" : 
+                 "Informations Client"}
               </h3>
               <div className="space-y-1">
                 {receipt.type_operation === "versement_agent" && agentDetails?.agents_recouvrement ? (
@@ -120,6 +122,22 @@ export function ReceiptDetailsDialog({
                     )}
                     {agentDetails.agents_recouvrement.telephone && (
                       <p className="text-sm text-muted-foreground">{agentDetails.agents_recouvrement.telephone}</p>
+                    )}
+                  </>
+                ) : receipt.type_operation === "paiement_facture" ? (
+                  <>
+                    <p className="font-medium">{(receipt as any).meta?.fournisseur_nom || 'N/A'}</p>
+                    {(receipt as any).meta?.fournisseur_contact && (
+                      <p className="text-sm text-muted-foreground">Contact: {(receipt as any).meta.fournisseur_contact}</p>
+                    )}
+                    {(receipt as any).meta?.fournisseur_telephone && (
+                      <p className="text-sm text-muted-foreground">{(receipt as any).meta.fournisseur_telephone}</p>
+                    )}
+                    {(receipt as any).meta?.fournisseur_email && (
+                      <p className="text-sm text-muted-foreground">{(receipt as any).meta.fournisseur_email}</p>
+                    )}
+                    {(receipt as any).meta?.facture_numero && (
+                      <p className="text-sm text-muted-foreground">Facture N°: {(receipt as any).meta.facture_numero}</p>
                     )}
                   </>
                 ) : (
