@@ -121,7 +121,8 @@ export default function Caisse() {
     } else {
       // Caisse entreprise: company expenses only
       filtered = allTransactions.filter((t: any) => 
-        t.type_operation === "depense_entreprise"
+        t.type_operation === "depense_entreprise" ||
+        t.type_operation === "autre"
       );
     }
     
