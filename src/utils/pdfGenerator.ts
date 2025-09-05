@@ -50,12 +50,12 @@ export const generateReceiptPDF = (receipt: ReceiptWithDetails, logoDataUrl?: st
   doc.text(`Date: ${new Date(receipt.date_generation).toLocaleDateString("fr-FR")}`, 140, 80);
   doc.setTextColor('#000000'); // Reset to black
   
-  // Layout en deux colonnes comme la fiche détails
-  let yPos = 90;
+  // Layout en deux colonnes comme la fiche détails avec plus d'espacement
+  let yPos = 95;
   const leftColumnX = 15;
   const rightColumnX = 110;
   const columnWidth = 85;
-  const cardHeight = 45;
+  const cardHeight = 50; // Augmenté pour plus d'espace
   
   // Carte 1: Informations Client/Agent/Fournisseur
   addCard(leftColumnX, yPos, columnWidth, cardHeight);
@@ -66,21 +66,21 @@ export const generateReceiptPDF = (receipt: ReceiptWithDetails, logoDataUrl?: st
   const headerText = receipt.type_operation === "versement_agent" ? "INFORMATIONS AGENT" : 
                     receipt.type_operation === "paiement_facture" ? "INFORMATIONS FOURNISSEUR" : 
                     "INFORMATIONS CLIENT";
-  doc.text(headerText, leftColumnX + 3, yPos + 8);
+  doc.text(headerText, leftColumnX + 3, yPos + 10);
   
   doc.setTextColor('#000000');
   doc.setFont("helvetica", "normal");
   doc.setFontSize(11);
   
   const clientName = `${receipt.client?.nom || ""} ${receipt.client?.prenom || ""}`.trim();
-  doc.text(clientName, leftColumnX + 3, yPos + 16);
+  doc.text(clientName, leftColumnX + 3, yPos + 20);
   
-  let detailY = yPos + 24;
+  let detailY = yPos + 28;
   if (receipt.client?.email) {
     doc.setFontSize(9);
     doc.setTextColor('#6b7280');
     doc.text(receipt.client.email, leftColumnX + 3, detailY);
-    detailY += 6;
+    detailY += 8;
   }
   
   if (receipt.client?.telephone_principal) {
@@ -95,19 +95,19 @@ export const generateReceiptPDF = (receipt: ReceiptWithDetails, logoDataUrl?: st
     doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
     doc.setTextColor('#6b7280');
-    doc.text("PROPRIÉTÉ CONCERNÉE", rightColumnX + 3, yPos + 8);
+    doc.text("PROPRIÉTÉ CONCERNÉE", rightColumnX + 3, yPos + 10);
     
     doc.setTextColor(primaryColor);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
-    doc.text(receipt.property_name, rightColumnX + 3, yPos + 16);
+    doc.text(receipt.property_name, rightColumnX + 3, yPos + 20);
     
-    let propDetailY = yPos + 24;
+    let propDetailY = yPos + 28;
     if (receipt.property_address) {
       doc.setFontSize(9);
       doc.setTextColor('#6b7280');
       doc.text(receipt.property_address, rightColumnX + 3, propDetailY);
-      propDetailY += 6;
+      propDetailY += 8;
     }
     
     if (receipt.type_bien) {
@@ -117,15 +117,16 @@ export const generateReceiptPDF = (receipt: ReceiptWithDetails, logoDataUrl?: st
     }
   }
   
-  // Deuxième ligne de cartes
-  yPos += 55;
+  // Deuxième ligne de cartes avec plus d'espacement
+  yPos += 65; // Plus d'espace entre les lignes
   
-  // Carte 3: Contexte de l'opération
-  addCard(leftColumnX, yPos, columnWidth, cardHeight);
+  // Carte 3: Contexte de l'opération (plus grande)
+  const contextCardHeight = 55;
+  addCard(leftColumnX, yPos, columnWidth, contextCardHeight);
   doc.setFontSize(10);
   doc.setFont("helvetica", "bold");
   doc.setTextColor('#6b7280');
-  doc.text("CONTEXTE DE L'OPÉRATION", leftColumnX + 3, yPos + 8);
+  doc.text("CONTEXTE DE L'OPÉRATION", leftColumnX + 3, yPos + 10);
   
   // Badge coloré pour le type d'opération
   const operationColors: Record<string, string> = {
@@ -149,16 +150,16 @@ export const generateReceiptPDF = (receipt: ReceiptWithDetails, logoDataUrl?: st
   const baseLabel = operationTypes[receipt.type_operation] || receipt.type_operation;
   const operationColor = operationColors[receipt.type_operation] || '#6b7280';
   
-  // Badge avec la couleur appropriée
+  // Badge avec la couleur appropriée (plus grand)
   doc.setFillColor(operationColor);
-  doc.roundedRect(leftColumnX + 3, yPos + 12, 75, 8, 2, 2, 'F');
+  doc.roundedRect(leftColumnX + 3, yPos + 16, 75, 10, 2, 2, 'F');
   doc.setTextColor('#ffffff');
-  doc.setFontSize(8);
+  doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
-  doc.text(baseLabel, leftColumnX + 5, yPos + 17.5);
+  doc.text(baseLabel, leftColumnX + 5, yPos + 22);
   
-  // Détails contextuels
-  let contextY = yPos + 25;
+  // Détails contextuels avec plus d'espace
+  let contextY = yPos + 32;
   doc.setTextColor('#000000');
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
@@ -171,6 +172,7 @@ export const generateReceiptPDF = (receipt: ReceiptWithDetails, logoDataUrl?: st
                     receipt.mode_paiement === 'carte' ? 'Carte bancaire' :
                     receipt.mode_paiement;
     doc.text(`Mode: ${modeText}`, leftColumnX + 3, contextY);
+    contextY += 8;
   }
 
   if (receipt.periode_debut) {
@@ -178,15 +180,16 @@ export const generateReceiptPDF = (receipt: ReceiptWithDetails, logoDataUrl?: st
     if (receipt.periode_fin) {
       periodeText += ` au ${new Date(receipt.periode_fin).toLocaleDateString("fr-FR")}`;
     }
-    doc.text(periodeText, leftColumnX + 3, contextY + 6);
+    doc.text(periodeText, leftColumnX + 3, contextY);
   }
 
-  // Carte 4: Récapitulatif financier
-  addCard(rightColumnX, yPos, columnWidth, cardHeight + 20);
+  // Carte 4: Récapitulatif financier (plus grande)
+  const financialCardHeight = 55;
+  addCard(rightColumnX, yPos, columnWidth, financialCardHeight);
   doc.setFontSize(10);
   doc.setFont("helvetica", "bold");
   doc.setTextColor('#6b7280');
-  doc.text("RÉCAPITULATIF FINANCIER", rightColumnX + 3, yPos + 8);
+  doc.text("RÉCAPITULATIF FINANCIER", rightColumnX + 3, yPos + 10);
   
   // Statut avec badge coloré
   if (receipt.type_operation !== 'versement_agent') {
@@ -195,14 +198,14 @@ export const generateReceiptPDF = (receipt: ReceiptWithDetails, logoDataUrl?: st
     const statusColor = isComplete ? '#10b981' : '#f59e0b'; // green or orange
     
     doc.setFillColor(statusColor);
-    doc.roundedRect(rightColumnX + 3, yPos + 12, 30, 6, 2, 2, 'F');
+    doc.roundedRect(rightColumnX + 3, yPos + 16, 35, 8, 2, 2, 'F');
     doc.setTextColor('#ffffff');
     doc.setFontSize(8);
     doc.setFont("helvetica", "bold");
-    doc.text(statusText, rightColumnX + 5, yPos + 16);
+    doc.text(statusText, rightColumnX + 5, yPos + 21);
   }
 
-  // Montant principal
+  // Montant principal avec plus d'espace
   doc.setTextColor('#000000');
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
@@ -211,49 +214,49 @@ export const generateReceiptPDF = (receipt: ReceiptWithDetails, logoDataUrl?: st
       .replace(/\s/g, ' ');
     return `${formattedNumber} FCFA`;
   };
-  doc.text(`${formatCurrency(Number(receipt.montant_total))}`, rightColumnX + 3, yPos + 28);
+  doc.text(`${formatCurrency(Number(receipt.montant_total))}`, rightColumnX + 3, yPos + 35);
   
   // Ajuster la position pour la suite
-  yPos += 75;
+  yPos += 75; // Plus d'espace avant la section suivante
 
-  // Section détails financiers dans une carte pleine largeur
-  const financialCardHeight = 45;
-  addCard(leftColumnX, yPos, 180, financialCardHeight);
+  // Section détails financiers dans une carte pleine largeur avec plus d'espace
+  const detailsCardHeight = 50; // Plus haut
+  addCard(leftColumnX, yPos, 180, detailsCardHeight);
   doc.setFontSize(10);
   doc.setFont("helvetica", "bold");
   doc.setTextColor('#6b7280');
-  doc.text("DÉTAILS FINANCIERS", leftColumnX + 3, yPos + 8);
+  doc.text("DÉTAILS FINANCIERS", leftColumnX + 3, yPos + 10);
   
   doc.setTextColor('#000000');
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   
-  let financialY = yPos + 16;
+  let financialY = yPos + 20; // Plus d'espace en haut
   const addFinancialLine = (label: string, value?: number | null, isBold: boolean = false) => {
     if (value !== undefined && value !== null && !isNaN(Number(value))) {
       if (isBold) doc.setFont("helvetica", "bold");
       doc.text(`${label}: ${formatCurrency(Number(value))}`, leftColumnX + 3, financialY);
       if (isBold) doc.setFont("helvetica", "normal");
-      financialY += 6;
+      financialY += 8; // Plus d'espace entre les lignes
     }
   };
 
   if (receipt.type_operation === 'location') {
     const leftColX = leftColumnX + 3;
     const rightColX = leftColumnX + 93;
-    let leftY = yPos + 16;
-    let rightY = yPos + 16;
+    let leftY = yPos + 20;
+    let rightY = yPos + 20;
     
     if ((receipt as any).loyer_mensuel) {
       doc.text(`Loyer mensuel: ${formatCurrency((receipt as any).loyer_mensuel)}`, leftColX, leftY);
-      leftY += 6;
+      leftY += 8;
     }
     if ((receipt as any).location_total_paye) {
       doc.text(`Déjà payé: ${formatCurrency((receipt as any).location_total_paye)}`, leftColX, leftY);
-      leftY += 6;
+      leftY += 8;
     }
     doc.text(`Ce paiement: ${formatCurrency(Number(receipt.montant_total))}`, rightColX, rightY);
-    rightY += 6;
+    rightY += 8;
     if ((receipt as any).remaining_balance !== undefined) {
       doc.setFont("helvetica", "bold");
       doc.setTextColor('#f59e0b');
@@ -264,19 +267,19 @@ export const generateReceiptPDF = (receipt: ReceiptWithDetails, logoDataUrl?: st
   } else if (receipt.type_operation === 'apport_souscription') {
     const leftColX = leftColumnX + 3;
     const rightColX = leftColumnX + 93;
-    let leftY = yPos + 16;
-    let rightY = yPos + 16;
+    let leftY = yPos + 20;
+    let rightY = yPos + 20;
     
     if ((receipt as any).souscription_prix_total) {
       doc.text(`Prix total: ${formatCurrency((receipt as any).souscription_prix_total)}`, leftColX, leftY);
-      leftY += 6;
+      leftY += 8;
     }
     if ((receipt as any).souscription_total_paye) {
       doc.text(`Déjà payé: ${formatCurrency((receipt as any).souscription_total_paye)}`, leftColX, leftY);
-      leftY += 6;
+      leftY += 8;
     }
     doc.text(`Ce paiement: ${formatCurrency(Number(receipt.montant_total))}`, rightColX, rightY);
-    rightY += 6;
+    rightY += 8;
     if ((receipt as any).remaining_balance !== undefined) {
       doc.setFont("helvetica", "bold");
       doc.setTextColor('#f59e0b');
@@ -287,12 +290,12 @@ export const generateReceiptPDF = (receipt: ReceiptWithDetails, logoDataUrl?: st
   } else if (receipt.type_operation === 'droit_terre') {
     const leftColX = leftColumnX + 3;
     const rightColX = leftColumnX + 93;
-    let leftY = yPos + 16;
-    let rightY = yPos + 16;
+    let leftY = yPos + 20;
+    let rightY = yPos + 20;
     
     if ((receipt as any).droit_terre_mensuel) {
       doc.text(`Montant prévu/mois: ${formatCurrency((receipt as any).droit_terre_mensuel)}`, leftColX, leftY);
-      leftY += 6;
+      leftY += 8;
     }
     if ((receipt as any).droit_terre_total_paye) {
       doc.text(`Total déjà payé: ${formatCurrency((receipt as any).droit_terre_total_paye)}`, leftColX, leftY);
@@ -301,18 +304,18 @@ export const generateReceiptPDF = (receipt: ReceiptWithDetails, logoDataUrl?: st
   } else if (receipt.type_operation === 'caution_location') {
     const leftColX = leftColumnX + 3;
     const rightColX = leftColumnX + 93;
-    let leftY = yPos + 16;
-    let rightY = yPos + 16;
+    let leftY = yPos + 20;
+    let rightY = yPos + 20;
     
     if ((receipt as any).caution_totale) {
       doc.text(`Caution requise: ${formatCurrency((receipt as any).caution_totale)}`, leftColX, leftY);
-      leftY += 6;
+      leftY += 8;
     }
     if ((receipt as any).caution_total_paye) {
       doc.text(`Déjà payé: ${formatCurrency((receipt as any).caution_total_paye)}`, leftColX, leftY);
     }
     doc.text(`Ce paiement: ${formatCurrency(Number(receipt.montant_total))}`, rightColX, rightY);
-    rightY += 6;
+    rightY += 8;
     if ((receipt as any).remaining_balance !== undefined) {
       doc.setFont("helvetica", "bold");
       doc.setTextColor('#f59e0b');
@@ -322,7 +325,7 @@ export const generateReceiptPDF = (receipt: ReceiptWithDetails, logoDataUrl?: st
     }
   }
   
-  yPos += financialCardHeight + 10;
+  yPos += detailsCardHeight + 15; // Plus d'espace après
 
   // Historique des paiements dans une carte
   if (receipt.payment_history && receipt.payment_history.length > 0) {
@@ -413,34 +416,42 @@ export const generateReceiptPDF = (receipt: ReceiptWithDetails, logoDataUrl?: st
     yPos += echeanceCardHeight + 10;
   }
 
-  // Section signatures avec cartes élégantes
-  const signatureY = Math.min(Math.max(yPos + 15, 230), 260);
+  // Section signatures avec cartes très visibles et bien espacées
+  const signatureY = Math.min(Math.max(yPos + 20, 240), 270);
   
-  // Carte signature client
-  addCard(leftColumnX, signatureY, 85, 25);
-  doc.setFontSize(10);
+  // Carte signature client (plus grande et plus visible)
+  addCard(leftColumnX, signatureY, 85, 35);
+  doc.setFontSize(11);
   doc.setFont("helvetica", "bold");
-  doc.setTextColor('#6b7280');
-  doc.text("SIGNATURE CLIENT", leftColumnX + 3, signatureY + 8);
-  doc.setDrawColor('#000000');
-  doc.line(leftColumnX + 3, signatureY + 18, leftColumnX + 82, signatureY + 18);
+  doc.setTextColor('#374151'); // gray-700
+  doc.text("SIGNATURE CLIENT", leftColumnX + 15, signatureY + 12);
   
-  // Carte signature caisse
-  addCard(rightColumnX, signatureY, 85, 25);
-  doc.setTextColor('#6b7280');
-  doc.text("SIGNATURE CAISSE", rightColumnX + 3, signatureY + 8);
-  doc.line(rightColumnX + 3, signatureY + 18, rightColumnX + 82, signatureY + 18);
+  // Ligne de signature plus épaisse et plus longue
+  doc.setDrawColor('#000000');
+  doc.setLineWidth(0.8);
+  doc.line(leftColumnX + 5, signatureY + 25, leftColumnX + 80, signatureY + 25);
+  doc.setLineWidth(0.2); // Reset line width
+  
+  // Carte signature caisse (plus grande et plus visible)
+  addCard(rightColumnX, signatureY, 85, 35);
+  doc.setTextColor('#374151');
+  doc.text("SIGNATURE CAISSE", rightColumnX + 15, signatureY + 12);
+  
+  // Ligne de signature plus épaisse et plus longue
+  doc.setLineWidth(0.8);
+  doc.line(rightColumnX + 5, signatureY + 25, rightColumnX + 80, signatureY + 25);
+  doc.setLineWidth(0.2); // Reset line width
 
-  // Footer avec style moderne
-  const footerY = signatureY + 35;
+  // Footer avec style moderne et plus d'espace
+  const footerY = signatureY + 45;
   doc.setFillColor('#f3f4f6'); // gray-100
-  doc.rect(0, footerY, 210, 15, 'F');
+  doc.rect(0, footerY, 210, 20, 'F');
   
   doc.setTextColor('#374151'); // gray-700
-  doc.setFontSize(9);
+  doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
-  doc.text("Ce reçu fait foi de paiement.", 105, footerY + 6, { align: "center" });
-  doc.text("Merci pour votre confiance.", 105, footerY + 12, { align: "center" });
+  doc.text("Ce reçu fait foi de paiement.", 105, footerY + 8, { align: "center" });
+  doc.text("Merci pour votre confiance.", 105, footerY + 15, { align: "center" });
   
   return doc;
 };
