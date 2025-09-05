@@ -18,6 +18,9 @@ import ReceiptIntegrity from "./pages/ReceiptIntegrity";
 import NotFound from "./pages/NotFound";
 import Caisse from "./pages/Caisse";
 import Agents from "./pages/Agents";
+import Notifications from "./pages/Notifications";
+import Reports from "./pages/Reports";
+import Calendar from "./pages/Calendar";
 
 import Settings from "./pages/Settings";
 
@@ -57,6 +60,9 @@ const App = () => (
           <Route path="/caisse" element={<Layout><Caisse /></Layout>} />
           <Route path="/agents" element={<Layout><Agents /></Layout>} />
           <Route path="/recus" element={<Layout><Recus /></Layout>} />
+          <Route path="/notifications" element={<Layout><Notifications /></Layout>} />
+          <Route path="/reports" element={<Layout><Reports /></Layout>} />
+          <Route path="/calendar" element={<Layout><Calendar /></Layout>} />
           <Route path="/settings" element={<Layout><Settings /></Layout>} />
           <Route path="/receipt-integrity" element={<Layout><ReceiptIntegrity /></Layout>} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
