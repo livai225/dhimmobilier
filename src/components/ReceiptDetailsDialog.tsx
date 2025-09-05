@@ -295,6 +295,35 @@ export function ReceiptDetailsDialog({
                     </div>
                   </>
                 )}
+                {receipt.type_operation === 'paiement_facture' && (
+                  <>
+                    {(receipt as any).meta?.facture_montant_total && (
+                      <div className="flex justify-between text-sm">
+                        <span>Montant total de la facture:</span>
+                        <span className="font-medium">{(receipt as any).meta.facture_montant_total.toLocaleString("fr-FR")} FCFA</span>
+                      </div>
+                    )}
+                    {(receipt as any).meta?.facture_montant_total && (
+                      <div className="flex justify-between text-sm">
+                        <span>Déjà payé avant ce versement:</span>
+                        <span className="font-medium">{((receipt as any).meta.facture_montant_total - (receipt as any).meta.reste_a_payer - receipt.montant_total).toLocaleString("fr-FR")} FCFA</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-sm">
+                      <span>Montant de ce versement:</span>
+                      <span className="font-medium text-primary">{receipt.montant_total.toLocaleString("fr-FR")} FCFA</span>
+                    </div>
+                    {(receipt as any).meta?.reste_a_payer !== undefined && (
+                      <div className={`flex justify-between text-sm border-t pt-2 ${(receipt as any).meta.statut === 'solde' ? 'text-green-600' : 'text-orange-600'}`}>
+                        <span className="font-medium">Solde restant:</span>
+                        <span className="font-bold">{(receipt as any).meta.reste_a_payer.toLocaleString("fr-FR")} FCFA</span>
+                      </div>
+                    )}
+                    <div className={`text-center text-sm font-medium px-3 py-2 rounded-md ${(receipt as any).meta?.statut === 'solde' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'}`}>
+                      {(receipt as any).meta?.statut === 'solde' ? 'FACTURE SOLDÉE' : 'PAIEMENT PARTIEL'}
+                    </div>
+                  </>
+                )}
                 {receipt.type_operation === 'caution_location' && (
                   <>
                     {(receipt as any).caution_totale && (
