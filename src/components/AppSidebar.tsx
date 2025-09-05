@@ -20,10 +20,7 @@ import {
   Receipt,
   Settings,
   Wallet,
-  UserCog,
-  Bell,
-  BarChart3,
-  Calendar
+  UserCog
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 
@@ -77,21 +74,6 @@ const menuItems = [
     title: "Reçus",
     url: "/recus",
     icon: Receipt,
-  },
-  {
-    title: "Notifications",
-    url: "/notifications",
-    icon: Bell,
-  },
-  {
-    title: "Rapports",
-    url: "/reports",
-    icon: BarChart3,
-  },
-  {
-    title: "Calendrier",
-    url: "/calendar",
-    icon: Calendar,
   },
 ];
 
