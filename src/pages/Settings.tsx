@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, Trash2, Download, Settings as SettingsIcon, Database } from "lucide-react";
+import { AlertTriangle, Trash2, Download, Settings as SettingsIcon, Database, Upload } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { ImportClientsFromExcel } from "@/components/ImportClientsFromExcel";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -100,6 +101,22 @@ export default function Settings() {
                 <Badge variant="default" className="bg-green-600">Connecté</Badge>
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Import de données */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Upload className="h-5 w-5" />
+              Import de données
+            </CardTitle>
+            <CardDescription>
+              Importez des données depuis des fichiers externes.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ImportClientsFromExcel />
           </CardContent>
         </Card>
 
