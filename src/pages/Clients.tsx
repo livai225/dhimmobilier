@@ -17,6 +17,7 @@ import { ClientForm } from "@/components/ClientForm";
 import { ExportToExcelButton } from "@/components/ExportToExcelButton";
 import { ClientDetailsDialog } from "@/components/ClientDetailsDialog";
 import { MobileCard } from "@/components/MobileCard";
+import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 
 interface Client {
   id: string;
@@ -39,6 +40,7 @@ export default function Clients() {
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
   const [formData, setFormData] = useState({
     nom: "",
     prenom: "",
@@ -226,6 +228,19 @@ export default function Clients() {
     client.telephone_principal?.includes(searchTerm)
   ) || [];
 
+  // Pagination logic
+  const itemsPerPage = 50;
+  const totalPages = Math.ceil(filteredClients.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentClients = filteredClients.slice(startIndex, endIndex);
+
+  // Reset to first page when search changes
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
+    setCurrentPage(1);
+  };
+
   const formatPhone = (phone?: string) => {
     if (!phone) return "-";
     return phone;
@@ -349,7 +364,7 @@ export default function Clients() {
           <Input
             placeholder="Rechercher un client..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={handleSearchChange}
             className="pl-8"
           />
         </div>
@@ -372,6 +387,7 @@ export default function Clients() {
           <CardDescription>
             {filteredClients.length} client{filteredClients.length !== 1 ? 's' : ''} 
             {searchTerm && ` trouvé${filteredClients.length !== 1 ? 's' : ''} pour "${searchTerm}"`}
+            {totalPages > 1 && ` • Page ${currentPage} sur ${totalPages}`}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -394,7 +410,7 @@ export default function Clients() {
             <>
               {/* Mobile Cards (visible on small screens) */}
               <div className="block md:hidden space-y-3">
-                {filteredClients.map((client) => (
+                {currentClients.map((client) => (
                   <MobileCard
                     key={client.id}
                     title={`${client.nom} ${client.prenom || ''}`}
@@ -478,7 +494,7 @@ export default function Clients() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredClients.map((client) => (
+                    {currentClients.map((client) => (
                       <TableRow key={client.id}>
                         <TableCell>
                           <div>
@@ -561,6 +577,93 @@ export default function Clients() {
                 </Table>
               </div>
             </>
+          )}
+          
+          {/* Pagination */}
+          {totalPages > 1 && filteredClients.length > 0 && (
+            <div className="mt-6 flex justify-center">
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious 
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        if (currentPage > 1) setCurrentPage(currentPage - 1);
+                      }}
+                      className={currentPage <= 1 ? "pointer-events-none opacity-50" : ""}
+                    />
+                  </PaginationItem>
+                  
+                  {/* First page */}
+                  {currentPage > 3 && (
+                    <>
+                      <PaginationItem>
+                        <PaginationLink 
+                          href="#" 
+                          onClick={(e) => { e.preventDefault(); setCurrentPage(1); }}
+                        >
+                          1
+                        </PaginationLink>
+                      </PaginationItem>
+                      {currentPage > 4 && (
+                        <PaginationItem>
+                          <PaginationEllipsis />
+                        </PaginationItem>
+                      )}
+                    </>
+                  )}
+                  
+                  {/* Pages around current page */}
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter(page => 
+                      page >= Math.max(1, currentPage - 2) && 
+                      page <= Math.min(totalPages, currentPage + 2)
+                    )
+                    .map((page) => (
+                      <PaginationItem key={page}>
+                        <PaginationLink
+                          href="#"
+                          onClick={(e) => { e.preventDefault(); setCurrentPage(page); }}
+                          isActive={page === currentPage}
+                        >
+                          {page}
+                        </PaginationLink>
+                      </PaginationItem>
+                    ))}
+                  
+                  {/* Last page */}
+                  {currentPage < totalPages - 2 && (
+                    <>
+                      {currentPage < totalPages - 3 && (
+                        <PaginationItem>
+                          <PaginationEllipsis />
+                        </PaginationItem>
+                      )}
+                      <PaginationItem>
+                        <PaginationLink 
+                          href="#" 
+                          onClick={(e) => { e.preventDefault(); setCurrentPage(totalPages); }}
+                        >
+                          {totalPages}
+                        </PaginationLink>
+                      </PaginationItem>
+                    </>
+                  )}
+                  
+                  <PaginationItem>
+                    <PaginationNext 
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        if (currentPage < totalPages) setCurrentPage(currentPage + 1);
+                      }}
+                      className={currentPage >= totalPages ? "pointer-events-none opacity-50" : ""}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
           )}
         </CardContent>
       </Card>
