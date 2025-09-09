@@ -188,7 +188,6 @@ export default function Caisse() {
       // Validation spécifique pour les ventes
       if (tab === "entree" && entryType === "vente") {
         if (!form.article_id) throw new Error("Veuillez sélectionner un article pour la vente");
-        if (!form.quantite || Number(form.quantite) <= 0) throw new Error("La quantité doit être supérieure à 0");
       }
 
       let uploadedPath: string | null = null;
@@ -206,7 +205,7 @@ export default function Caisse() {
         const { data, error } = await supabase.rpc("record_sale_with_cash", {
           p_article_id: form.article_id,
           p_montant: montantNum,
-          p_quantite: Number(form.quantite) || 1,
+          p_quantite: 1, // Toujours 1 par défaut
           p_date_vente: form.date_transaction,
           p_agent_id: form.agent_id || null,
           p_description: form.description || "Vente",
@@ -451,17 +450,10 @@ export default function Caisse() {
                         <Combobox
                           options={articles.map((a: any) => ({ 
                             value: a.id, 
-                            label: `${a.nom}${a.prix_reference > 0 ? ` (${a.prix_reference.toLocaleString()} FCFA)` : ''}` 
+                            label: a.nom
                           }))}
                           value={form.article_id}
-                          onChange={(v) => {
-                            setForm((f) => ({ ...f, article_id: v }));
-                            // Auto-fill amount if article has reference price
-                            const article = articles.find((a: any) => a.id === v);
-                            if (article?.prix_reference > 0) {
-                              setForm((f) => ({ ...f, montant: article.prix_reference.toString() }));
-                            }
-                          }}
+                          onChange={(v) => setForm((f) => ({ ...f, article_id: v }))}
                           placeholder="Sélectionner un article"
                           className="flex-1"
                         />
@@ -472,16 +464,6 @@ export default function Caisse() {
                           }}
                         />
                       </div>
-                    </div>
-                    <div>
-                      <label className="text-sm">Quantité</label>
-                      <Input 
-                        type="number" 
-                        min="1" 
-                        step="0.1"
-                        value={form.quantite} 
-                        onChange={(e) => setForm({ ...form, quantite: e.target.value })} 
-                      />
                     </div>
                     <div>
                       <label className="text-sm">Agent (optionnel)</label>
