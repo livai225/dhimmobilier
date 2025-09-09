@@ -183,7 +183,13 @@ export default function Caisse() {
   const createTransaction = useMutation({
     mutationFn: async () => {
       const montantNum = Number(form.montant || 0);
-      if (!montantNum || montantNum <= 0) throw new Error("Montant invalide");
+      if (!montantNum || montantNum <= 0) throw new Error("Le montant doit être supérieur à 0");
+
+      // Validation spécifique pour les ventes
+      if (tab === "entree" && entryType === "vente") {
+        if (!form.article_id) throw new Error("Veuillez sélectionner un article pour la vente");
+        if (!form.quantite || Number(form.quantite) <= 0) throw new Error("La quantité doit être supérieure à 0");
+      }
 
       let uploadedPath: string | null = null;
       if (file) {
@@ -196,9 +202,7 @@ export default function Caisse() {
       }
 
       // Handle sales differently
-      if (tab === "entree" && entryType === "vente") {
-        if (!form.article_id) throw new Error("Article requis pour une vente");
-        
+      if (tab === "entree" && entryType === "vente") {        
         const { data, error } = await supabase.rpc("record_sale_with_cash", {
           p_article_id: form.article_id,
           p_montant: montantNum,

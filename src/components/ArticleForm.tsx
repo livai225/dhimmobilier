@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Plus } from "lucide-react";
 
@@ -19,8 +18,6 @@ export function ArticleForm({ onArticleCreated }: ArticleFormProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [form, setForm] = useState({
     nom: "",
-    prix_reference: "",
-    description: "",
   });
 
   const createArticle = useMutation({
@@ -29,8 +26,8 @@ export function ArticleForm({ onArticleCreated }: ArticleFormProps) {
         .from("articles")
         .insert({
           nom: form.nom,
-          prix_reference: Number(form.prix_reference) || 0,
-          description: form.description || null,
+          prix_reference: 0,
+          description: null,
         })
         .select()
         .single();
@@ -43,7 +40,7 @@ export function ArticleForm({ onArticleCreated }: ArticleFormProps) {
         title: "Article créé",
         description: `L'article "${form.nom}" a été ajouté avec succès.`,
       });
-      setForm({ nom: "", prix_reference: "", description: "" });
+      setForm({ nom: "" });
       setIsOpen(false);
       queryClient.invalidateQueries({ queryKey: ["articles"] });
       onArticleCreated?.(data.id);
@@ -68,6 +65,9 @@ export function ArticleForm({ onArticleCreated }: ArticleFormProps) {
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Créer un nouvel article</DialogTitle>
+          <DialogDescription>
+            Ajoutez un nouvel article à votre catalogue. Le montant sera saisi lors de la vente.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div>
@@ -76,27 +76,7 @@ export function ArticleForm({ onArticleCreated }: ArticleFormProps) {
               id="nom"
               value={form.nom}
               onChange={(e) => setForm({ ...form, nom: e.target.value })}
-              placeholder="Ex: Sable, Ciment, etc."
-            />
-          </div>
-          <div>
-            <Label htmlFor="prix_reference">Prix de référence (FCFA)</Label>
-            <Input
-              id="prix_reference"
-              type="number"
-              value={form.prix_reference}
-              onChange={(e) => setForm({ ...form, prix_reference: e.target.value })}
-              placeholder="0"
-            />
-          </div>
-          <div>
-            <Label htmlFor="description">Description (optionnelle)</Label>
-            <Textarea
-              id="description"
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              placeholder="Description de l'article"
-              rows={3}
+              placeholder="Ex: Sable, Ciment, Gravier..."
             />
           </div>
           <div className="flex justify-end gap-2">
