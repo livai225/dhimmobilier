@@ -375,26 +375,26 @@ export function ReceiptDetailsDialog({
                 })()}
                 {receipt.type_operation === 'vente' && (
                   <>
-                    {(receipt as any).article_nom && (
+                    {(receipt as any).meta?.article_nom && (
                       <div className="flex justify-between text-sm">
                         <span>Article vendu:</span>
-                        <span className="font-medium">{(receipt as any).article_nom}</span>
+                        <span className="font-medium">{(receipt as any).meta.article_nom}</span>
                       </div>
                     )}
-                    {(receipt as any).quantite && (
+                    {(receipt as any).meta?.quantite && (
                       <div className="flex justify-between text-sm">
                         <span>Quantité:</span>
-                        <span className="font-medium">{(receipt as any).quantite}</span>
+                        <span className="font-medium">{(receipt as any).meta.quantite}</span>
                       </div>
                     )}
                     <div className="flex justify-between text-sm">
                       <span>Montant de la vente:</span>
                       <span className="font-medium text-primary">{receipt.montant_total.toLocaleString("fr-FR")} FCFA</span>
                     </div>
-                    {(receipt as any).agent_nom && (
+                    {(receipt as any).meta?.agent_nom && (
                       <div className="flex justify-between text-sm">
                         <span>Agent vendeur:</span>
-                        <span className="font-medium">{(receipt as any).agent_nom}</span>
+                        <span className="font-medium">{(receipt as any).meta.agent_nom}</span>
                       </div>
                     )}
                     <div className="text-center text-sm font-medium px-3 py-2 rounded-md bg-green-100 text-green-800">

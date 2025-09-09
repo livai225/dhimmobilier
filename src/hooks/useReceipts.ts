@@ -440,16 +440,10 @@ const enrichedReceipts = await Promise.all(
 
         case 'vente': {
           // Les ventes sont toujours des paiements complets
-          // Récupérer les détails depuis les métadonnées du reçu
-          const meta = receipt.meta as any;
-          
           Object.assign(extras, {
             details_type: 'vente',
             is_payment_complete: true, // Les ventes sont toujours complètes
             remaining_balance: 0, // Pas de solde restant pour les ventes
-            article_nom: meta?.article_nom || null,
-            quantite: meta?.quantite || 1,
-            agent_nom: meta?.agent_nom || null,
           });
           break;
         }
