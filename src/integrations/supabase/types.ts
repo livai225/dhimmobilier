@@ -62,6 +62,33 @@ export type Database = {
         }
         Relationships: []
       }
+      articles: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          nom: string
+          prix_reference: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          nom: string
+          prix_reference?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          nom?: string
+          prix_reference?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       bareme_droits_terre: {
         Row: {
           created_at: string
@@ -838,6 +865,67 @@ export type Database = {
         }
         Relationships: []
       }
+      ventes: {
+        Row: {
+          agent_id: string | null
+          article_id: string
+          cash_transaction_id: string | null
+          created_at: string
+          date_vente: string
+          description: string | null
+          id: string
+          montant: number
+          quantite: number | null
+          updated_at: string
+        }
+        Insert: {
+          agent_id?: string | null
+          article_id: string
+          cash_transaction_id?: string | null
+          created_at?: string
+          date_vente?: string
+          description?: string | null
+          id?: string
+          montant: number
+          quantite?: number | null
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string | null
+          article_id?: string
+          cash_transaction_id?: string | null
+          created_at?: string
+          date_vente?: string
+          description?: string | null
+          id?: string
+          montant?: number
+          quantite?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ventes_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents_recouvrement"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ventes_article_id_fkey"
+            columns: ["article_id"]
+            isOneToOne: false
+            referencedRelation: "articles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ventes_cash_transaction_id_fkey"
+            columns: ["cash_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "cash_transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -969,6 +1057,17 @@ export type Database = {
           p_reference_operation?: string
           p_type_operation: string
           p_type_transaction: string
+        }
+        Returns: string
+      }
+      record_sale_with_cash: {
+        Args: {
+          p_agent_id?: string
+          p_article_id: string
+          p_date_vente?: string
+          p_description?: string
+          p_montant: number
+          p_quantite?: number
         }
         Returns: string
       }

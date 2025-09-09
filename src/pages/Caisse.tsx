@@ -14,6 +14,7 @@ import { format } from "date-fns";
 import * as XLSX from 'xlsx';
 import { ReceiptDetailsDialog } from "@/components/ReceiptDetailsDialog";
 import { ReceiptWithDetails } from "@/hooks/useReceipts";
+import { ArticleForm } from "@/components/ArticleForm";
 
 export default function Caisse() {
   const { toast } = useToast();
@@ -26,6 +27,7 @@ export default function Caisse() {
   const [typeOperationFilter, setTypeOperationFilter] = useState<string>("");
   const [isExporting, setIsExporting] = useState(false);
   const [journalTab, setJournalTab] = useState<"versement" | "entreprise">("versement");
+  const [entryType, setEntryType] = useState<"versement" | "vente">("versement");
   
   // Receipt dialog state
   const [selectedReceipt, setSelectedReceipt] = useState<ReceiptWithDetails | null>(null);
@@ -61,6 +63,18 @@ export default function Caisse() {
       const { data, error } = await supabase
         .from("agents_recouvrement")
         .select("id, nom, prenom, code_agent, statut")
+        .order("nom");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: articles = [] } = useQuery({
+    queryKey: ["articles"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("articles")
+        .select("id, nom, prix_reference, description")
         .order("nom");
       if (error) throw error;
       return data;
@@ -119,9 +133,10 @@ export default function Caisse() {
         t.type_operation === "paiement_caution"
       );
     } else {
-      // Caisse entreprise: company expenses only
+      // Caisse entreprise: company operations including sales
       filtered = allTransactions.filter((t: any) => 
         t.type_operation === "depense_entreprise" ||
+        t.type_operation === "vente" ||
         t.type_operation === "autre"
       );
     }
@@ -156,7 +171,9 @@ export default function Caisse() {
 
   const [form, setForm] = useState({
     agent_id: "",
+    article_id: "",
     montant: "",
+    quantite: "1",
     date_transaction: format(new Date(), "yyyy-MM-dd"),
     type_operation: "versement_agent" as "versement_agent" | "depense_entreprise" | "autre",
     beneficiaire: "",
@@ -178,6 +195,23 @@ export default function Caisse() {
         uploadedPath = path;
       }
 
+      // Handle sales differently
+      if (tab === "entree" && entryType === "vente") {
+        if (!form.article_id) throw new Error("Article requis pour une vente");
+        
+        const { data, error } = await supabase.rpc("record_sale_with_cash", {
+          p_article_id: form.article_id,
+          p_montant: montantNum,
+          p_quantite: Number(form.quantite) || 1,
+          p_date_vente: form.date_transaction,
+          p_agent_id: form.agent_id || null,
+          p_description: form.description || "Vente",
+        });
+        if (error) throw error;
+        return data;
+      }
+
+      // Regular transaction
       const { data, error } = await supabase.rpc("record_cash_transaction", {
         p_type_transaction: tab === "entree" ? "entree" : "sortie",
         p_montant: montantNum,
@@ -194,7 +228,9 @@ export default function Caisse() {
     onSuccess: async (transactionId) => {
       setForm({
         agent_id: "",
+        article_id: "",
         montant: "",
+        quantite: "1",
         date_transaction: format(new Date(), "yyyy-MM-dd"),
         type_operation: "versement_agent",
         beneficiaire: "",
@@ -203,7 +239,11 @@ export default function Caisse() {
       setFile(null);
       queryClient.invalidateQueries({ queryKey: ["cash_transactions"] });
       queryClient.invalidateQueries({ queryKey: ["cash_balance"] });
-      toast({ title: "Opération enregistrée", description: "La transaction a été ajoutée à la caisse." });
+      queryClient.invalidateQueries({ queryKey: ["solde_caisse_entreprise"] });
+      toast({ 
+        title: "Opération enregistrée", 
+        description: entryType === "vente" ? "La vente a été enregistrée avec succès." : "La transaction a été ajoutée à la caisse." 
+      });
     },
     onError: (e: any) => {
       toast({ title: "Erreur", description: e.message || "Impossible d'enregistrer", variant: "destructive" });
@@ -387,32 +427,99 @@ export default function Caisse() {
               </TabsList>
               <TabsContent value="entree" className="space-y-3">
                 <div>
-                  <label className="text-sm">Agent</label>
+                  <label className="text-sm">Type d'entrée</label>
                   <Combobox
-                    options={agents.map((a: any) => ({ value: a.id, label: `${a.prenom} ${a.nom} (${a.code_agent})` }))}
-                    value={form.agent_id}
-                    onChange={(v) => setForm((f) => ({ ...f, agent_id: v }))}
-                    placeholder="Sélectionner un agent"
+                    options={[
+                      { value: "versement", label: "Versement agent" },
+                      { value: "vente", label: "Vente" },
+                    ]}
+                    value={entryType}
+                    onChange={(v) => setEntryType(v as "versement" | "vente")}
+                    placeholder="Sélectionner le type"
                   />
                 </div>
+                
+                {entryType === "vente" ? (
+                  <>
+                    <div>
+                      <label className="text-sm">Article</label>
+                      <div className="flex gap-2">
+                        <Combobox
+                          options={articles.map((a: any) => ({ 
+                            value: a.id, 
+                            label: `${a.nom}${a.prix_reference > 0 ? ` (${a.prix_reference.toLocaleString()} FCFA)` : ''}` 
+                          }))}
+                          value={form.article_id}
+                          onChange={(v) => {
+                            setForm((f) => ({ ...f, article_id: v }));
+                            // Auto-fill amount if article has reference price
+                            const article = articles.find((a: any) => a.id === v);
+                            if (article?.prix_reference > 0) {
+                              setForm((f) => ({ ...f, montant: article.prix_reference.toString() }));
+                            }
+                          }}
+                          placeholder="Sélectionner un article"
+                          className="flex-1"
+                        />
+                        <ArticleForm
+                          onArticleCreated={(articleId) => {
+                            setForm((f) => ({ ...f, article_id: articleId }));
+                            queryClient.invalidateQueries({ queryKey: ["articles"] });
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-sm">Quantité</label>
+                      <Input 
+                        type="number" 
+                        min="1" 
+                        step="0.1"
+                        value={form.quantite} 
+                        onChange={(e) => setForm({ ...form, quantite: e.target.value })} 
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm">Agent (optionnel)</label>
+                      <Combobox
+                        options={agents.map((a: any) => ({ value: a.id, label: `${a.prenom} ${a.nom} (${a.code_agent})` }))}
+                        value={form.agent_id}
+                        onChange={(v) => setForm((f) => ({ ...f, agent_id: v }))}
+                        placeholder="Sélectionner un agent"
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <div>
+                    <label className="text-sm">Agent</label>
+                    <Combobox
+                      options={agents.map((a: any) => ({ value: a.id, label: `${a.prenom} ${a.nom} (${a.code_agent})` }))}
+                      value={form.agent_id}
+                      onChange={(v) => setForm((f) => ({ ...f, agent_id: v }))}
+                      placeholder="Sélectionner un agent"
+                    />
+                  </div>
+                )}
+                
                 <div>
                   <label className="text-sm">Montant (FCFA)</label>
                   <Input type="number" value={form.montant} onChange={(e) => setForm({ ...form, montant: e.target.value })} />
                 </div>
                 <div>
-                  <label className="text-sm">Bénéficiaire (optionnel)</label>
-                  <Input value={form.beneficiaire} onChange={(e) => setForm({ ...form, beneficiaire: e.target.value })} />
-                </div>
-                <div>
                   <label className="text-sm">Description</label>
-                  <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+                  <Input 
+                    value={form.description} 
+                    onChange={(e) => setForm({ ...form, description: e.target.value })} 
+                    placeholder={entryType === "vente" ? "Vente" : "Description"}
+                  />
                 </div>
                 <div>
                   <label className="text-sm">Pièce justificative</label>
                   <Input type="file" accept="image/*,application/pdf" onChange={(e) => setFile(e.target.files?.[0] || null)} />
                 </div>
                 <Button className="w-full" onClick={() => createTransaction.mutate()} disabled={createTransaction.isPending}>
-                  {createTransaction.isPending ? "Enregistrement..." : "Enregistrer l'entrée"}
+                  {createTransaction.isPending ? "Enregistrement..." : 
+                   entryType === "vente" ? "Enregistrer la vente" : "Enregistrer l'entrée"}
                 </Button>
               </TabsContent>
               <TabsContent value="depense" className="space-y-3">
@@ -490,7 +597,10 @@ export default function Caisse() {
                           <option value="paiement_droit_terre">Paiement droit de terre</option>
                         </>
                        ) : (
-                         <option value="depense_entreprise">Dépense entreprise</option>
+                         <>
+                           <option value="vente">Vente</option>
+                           <option value="depense_entreprise">Dépense entreprise</option>
+                         </>
                        )}
                        <option value="autre">Autre opération</option>
                     </select>
@@ -601,36 +711,66 @@ export default function Caisse() {
                         <TableHead>Heure</TableHead>
                         <TableHead>Type</TableHead>
                         <TableHead>Opération</TableHead>
-                        <TableHead>Bénéficiaire</TableHead>
+                        <TableHead>Agent/Bénéficiaire</TableHead>
                         <TableHead>Montant</TableHead>
                         <TableHead>Description</TableHead>
+                        <TableHead>Reçu</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {transactions.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">
-                            Aucune dépense pour cette période
+                          <TableCell colSpan={8} className="text-center py-6 text-muted-foreground">
+                            Aucune opération pour cette période
                           </TableCell>
                         </TableRow>
                       ) : (
-                        transactions.map((t: any) => (
-                          <TableRow key={t.id}>
-                            <TableCell>{format(new Date(t.date_transaction), "dd/MM/yyyy")}</TableCell>
-                            <TableCell>{t.heure_transaction?.toString().slice(0,5)}</TableCell>
-                            <TableCell>
-                              <Badge variant="outline">Sortie</Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="outline">{t.type_operation}</Badge>
-                            </TableCell>
-                            <TableCell>{t.beneficiaire || "-"}</TableCell>
-                            <TableCell className="text-red-600 font-medium">
-                              -{Number(t.montant).toLocaleString()} FCFA
-                            </TableCell>
-                            <TableCell className="text-sm">{t.description || "-"}</TableCell>
-                          </TableRow>
-                        ))
+                        transactions.map((t: any) => {
+                          const agent = agents.find(a => a.id === t.agent_id);
+                          const isVente = t.type_operation === "vente";
+                          return (
+                            <TableRow key={t.id}>
+                              <TableCell>{format(new Date(t.date_transaction), "dd/MM/yyyy")}</TableCell>
+                              <TableCell>{t.heure_transaction?.toString().slice(0,5)}</TableCell>
+                              <TableCell>
+                                <Badge variant={isVente ? "secondary" : "outline"}>
+                                  {isVente ? "Entrée" : "Sortie"}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant={isVente ? "default" : "outline"}>{t.type_operation}</Badge>
+                              </TableCell>
+                              <TableCell>
+                                {agent ? (
+                                  <div className="text-xs">
+                                    <div className="font-medium">{agent.prenom} {agent.nom}</div>
+                                    <div className="text-muted-foreground">{agent.code_agent}</div>
+                                  </div>
+                                ) : t.beneficiaire ? (
+                                  <span className="text-sm">{t.beneficiaire}</span>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">-</span>
+                                )}
+                              </TableCell>
+                              <TableCell className={isVente ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
+                                {isVente ? "+" : "-"}{Number(t.montant).toLocaleString()} FCFA
+                              </TableCell>
+                              <TableCell className="text-sm">{t.description || "-"}</TableCell>
+                              <TableCell>
+                                {isVente && (
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="h-7 text-xs"
+                                    onClick={() => handleViewReceipt(t.id)}
+                                  >
+                                    📄 Voir reçu
+                                  </Button>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
                       )}
                     </TableBody>
                   </Table>
