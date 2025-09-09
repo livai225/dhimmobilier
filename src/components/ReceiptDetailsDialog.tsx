@@ -57,7 +57,8 @@ export function ReceiptDetailsDialog({
     apport_souscription: { label: "Apport de souscription", color: "bg-purple-500" },
     droit_terre: { label: "Droit de terre", color: "bg-orange-500" },
     paiement_facture: { label: "Paiement de facture", color: "bg-red-500" },
-    versement_agent: { label: "Versement agent", color: "bg-indigo-500" }
+    versement_agent: { label: "Versement agent", color: "bg-indigo-500" },
+    vente: { label: "Vente", color: "bg-emerald-500" }
   };
 
   const operation = operationTypes[receipt.type_operation] || { 
@@ -372,6 +373,35 @@ export function ReceiptDetailsDialog({
                     </>
                   );
                 })()}
+                {receipt.type_operation === 'vente' && (
+                  <>
+                    {(receipt as any).article_nom && (
+                      <div className="flex justify-between text-sm">
+                        <span>Article vendu:</span>
+                        <span className="font-medium">{(receipt as any).article_nom}</span>
+                      </div>
+                    )}
+                    {(receipt as any).quantite && (
+                      <div className="flex justify-between text-sm">
+                        <span>Quantité:</span>
+                        <span className="font-medium">{(receipt as any).quantite}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-sm">
+                      <span>Montant de la vente:</span>
+                      <span className="font-medium text-primary">{receipt.montant_total.toLocaleString("fr-FR")} FCFA</span>
+                    </div>
+                    {(receipt as any).agent_nom && (
+                      <div className="flex justify-between text-sm">
+                        <span>Agent vendeur:</span>
+                        <span className="font-medium">{(receipt as any).agent_nom}</span>
+                      </div>
+                    )}
+                    <div className="text-center text-sm font-medium px-3 py-2 rounded-md bg-green-100 text-green-800">
+                      VENTE RÉALISÉE
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>

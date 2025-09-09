@@ -45,7 +45,8 @@ export default function Recus() {
     apport_souscription: { label: "Apport de souscription", color: "bg-purple-500" },
     droit_terre: { label: "Droit de terre", color: "bg-orange-500" },
     paiement_facture: { label: "Paiement de facture", color: "bg-red-500" },
-    versement_agent: { label: "Versement agent", color: "bg-indigo-500" }
+    versement_agent: { label: "Versement agent", color: "bg-indigo-500" },
+    vente: { label: "Vente", color: "bg-emerald-500" }
   };
 
   const handleViewDetails = (receipt: ReceiptWithDetails) => {
