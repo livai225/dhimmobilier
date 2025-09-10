@@ -222,12 +222,28 @@ export default function Clients() {
     }
   };
 
-  const filteredClients = clients?.filter(client =>
-    client.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    client.prenom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    client.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    client.telephone_principal?.includes(searchTerm)
-  ) || [];
+  const filteredClients = clients?.filter(client => {
+    const searchLower = searchTerm.toLowerCase().trim().replace(/\s+/g, ' ');
+    if (!searchLower) return true;
+    
+    // Normalize client data
+    const nom = (client.nom || '').toLowerCase().trim();
+    const prenom = (client.prenom || '').toLowerCase().trim();
+    const email = (client.email || '').toLowerCase().trim();
+    const phone = (client.telephone_principal || '').replace(/[\s\-\.]/g, '');
+    const searchPhone = searchTerm.replace(/[\s\-\.]/g, '');
+    
+    // Full name variations
+    const fullName1 = `${nom} ${prenom}`.trim();
+    const fullName2 = `${prenom} ${nom}`.trim();
+    
+    return nom.includes(searchLower) ||
+           prenom.includes(searchLower) ||
+           fullName1.includes(searchLower) ||
+           fullName2.includes(searchLower) ||
+           email.includes(searchLower) ||
+           phone.includes(searchPhone);
+  }) || [];
 
   // Pagination logic
   const itemsPerPage = 50;
