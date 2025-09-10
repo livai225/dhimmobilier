@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Plus, Edit, Trash2, Users, Phone, Mail, MapPin, AlertTriangle, Search, TrendingUp, Activity, Eye } from "lucide-react";
+import { ProtectedAction } from "@/components/ProtectedAction";
 import { useToast } from "@/hooks/use-toast";
 import { ClientForm } from "@/components/ClientForm";
 import { ExportToExcelButton } from "@/components/ExportToExcelButton";
@@ -270,10 +271,12 @@ export default function Clients() {
           />
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
+            <ProtectedAction permission="canCreateClients">
               <Button onClick={() => { resetForm(); setEditingClient(null); }} className="w-full sm:w-auto">
                 <Plus className="mr-2 h-4 w-4" />
                 Nouveau client
               </Button>
+            </ProtectedAction>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto mx-4">
               <DialogHeader>

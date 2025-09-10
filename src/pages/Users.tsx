@@ -4,13 +4,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Separator } from "@/components/ui/separator";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +15,13 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -26,9 +29,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
+import { Plus, Edit, Trash2, Shield, User, Calculator, Lock } from "lucide-react";
 import { toast } from "sonner";
-import { Plus, Edit, Trash2 } from "lucide-react";
 import { ProtectedAction } from "@/components/ProtectedAction";
 
 interface User {
@@ -39,6 +41,21 @@ interface User {
   telephone?: string;
   role: 'admin' | 'comptable' | 'secretaire';
   actif: boolean;
+  username?: string;
+  password_hash?: string;
+}
+
+interface AvailablePermission {
+  id: string;
+  name: string;
+  display_name: string;
+  description?: string;
+  category: string;
+}
+
+interface UserPermission {
+  permission_name: string;
+  granted: boolean;
 }
 
 export default function Users() {
@@ -49,10 +66,54 @@ export default function Users() {
     prenom: '',
     email: '',
     telephone: '',
+    username: '',
+    password: '',
     role: 'secretaire' as 'admin' | 'comptable' | 'secretaire',
   });
+  const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
 
   const queryClient = useQueryClient();
+
+  // Charger les permissions disponibles
+  const { data: availablePermissions } = useQuery({
+    queryKey: ['available-permissions'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('available_permissions')
+        .select('*')
+        .order('category, display_name');
+      
+      if (error) throw error;
+      return data as AvailablePermission[];
+    }
+  });
+
+  // Charger les permissions de l'utilisateur en cours d'édition
+  const { data: userPermissions } = useQuery({
+    queryKey: ['user-permissions', editingUser?.id],
+    queryFn: async () => {
+      if (!editingUser?.id) return [];
+      
+      const { data, error } = await supabase
+        .from('user_permissions')
+        .select('permission_name, granted')
+        .eq('user_id', editingUser.id);
+      
+      if (error) throw error;
+      return data as UserPermission[];
+    },
+    enabled: !!editingUser?.id
+  });
+
+  // Effet pour mettre à jour les permissions sélectionnées
+  useEffect(() => {
+    if (userPermissions) {
+      const grantedPermissions = userPermissions
+        .filter(p => p.granted)
+        .map(p => p.permission_name);
+      setSelectedPermissions(grantedPermissions);
+    }
+  }, [userPermissions]);
 
   const { data: users, isLoading } = useQuery({
     queryKey: ['users'],
@@ -69,13 +130,44 @@ export default function Users() {
 
   const createUserMutation = useMutation({
     mutationFn: async (userData: typeof formData) => {
+      // Hash le mot de passe si fourni
+      let hashedPassword = null;
+      if (userData.password) {
+        // Pour le moment, simple hash - à améliorer pour la production
+        hashedPassword = btoa(userData.password); // Base64 encoding - remplacer par bcrypt en production
+      }
+
+      const { password, ...userDataToInsert } = userData;
+      const finalUserData = {
+        ...userDataToInsert,
+        password_hash: hashedPassword
+      };
+
       const { data, error } = await supabase
         .from('users')
-        .insert([userData])
+        .insert([finalUserData])
         .select()
         .single();
       
       if (error) throw error;
+
+      // Sauvegarder les permissions personnalisées
+      if (selectedPermissions.length > 0) {
+        const permissionsToInsert = selectedPermissions.map(permissionName => ({
+          user_id: data.id,
+          permission_name: permissionName,
+          granted: true
+        }));
+
+        const { error: permError } = await supabase
+          .from('user_permissions')
+          .insert(permissionsToInsert);
+
+        if (permError) {
+          console.error('Error saving permissions:', permError);
+        }
+      }
+
       return data;
     },
     onSuccess: () => {
@@ -84,32 +176,73 @@ export default function Users() {
       resetForm();
       toast.success("Utilisateur créé avec succès");
     },
-    onError: (error) => {
-      toast.error("Erreur lors de la création de l'utilisateur");
+    onError: (error: any) => {
+      toast.error(error.message?.includes('users_username_key') 
+        ? "Ce nom d'utilisateur existe déjà" 
+        : "Erreur lors de la création de l'utilisateur");
       console.error(error);
     }
   });
 
   const updateUserMutation = useMutation({
     mutationFn: async ({ id, ...userData }: { id: string } & typeof formData) => {
+      // Hash le mot de passe si fourni et modifié
+      let hashedPassword = undefined;
+      if (userData.password && userData.password.trim() !== '') {
+        hashedPassword = btoa(userData.password); // Base64 encoding - remplacer par bcrypt en production
+      }
+
+      const { password, ...userDataToUpdate } = userData;
+      const finalUserData = hashedPassword 
+        ? { ...userDataToUpdate, password_hash: hashedPassword }
+        : userDataToUpdate;
+
       const { data, error } = await supabase
         .from('users')
-        .update(userData)
+        .update(finalUserData)
         .eq('id', id)
         .select()
         .single();
       
       if (error) throw error;
+
+      // Mettre à jour les permissions personnalisées
+      // D'abord, supprimer toutes les permissions existantes
+      await supabase
+        .from('user_permissions')
+        .delete()
+        .eq('user_id', id);
+
+      // Puis, insérer les nouvelles permissions sélectionnées
+      if (selectedPermissions.length > 0) {
+        const permissionsToInsert = selectedPermissions.map(permissionName => ({
+          user_id: id,
+          permission_name: permissionName,
+          granted: true
+        }));
+
+        const { error: permError } = await supabase
+          .from('user_permissions')
+          .insert(permissionsToInsert);
+
+        if (permError) {
+          console.error('Error saving permissions:', permError);
+        }
+      }
+
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['user-permissions'] });
       setIsDialogOpen(false);
       resetForm();
       toast.success("Utilisateur modifié avec succès");
     },
-    onError: (error) => {
-      toast.error("Erreur lors de la modification de l'utilisateur");
+    onError: (error: any) => {
+      toast.error(error.message?.includes('users_username_key') 
+        ? "Ce nom d'utilisateur existe déjà" 
+        : "Erreur lors de la modification de l'utilisateur");
       console.error(error);
     }
   });
@@ -139,8 +272,11 @@ export default function Users() {
       prenom: '',
       email: '',
       telephone: '',
+      username: '',
+      password: '',
       role: 'secretaire',
     });
+    setSelectedPermissions([]);
     setEditingUser(null);
   };
 
@@ -161,6 +297,8 @@ export default function Users() {
       prenom: user.prenom,
       email: user.email || '',
       telephone: user.telephone || '',
+      username: user.username || '',
+      password: '', // Ne pas pré-remplir le mot de passe
       role: user.role,
     });
     setIsDialogOpen(true);
@@ -252,6 +390,38 @@ export default function Users() {
                     onChange={(e) => setFormData(prev => ({ ...prev, telephone: e.target.value }))}
                   />
                 </div>
+
+                <Separator />
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="username" className="flex items-center gap-2">
+                      <User className="h-4 w-4" />
+                      Nom d'utilisateur *
+                    </Label>
+                    <Input
+                      id="username"
+                      value={formData.username}
+                      onChange={(e) => setFormData(prev => ({ ...prev, username: e.target.value }))}
+                      required
+                      placeholder="login_utilisateur"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="password" className="flex items-center gap-2">
+                      <Lock className="h-4 w-4" />
+                      Mot de passe {editingUser ? '' : '*'}
+                    </Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      value={formData.password}
+                      onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                      required={!editingUser}
+                      placeholder={editingUser ? "Laisser vide pour ne pas changer" : "mot_de_passe"}
+                    />
+                  </div>
+                </div>
                 
                 <div className="space-y-2">
                   <Label htmlFor="role">Rôle *</Label>
@@ -265,12 +435,71 @@ export default function Users() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="admin">Administrateur</SelectItem>
-                      <SelectItem value="comptable">Comptable</SelectItem>
-                      <SelectItem value="secretaire">Secrétaire</SelectItem>
+                      <SelectItem value="admin">
+                        <div className="flex items-center gap-2">
+                          <Shield className="h-4 w-4" />
+                          Administrateur
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="comptable">
+                        <div className="flex items-center gap-2">
+                          <Calculator className="h-4 w-4" />
+                          Comptable
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="secretaire">
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4" />
+                          Secrétaire
+                        </div>
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* Section des permissions personnalisées */}
+                {availablePermissions && availablePermissions.length > 0 && (
+                  <>
+                    <Separator />
+                    <div className="space-y-3">
+                      <Label className="text-base font-medium">Permissions personnalisées</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Accordez des permissions spécifiques en plus de celles du rôle.
+                      </p>
+                      
+                      <div className="grid grid-cols-1 gap-3 max-h-48 overflow-y-auto border rounded-md p-3">
+                        {availablePermissions.map((permission) => (
+                          <div key={permission.id} className="flex items-start space-x-3">
+                            <Checkbox
+                              id={permission.name}
+                              checked={selectedPermissions.includes(permission.name)}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setSelectedPermissions(prev => [...prev, permission.name]);
+                                } else {
+                                  setSelectedPermissions(prev => prev.filter(p => p !== permission.name));
+                                }
+                              }}
+                            />
+                            <div className="space-y-1 leading-none">
+                              <Label
+                                htmlFor={permission.name}
+                                className="text-sm font-medium leading-none cursor-pointer"
+                              >
+                                {permission.display_name}
+                              </Label>
+                              {permission.description && (
+                                <p className="text-xs text-muted-foreground">
+                                  {permission.description}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
                 
                 <div className="flex justify-end gap-2">
                   <Button 

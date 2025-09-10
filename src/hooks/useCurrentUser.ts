@@ -9,6 +9,8 @@ export interface User {
   telephone?: string;
   role: 'admin' | 'comptable' | 'secretaire';
   actif: boolean;
+  username?: string;
+  password_hash?: string;
 }
 
 export const useCurrentUser = () => {

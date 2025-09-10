@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { ProtectedAction } from "@/components/ProtectedAction";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -98,10 +99,12 @@ export default function Agents() {
             Gérez vos agents et suivez leurs performances
           </p>
         </div>
-        <Button className="w-full sm:w-auto">
-          <Plus className="h-4 w-4 mr-2" />
-          Nouvel agent
-        </Button>
+        <ProtectedAction permission="canCreateAgents">
+          <Button className="w-full sm:w-auto">
+            <Plus className="h-4 w-4 mr-2" />
+            Nouvel agent
+          </Button>
+        </ProtectedAction>
       </div>
 
       {/* Statistics selector */}

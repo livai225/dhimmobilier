@@ -89,6 +89,33 @@ export type Database = {
         }
         Relationships: []
       }
+      available_permissions: {
+        Row: {
+          category: string
+          created_at: string
+          description: string | null
+          display_name: string
+          id: string
+          name: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          display_name: string
+          id?: string
+          name: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          display_name?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
       bareme_droits_terre: {
         Row: {
           created_at: string
@@ -865,6 +892,41 @@ export type Database = {
         }
         Relationships: []
       }
+      user_permissions: {
+        Row: {
+          created_at: string
+          granted: boolean
+          id: string
+          permission_name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          granted?: boolean
+          id?: string
+          permission_name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          granted?: boolean
+          id?: string
+          permission_name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_permissions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       users: {
         Row: {
           actif: boolean
@@ -872,10 +934,12 @@ export type Database = {
           email: string | null
           id: string
           nom: string
+          password_hash: string | null
           prenom: string
           role: Database["public"]["Enums"]["user_role"]
           telephone: string | null
           updated_at: string
+          username: string | null
         }
         Insert: {
           actif?: boolean
@@ -883,10 +947,12 @@ export type Database = {
           email?: string | null
           id?: string
           nom: string
+          password_hash?: string | null
           prenom: string
           role?: Database["public"]["Enums"]["user_role"]
           telephone?: string | null
           updated_at?: string
+          username?: string | null
         }
         Update: {
           actif?: boolean
@@ -894,10 +960,12 @@ export type Database = {
           email?: string | null
           id?: string
           nom?: string
+          password_hash?: string | null
           prenom?: string
           role?: Database["public"]["Enums"]["user_role"]
           telephone?: string | null
           updated_at?: string
+          username?: string | null
         }
         Relationships: []
       }

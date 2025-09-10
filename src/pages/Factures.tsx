@@ -196,10 +196,12 @@ export default function Factures() {
           />
           <Dialog open={isFactureDialogOpen} onOpenChange={setIsFactureDialogOpen}>
             <DialogTrigger asChild>
+            <ProtectedAction permission="canCreateInvoices">
               <Button onClick={() => setEditingFacture(null)}>
                 <Plus className="h-4 w-4 mr-2" />
                 Nouvelle facture
               </Button>
+            </ProtectedAction>
             </DialogTrigger>
             <DialogContent className="max-w-2xl">
               <DialogHeader>

@@ -19,6 +19,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { ProtectedAction } from "@/components/ProtectedAction";
 import { FournisseurForm } from "@/components/FournisseurForm";
 import { FournisseurDetailsDialog } from "@/components/FournisseurDetailsDialog";
 import { Plus, Search, Edit, Trash2, Eye } from "lucide-react";
@@ -147,10 +148,12 @@ export default function Fournisseurs() {
           />
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
+            <ProtectedAction permission="canCreateSuppliers">
               <Button onClick={() => setEditingFournisseur(null)}>
                 <Plus className="h-4 w-4 mr-2" />
                 Nouveau fournisseur
               </Button>
+            </ProtectedAction>
             </DialogTrigger>
             <DialogContent className="max-w-2xl">
               <DialogHeader>

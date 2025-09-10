@@ -10,6 +10,7 @@ import { Combobox } from "@/components/ui/combobox";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Plus, Edit, Trash2, Building, Search } from "lucide-react";
+import { ProtectedAction } from "@/components/ProtectedAction";
 import { useToast } from "@/hooks/use-toast";
 import { PropertyDetailsDialog } from "@/components/PropertyDetailsDialog";
 import { PropertyForm } from "@/components/PropertyForm";
@@ -282,10 +283,12 @@ export default function Proprietes() {
           />
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
+            <ProtectedAction permission="canCreateProperties">
               <Button onClick={() => { resetForm(); setEditingPropriete(null); }} className="w-full sm:w-auto">
                 <Plus className="mr-2 h-4 w-4" />
                 Nouvelle propriété
               </Button>
+            </ProtectedAction>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[425px]">
               <DialogHeader>
