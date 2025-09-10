@@ -58,13 +58,82 @@ export default function Clients() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Fetch clients
+  // Advanced string normalization function
+  const normalizeString = (str: string): string => {
+    if (!str) return '';
+    return str
+      .normalize('NFD') // Decompose accented characters
+      .replace(/[\u0300-\u036f]/g, '') // Remove diacritics
+      .replace(/[\u200B-\u200D\uFEFF]/g, '') // Remove invisible characters
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, ' '); // Normalize spaces
+  };
+
+  // Fuzzy matching function
+  const fuzzyMatch = (text: string, query: string): boolean => {
+    const normalizedText = normalizeString(text);
+    const normalizedQuery = normalizeString(query);
+    
+    // Exact match first
+    if (normalizedText.includes(normalizedQuery)) return true;
+    
+    // Word-by-word matching
+    const queryWords = normalizedQuery.split(' ').filter(word => word.length > 0);
+    const textWords = normalizedText.split(' ');
+    
+    return queryWords.every(queryWord => 
+      textWords.some(textWord => 
+        textWord.includes(queryWord) || 
+        queryWord.includes(textWord) ||
+        levenshteinDistance(textWord, queryWord) <= 1
+      )
+    );
+  };
+
+  // Simple Levenshtein distance for fuzzy matching (max distance 1)
+  const levenshteinDistance = (a: string, b: string): number => {
+    if (Math.abs(a.length - b.length) > 1) return 2; // Early exit for efficiency
+    
+    const matrix = Array(a.length + 1).fill(null).map(() => Array(b.length + 1).fill(0));
+    
+    for (let i = 0; i <= a.length; i++) matrix[i][0] = i;
+    for (let j = 0; j <= b.length; j++) matrix[0][j] = j;
+    
+    for (let i = 1; i <= a.length; i++) {
+      for (let j = 1; j <= b.length; j++) {
+        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j - 1] + cost
+        );
+      }
+    }
+    
+    return matrix[a.length][b.length];
+  };
+
+  // Fetch clients with server-side search when search term is provided
   const { data: clients, isLoading } = useQuery({
-    queryKey: ['clients'],
+    queryKey: ['clients', searchTerm],
     queryFn: async () => {
-      const { data, error } = await supabase.from('clients').select('*').order('nom');
-      if (error) throw error;
-      return data;
+      if (searchTerm.trim().length > 0) {
+        // Server-side search using Supabase text search
+        const normalizedSearch = normalizeString(searchTerm);
+        const { data, error } = await supabase
+          .from('clients')
+          .select('*')
+          .or(`nom.ilike.%${normalizedSearch}%,prenom.ilike.%${normalizedSearch}%,email.ilike.%${normalizedSearch}%,telephone_principal.ilike.%${searchTerm}%`)
+          .order('nom');
+        if (error) throw error;
+        return data;
+      } else {
+        // Load all clients when no search term
+        const { data, error } = await supabase.from('clients').select('*').order('nom');
+        if (error) throw error;
+        return data;
+      }
     },
   });
 
@@ -223,26 +292,42 @@ export default function Clients() {
   };
 
   const filteredClients = clients?.filter(client => {
-    const searchLower = searchTerm.toLowerCase().trim().replace(/\s+/g, ' ');
-    if (!searchLower) return true;
+    if (!searchTerm.trim()) return true;
     
-    // Normalize client data
-    const nom = (client.nom || '').toLowerCase().trim();
-    const prenom = (client.prenom || '').toLowerCase().trim();
-    const email = (client.email || '').toLowerCase().trim();
-    const phone = (client.telephone_principal || '').replace(/[\s\-\.]/g, '');
-    const searchPhone = searchTerm.replace(/[\s\-\.]/g, '');
+    // Enhanced client-side filtering with fuzzy matching
+    const normalizedSearch = normalizeString(searchTerm);
     
-    // Full name variations
-    const fullName1 = `${nom} ${prenom}`.trim();
-    const fullName2 = `${prenom} ${nom}`.trim();
-    
-    return nom.includes(searchLower) ||
-           prenom.includes(searchLower) ||
-           fullName1.includes(searchLower) ||
-           fullName2.includes(searchLower) ||
-           email.includes(searchLower) ||
-           phone.includes(searchPhone);
+    // Check all relevant fields with fuzzy matching
+    const searchableFields = [
+      client.nom || '',
+      client.prenom || '',
+      `${client.nom || ''} ${client.prenom || ''}`.trim(),
+      `${client.prenom || ''} ${client.nom || ''}`.trim(),
+      client.email || '',
+      client.telephone_principal || '',
+      client.telephone_secondaire_1 || '',
+      client.telephone_secondaire_2 || '',
+      client.adresse || '',
+      client.contact_urgence_nom || ''
+    ];
+
+    // Phone number matching (exact digits only)
+    const searchDigits = searchTerm.replace(/[^\d]/g, '');
+    if (searchDigits.length >= 3) {
+      const phoneFields = [
+        client.telephone_principal || '',
+        client.telephone_secondaire_1 || '',
+        client.telephone_secondaire_2 || '',
+        client.contact_urgence_telephone || ''
+      ];
+      
+      if (phoneFields.some(phone => phone.replace(/[^\d]/g, '').includes(searchDigits))) {
+        return true;
+      }
+    }
+
+    // Fuzzy text matching
+    return searchableFields.some(field => fuzzyMatch(field, normalizedSearch));
   }) || [];
 
   // Pagination logic
@@ -252,10 +337,21 @@ export default function Clients() {
   const endIndex = startIndex + itemsPerPage;
   const currentClients = filteredClients.slice(startIndex, endIndex);
 
-  // Reset to first page when search changes
+  // Reset to first page when search changes with debouncing
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchTerm(e.target.value);
+    const value = e.target.value;
+    setSearchTerm(value);
     setCurrentPage(1);
+    
+    // Debug logging
+    if (value.trim()) {
+      console.log('🔍 Recherche:', {
+        terme: value,
+        normalise: normalizeString(value),
+        clientsTotal: clients?.length || 0,
+        resultats: filteredClients.length
+      });
+    }
   };
 
   const formatPhone = (phone?: string) => {
@@ -376,17 +472,35 @@ export default function Clients() {
         </Card>
       </div>
 
-      {/* Search Bar */}
-      <div className="flex items-center space-x-2">
-        <div className="relative flex-1 max-w-sm">
+      {/* Enhanced Search Bar */}
+      <div className="flex flex-col space-y-2 sm:flex-row sm:items-center sm:space-x-4 sm:space-y-0">
+        <div className="relative flex-1 max-w-md">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Rechercher un client..."
+            placeholder="Rechercher par nom, prénom, email, téléphone..."
             value={searchTerm}
             onChange={handleSearchChange}
             className="pl-8"
           />
         </div>
+        {searchTerm && (
+          <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+            <Badge variant="outline" className="text-xs">
+              {filteredClients.length} résultat{filteredClients.length !== 1 ? 's' : ''}
+            </Badge>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setSearchTerm('');
+                setCurrentPage(1);
+              }}
+              className="h-6 px-2 text-xs"
+            >
+              Effacer
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Client Details Dialog */}
@@ -403,28 +517,45 @@ export default function Clients() {
             <Users className="h-5 w-5" />
             Liste des clients
           </CardTitle>
-          <CardDescription>
-            {filteredClients.length} client{filteredClients.length !== 1 ? 's' : ''} 
-            {searchTerm && ` trouvé${filteredClients.length !== 1 ? 's' : ''} pour "${searchTerm}"`}
-            {totalPages > 1 && ` • Page ${currentPage} sur ${totalPages}`}
+          <CardDescription className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+            <span>
+              {filteredClients.length} client{filteredClients.length !== 1 ? 's' : ''} 
+              {searchTerm && ` trouvé${filteredClients.length !== 1 ? 's' : ''} pour "${searchTerm}"`}
+              {totalPages > 1 && ` • Page ${currentPage} sur ${totalPages}`}
+            </span>
+            {searchTerm && filteredClients.length === 0 && (
+              <span className="text-xs mt-1 sm:mt-0">
+                💡 Astuce: Essayez avec moins de caractères ou vérifiez l'orthographe
+              </span>
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
             <p>Chargement...</p>
           ) : filteredClients.length === 0 ? (
-            <div className="text-center py-10">
-              <Users className="mx-auto h-12 w-12 text-muted-foreground" />
-              <h3 className="mt-2 text-sm font-semibold">
-                {searchTerm ? "Aucun client trouvé" : "Aucun client"}
-              </h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {searchTerm 
-                  ? "Essayez avec d'autres termes de recherche."
-                  : "Commencez par créer votre premier client."
-                }
-              </p>
-            </div>
+              <div className="text-center py-10">
+                <Users className="mx-auto h-12 w-12 text-muted-foreground" />
+                <h3 className="mt-2 text-sm font-semibold">
+                  {searchTerm ? "Aucun client trouvé" : "Aucun client"}
+                </h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {searchTerm 
+                    ? `Aucun résultat pour "${searchTerm}". Essayez avec d'autres termes ou vérifiez l'orthographe.`
+                    : "Commencez par créer votre premier client."
+                  }
+                </p>
+                {searchTerm && (
+                  <div className="mt-4 space-y-2">
+                    <p className="text-xs text-muted-foreground">Suggestions:</p>
+                    <div className="flex flex-wrap justify-center gap-2">
+                      <Badge variant="outline" className="text-xs">Vérifiez l'orthographe</Badge>
+                      <Badge variant="outline" className="text-xs">Utilisez moins de mots</Badge>
+                      <Badge variant="outline" className="text-xs">Essayez juste le nom</Badge>
+                    </div>
+                  </div>
+                )}
+              </div>
           ) : (
             <>
               {/* Mobile Cards (visible on small screens) */}
