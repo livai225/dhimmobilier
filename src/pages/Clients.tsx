@@ -129,8 +129,8 @@ export default function Clients() {
         if (error) throw error;
         return data;
       } else {
-        // Load all clients when no search term
-        const { data, error } = await supabase.from('clients').select('*').order('nom');
+        // Load all clients when no search term (remove any implicit limits)
+        const { data, error } = await supabase.from('clients').select('*').limit(10000).order('nom');
         if (error) throw error;
         return data;
       }
@@ -366,7 +366,10 @@ export default function Clients() {
         <div>
           <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Clients</h2>
           <p className="text-muted-foreground">
-            Gérez vos clients et leurs informations
+            {searchTerm.trim() ? 
+              `${filteredClients.length} résultats sur ${stats?.totalClients || 0} clients` :
+              `${stats?.totalClients || 0} clients au total`
+            }
           </p>
         </div>
         <div className="flex flex-col space-y-2 sm:flex-row sm:space-x-2 sm:space-y-0">
@@ -486,7 +489,7 @@ export default function Clients() {
         {searchTerm && (
           <div className="flex items-center space-x-2 text-sm text-muted-foreground">
             <Badge variant="outline" className="text-xs">
-              {filteredClients.length} résultat{filteredClients.length !== 1 ? 's' : ''}
+              {filteredClients.length} résultat{filteredClients.length !== 1 ? 's' : ''} sur {stats?.totalClients || 0} clients
             </Badge>
             <Button
               variant="ghost"
