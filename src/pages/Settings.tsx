@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, Trash2, Download, Settings as SettingsIcon, Database, Upload } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ImportClientsFromExcel } from "@/components/ImportClientsFromExcel";
+import { DuplicateClientManager } from "@/components/DuplicateClientManager";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -119,6 +120,9 @@ export default function Settings() {
             <ImportClientsFromExcel />
           </CardContent>
         </Card>
+
+        {/* Gestion des doublons */}
+        <DuplicateClientManager />
 
         {/* Zone dangereuse */}
         <Card className="border-red-200 bg-red-50/50">
