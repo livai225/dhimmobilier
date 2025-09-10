@@ -22,6 +22,7 @@ import { fr } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import { PaiementLocationDialog } from "@/components/PaiementLocationDialog";
 import { PaiementCautionDialog } from "@/components/PaiementCautionDialog";
+import { ProtectedAction } from "@/components/ProtectedAction";
 
 interface LocationDetailsDialogProps {
   location: any;

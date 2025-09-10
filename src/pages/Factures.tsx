@@ -28,6 +28,7 @@ import { fr } from "date-fns/locale";
 import { ExportToExcelButton } from "@/components/ExportToExcelButton";
 import { FactureDetailsDialog } from "@/components/FactureDetailsDialog";
 import { Eye, Download as DownloadIcon } from "lucide-react";
+import { ProtectedAction } from "@/components/ProtectedAction";
 
 export default function Factures() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -340,14 +341,16 @@ export default function Factures() {
                    <TableCell>{getStatutBadge(facture)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handlePaiement(facture)}
-                        disabled={facture.solde === 0}
-                      >
-                        <CreditCard className="h-4 w-4" />
-                      </Button>
+                      <ProtectedAction permission="canPayInvoices">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handlePaiement(facture)}
+                          disabled={facture.solde === 0}
+                        >
+                          <CreditCard className="h-4 w-4" />
+                        </Button>
+                      </ProtectedAction>
                       <Button
                         variant="ghost"
                         size="sm"

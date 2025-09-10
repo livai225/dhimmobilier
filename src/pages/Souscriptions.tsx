@@ -17,6 +17,7 @@ import { toast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { ExportToExcelButton } from "@/components/ExportToExcelButton";
+import { ProtectedAction } from "@/components/ProtectedAction";
 
 export default function Souscriptions() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -293,31 +294,34 @@ export default function Souscriptions() {
 
                   {/* Bouton pour paiement de souscription */}
                   {souscription.solde_restant > 0 && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setSelectedSouscription(souscription);
-                        setIsPaymentDialogOpen(true);
-                      }}
-                    >
-                      <CreditCard className="mr-2 h-4 w-4" />
-                      Paiement souscription
-                    </Button>
+                    <ProtectedAction permission="canCreateSubscriptions">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedSouscription(souscription);
+                          setIsPaymentDialogOpen(true);
+                        }}
+                      >
+                        <CreditCard className="mr-2 h-4 w-4" />
+                        Paiement souscription
+                      </Button>
+                    </ProtectedAction>
                   )}
 
                   {/* Bouton pour paiement de droit de terre */}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={souscription.solde_restant > 0 || (souscription.montant_droit_terre_mensuel ?? 0) <= 0}
-                    onClick={() => {
-                      setSelectedSouscription(souscription);
-                      setIsDroitTerreDialogOpen(true);
-                    }}
-                    title={
-                      souscription.solde_restant > 0
-                        ? "Disponible après solde de la souscription"
+                  <ProtectedAction permission="canPayLandRights">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={souscription.solde_restant > 0 || (souscription.montant_droit_terre_mensuel ?? 0) <= 0}
+                      onClick={() => {
+                        setSelectedSouscription(souscription);
+                        setIsDroitTerreDialogOpen(true);
+                      }}
+                      title={
+                        souscription.solde_restant > 0
+                          ? "Disponible après solde de la souscription"
                         : (souscription.montant_droit_terre_mensuel ?? 0) <= 0
                           ? "Droit de terre non applicable"
                           : undefined
