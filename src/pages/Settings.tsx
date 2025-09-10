@@ -25,7 +25,9 @@ export default function Settings() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [confirmText, setConfirmText] = useState("");
+  const [confirmClientText, setConfirmClientText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingClients, setIsLoadingClients] = useState(false);
 
   const clearFinancialData = useMutation({
     mutationFn: async () => {
@@ -70,7 +72,46 @@ export default function Settings() {
     },
   });
 
+  const clearAllClients = useMutation({
+    mutationFn: async () => {
+      setIsLoadingClients(true);
+      
+      // Supprimer tous les clients - vérifier d'abord s'il y a des relations
+      const { count } = await supabase
+        .from('clients')
+        .select('*', { count: 'exact', head: true });
+      
+      // Supprimer tous les clients
+      const { error } = await supabase
+        .from('clients')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+      
+      if (error) throw error;
+      
+      return count;
+    },
+    onSuccess: (deletedCount) => {
+      setConfirmClientText("");
+      setIsLoadingClients(false);
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
+      toast({
+        title: "✅ Clients supprimés",
+        description: `Tous les clients (${deletedCount}) ont été supprimés avec succès.`,
+      });
+    },
+    onError: (error: any) => {
+      setIsLoadingClients(false);
+      toast({
+        title: "❌ Erreur",
+        description: error.message || "Impossible de supprimer les clients",
+        variant: "destructive",
+      });
+    },
+  });
+
   const canDelete = confirmText === "SUPPRIMER TOUT";
+  const canDeleteClients = confirmClientText === "SUPPRIMER TOUS LES CLIENTS";
 
   return (
     <div className="container mx-auto p-4 lg:p-6 max-w-4xl">
@@ -133,6 +174,65 @@ export default function Settings() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="bg-red-100 border border-red-200 rounded-lg p-4 mb-4">
+              <h3 className="font-medium text-red-800 mb-2">🗑️ Suppression de tous les clients</h3>
+              <p className="text-sm text-red-700 mb-3">
+                Cette action va supprimer <strong>tous les clients</strong> de la base de données.
+              </p>
+              <div className="bg-yellow-100 border border-yellow-200 rounded p-3 mb-4">
+                <p className="text-sm text-yellow-800">
+                  ⚠️ <strong>Attention :</strong> Utilisez cette fonction uniquement pour nettoyer avant un nouvel import.
+                </p>
+              </div>
+              
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" className="w-full">
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Supprimer tous les clients
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent className="max-w-lg">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle className="text-red-600">
+                      ⚠️ Suppression de tous les clients
+                    </AlertDialogTitle>
+                    <AlertDialogDescription className="space-y-3">
+                      <p>
+                        Vous êtes sur le point de supprimer <strong>tous les clients</strong> de la base de données.
+                      </p>
+                      <p className="text-red-600 font-medium">
+                        Cette action est IRRÉVERSIBLE !
+                      </p>
+                      <div>
+                        <p className="text-sm mb-2">
+                          Tapez <strong>"SUPPRIMER TOUS LES CLIENTS"</strong> pour confirmer :
+                        </p>
+                        <Input
+                          value={confirmClientText}
+                          onChange={(e) => setConfirmClientText(e.target.value)}
+                          placeholder="SUPPRIMER TOUS LES CLIENTS"
+                          className="font-mono text-sm"
+                        />
+                      </div>
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel onClick={() => setConfirmClientText("")}>
+                      Annuler
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => clearAllClients.mutate()}
+                      disabled={!canDeleteClients || isLoadingClients}
+                      className="bg-red-600 hover:bg-red-700"
+                    >
+                      {isLoadingClients ? "Suppression..." : "Confirmer la suppression"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+
             <div className="bg-red-100 border border-red-200 rounded-lg p-4">
               <h3 className="font-medium text-red-800 mb-2">⚠️ Suppression des données financières</h3>
               <p className="text-sm text-red-700 mb-3">
