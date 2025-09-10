@@ -4,7 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
-import { Upload, FileSpreadsheet, CheckCircle, AlertCircle } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
+import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, Search, Users, Eye } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import * as XLSX from 'xlsx';
@@ -13,6 +15,15 @@ interface ClientPreview {
   nom: string;
   prenom: string;
   original: string;
+}
+
+interface ClientVerification {
+  nom: string;
+  prenom: string;
+  original: string;
+  status: 'nouveau' | 'doublon_exact' | 'doublon_probable';
+  reason?: string;
+  selected: boolean;
 }
 
 interface ImportResult {
@@ -24,11 +35,77 @@ interface ImportResult {
 export const ImportClientsFromExcel = () => {
   const [file, setFile] = useState<File | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [preview, setPreview] = useState<ClientPreview[]>([]);
+  const [verificationList, setVerificationList] = useState<ClientVerification[]>([]);
   const [showPreview, setShowPreview] = useState(false);
+  const [showVerification, setShowVerification] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const { toast } = useToast();
+
+  // Fonction pour normaliser les noms pour la comparaison
+  const normalizeName = (name: string): string => {
+    return name
+      .toLowerCase()
+      .trim()
+      .replace(/[àáâãäå]/g, 'a')
+      .replace(/[èéêë]/g, 'e')
+      .replace(/[ìíîï]/g, 'i')
+      .replace(/[òóôõö]/g, 'o')
+      .replace(/[ùúûü]/g, 'u')
+      .replace(/[ç]/g, 'c')
+      .replace(/[ñ]/g, 'n')
+      .replace(/\s+/g, ' ');
+  };
+
+  // Fonction pour détecter les doublons avec logique avancée
+  const detectDuplicate = (nom: string, prenom: string, existingClients: any[]): { isDuplicate: boolean; status: ClientVerification['status']; reason?: string } => {
+    const normalizedNom = normalizeName(nom);
+    const normalizedPrenom = normalizeName(prenom || '');
+    const fullName = `${normalizedNom} ${normalizedPrenom}`.trim();
+
+    for (const existing of existingClients) {
+      const existingNom = normalizeName(existing.nom);
+      const existingPrenom = normalizeName(existing.prenom || '');
+      const existingFullName = `${existingNom} ${existingPrenom}`.trim();
+
+      // Doublon exact
+      if (normalizedNom === existingNom && normalizedPrenom === existingPrenom) {
+        return { 
+          isDuplicate: true, 
+          status: 'doublon_exact', 
+          reason: `Identique à: ${existing.nom} ${existing.prenom || ''}`.trim()
+        };
+      }
+
+      // Doublon probable - même nom complet
+      if (fullName === existingFullName && fullName.length > 0) {
+        return { 
+          isDuplicate: true, 
+          status: 'doublon_probable', 
+          reason: `Nom complet similaire à: ${existing.nom} ${existing.prenom || ''}`.trim()
+        };
+      }
+
+      // Doublon probable - nom identique avec prénom similaire
+      if (normalizedNom === existingNom && normalizedPrenom && existingPrenom) {
+        const prenomWords1 = normalizedPrenom.split(' ');
+        const prenomWords2 = existingPrenom.split(' ');
+        const commonWords = prenomWords1.filter(word => prenomWords2.includes(word));
+        
+        if (commonWords.length > 0) {
+          return { 
+            isDuplicate: true, 
+            status: 'doublon_probable', 
+            reason: `Nom identique avec prénom similaire: ${existing.nom} ${existing.prenom || ''}`.trim()
+          };
+        }
+      }
+    }
+
+    return { isDuplicate: false, status: 'nouveau' };
+  };
 
   const parseNameFromFullName = (fullName: string): { nom: string; prenom: string } => {
     if (!fullName || typeof fullName !== 'string') {
@@ -55,7 +132,9 @@ export const ImportClientsFromExcel = () => {
     if (selectedFile) {
       setFile(selectedFile);
       setShowPreview(false);
+      setShowVerification(false);
       setImportResult(null);
+      setVerificationList([]);
     }
   };
 
@@ -101,6 +180,7 @@ export const ImportClientsFromExcel = () => {
 
       setPreview(previewData);
       setShowPreview(true);
+      setShowVerification(false);
       
       toast({
         title: "Aperçu généré",
@@ -116,13 +196,11 @@ export const ImportClientsFromExcel = () => {
     }
   };
 
-  const importClients = async () => {
+  // Nouvelle fonction de vérification des doublons
+  const verifyDuplicates = async () => {
     if (!file) return;
 
-    setIsImporting(true);
-    setProgress(0);
-    setImportResult(null);
-
+    setIsVerifying(true);
     try {
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data);
@@ -134,67 +212,120 @@ export const ImportClientsFromExcel = () => {
         .map(row => row[0])
         .filter(name => name && typeof name === 'string' && name.trim().length > 0);
 
-      if (names.length === 0) {
-        toast({
-          title: "Fichier vide",
-          description: "Aucun nom trouvé dans le fichier.",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      // Vérifier les doublons existants
+      // Récupérer tous les clients existants
       const { data: existingClients } = await supabase
         .from('clients')
         .select('nom, prenom');
 
-      const existingSet = new Set(
-        existingClients?.map(client => `${client.nom}_${client.prenom}`) || []
-      );
+      const verificationResults: ClientVerification[] = [];
+      
+      names.forEach(name => {
+        const { nom, prenom } = parseNameFromFullName(name);
+        
+        if (!nom) return;
 
+        const duplicateCheck = detectDuplicate(nom, prenom, existingClients || []);
+        
+        verificationResults.push({
+          nom,
+          prenom,
+          original: name,
+          status: duplicateCheck.status,
+          reason: duplicateCheck.reason,
+          selected: duplicateCheck.status === 'nouveau' // Sélectionner automatiquement les nouveaux noms
+        });
+      });
+
+      setVerificationList(verificationResults);
+      setShowVerification(true);
+      setShowPreview(false);
+
+      const newClients = verificationResults.filter(client => client.status === 'nouveau');
+      const duplicates = verificationResults.filter(client => client.status !== 'nouveau');
+
+      toast({
+        title: "Vérification terminée",
+        description: `${newClients.length} nouveaux clients détectés, ${duplicates.length} doublons trouvés.`
+      });
+
+    } catch (error) {
+      console.error('Erreur lors de la vérification:', error);
+      toast({
+        title: "Erreur de vérification",
+        description: "Une erreur est survenue lors de la vérification des doublons.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  // Fonction pour basculer la sélection d'un client
+  const toggleClientSelection = (index: number) => {
+    setVerificationList(prev => 
+      prev.map((client, i) => 
+        i === index ? { ...client, selected: !client.selected } : client
+      )
+    );
+  };
+
+  // Fonction pour sélectionner/désélectionner tous les nouveaux clients
+  const toggleAllNewClients = (selected: boolean) => {
+    setVerificationList(prev => 
+      prev.map(client => 
+        client.status === 'nouveau' ? { ...client, selected } : client
+      )
+    );
+  };
+
+  const importClients = async () => {
+    if (!file || verificationList.length === 0) return;
+
+    const selectedClients = verificationList.filter(client => client.selected);
+    
+    if (selectedClients.length === 0) {
+      toast({
+        title: "Aucune sélection",
+        description: "Veuillez sélectionner au moins un client à importer.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsImporting(true);
+    setProgress(0);
+    setImportResult(null);
+
+    try {
       let successCount = 0;
-      let duplicateCount = 0;
       const errors: string[] = [];
 
-      for (let i = 0; i < names.length; i++) {
-        const fullName = names[i];
-        const { nom, prenom } = parseNameFromFullName(fullName);
+      for (let i = 0; i < selectedClients.length; i++) {
+        const client = selectedClients[i];
         
-        if (!nom) {
-          errors.push(`Ligne ${i + 1}: Nom vide - "${fullName}"`);
-          continue;
-        }
-
-        const clientKey = `${nom}_${prenom}`;
-        if (existingSet.has(clientKey)) {
-          duplicateCount++;
-          continue;
-        }
-
         try {
           const { error } = await supabase
             .from('clients')
             .insert({
-              nom,
-              prenom: prenom || null
+              nom: client.nom,
+              prenom: client.prenom || null
             });
 
           if (error) {
-            errors.push(`Ligne ${i + 1}: ${error.message} - "${fullName}"`);
+            errors.push(`${client.original}: ${error.message}`);
           } else {
             successCount++;
-            existingSet.add(clientKey);
           }
         } catch (error) {
-          errors.push(`Ligne ${i + 1}: Erreur inconnue - "${fullName}"`);
+          errors.push(`${client.original}: Erreur inconnue`);
         }
 
-        setProgress(Math.round(((i + 1) / names.length) * 100));
+        setProgress(Math.round(((i + 1) / selectedClients.length) * 100));
       }
 
       const result = {
         success: successCount,
-        duplicates: duplicateCount,
+        duplicates: verificationList.length - selectedClients.length,
         errors
       };
 
@@ -228,6 +359,22 @@ export const ImportClientsFromExcel = () => {
     }
   };
 
+  const getStatusBadge = (status: ClientVerification['status']) => {
+    switch (status) {
+      case 'nouveau':
+        return <Badge variant="default" className="bg-green-100 text-green-800">Nouveau</Badge>;
+      case 'doublon_exact':
+        return <Badge variant="destructive">Doublon exact</Badge>;
+      case 'doublon_probable':
+        return <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">Doublon probable</Badge>;
+      default:
+        return null;
+    }
+  };
+
+  const newClientsCount = verificationList.filter(c => c.status === 'nouveau').length;
+  const selectedCount = verificationList.filter(c => c.selected).length;
+
   return (
     <Card>
       <CardHeader>
@@ -236,7 +383,7 @@ export const ImportClientsFromExcel = () => {
           Import de clients depuis Excel
         </CardTitle>
         <CardDescription>
-          Importez une liste de clients depuis un fichier Excel. Le fichier doit contenir une colonne avec les noms complets.
+          Importez une liste de clients depuis un fichier Excel avec vérification des doublons. Seuls les nouveaux noms non présents en base seront affichés pour import.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -253,9 +400,10 @@ export const ImportClientsFromExcel = () => {
             />
             <Button 
               onClick={previewData}
-              disabled={!file || isImporting}
+              disabled={!file || isImporting || isVerifying}
               variant="outline"
             >
+              <Eye className="h-4 w-4 mr-2" />
               Aperçu
             </Button>
           </div>
@@ -264,7 +412,17 @@ export const ImportClientsFromExcel = () => {
         {/* Aperçu des données */}
         {showPreview && preview.length > 0 && (
           <div className="space-y-3">
-            <h4 className="font-medium">Aperçu des données (20 premiers):</h4>
+            <div className="flex items-center justify-between">
+              <h4 className="font-medium">Aperçu des données (20 premiers):</h4>
+              <Button 
+                onClick={verifyDuplicates}
+                disabled={isVerifying}
+                className="flex items-center gap-2"
+              >
+                <Search className="h-4 w-4" />
+                {isVerifying ? 'Vérification...' : 'Vérifier les doublons'}
+              </Button>
+            </div>
             <div className="border rounded-lg max-h-60 overflow-y-auto">
               <table className="w-full text-sm">
                 <thead className="bg-muted/50">
@@ -280,6 +438,82 @@ export const ImportClientsFromExcel = () => {
                       <td className="p-2">{client.original}</td>
                       <td className="p-2 font-medium">{client.nom}</td>
                       <td className="p-2">{client.prenom}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Liste de vérification */}
+        {showVerification && verificationList.length > 0 && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h4 className="font-medium flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Vérification des doublons ({selectedCount} sélectionnés)
+              </h4>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => toggleAllNewClients(true)}
+                >
+                  Sélectionner tous les nouveaux
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => toggleAllNewClients(false)}
+                >
+                  Désélectionner tout
+                </Button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+              <div className="flex items-center gap-2 text-green-600">
+                <CheckCircle className="h-4 w-4" />
+                <span>{newClientsCount} nouveaux clients</span>
+              </div>
+              <div className="flex items-center gap-2 text-yellow-600">
+                <AlertCircle className="h-4 w-4" />
+                <span>{verificationList.filter(c => c.status === 'doublon_probable').length} doublons probables</span>
+              </div>
+              <div className="flex items-center gap-2 text-red-600">
+                <AlertCircle className="h-4 w-4" />
+                <span>{verificationList.filter(c => c.status === 'doublon_exact').length} doublons exacts</span>
+              </div>
+            </div>
+
+            <div className="border rounded-lg max-h-96 overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50 sticky top-0">
+                  <tr>
+                    <th className="p-2 text-left w-12">Sélection</th>
+                    <th className="p-2 text-left">Nom original</th>
+                    <th className="p-2 text-left">Nom</th>
+                    <th className="p-2 text-left">Prénom</th>
+                    <th className="p-2 text-left">Statut</th>
+                    <th className="p-2 text-left">Détails</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {verificationList.map((client, index) => (
+                    <tr key={index} className={`border-t ${client.status !== 'nouveau' ? 'bg-muted/30' : ''}`}>
+                      <td className="p-2">
+                        <Checkbox
+                          checked={client.selected}
+                          onCheckedChange={() => toggleClientSelection(index)}
+                          disabled={client.status === 'doublon_exact'}
+                        />
+                      </td>
+                      <td className="p-2">{client.original}</td>
+                      <td className="p-2 font-medium">{client.nom}</td>
+                      <td className="p-2">{client.prenom}</td>
+                      <td className="p-2">{getStatusBadge(client.status)}</td>
+                      <td className="p-2 text-xs text-muted-foreground">{client.reason}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -310,7 +544,7 @@ export const ImportClientsFromExcel = () => {
               </div>
               <div className="flex items-center gap-2 text-yellow-600">
                 <AlertCircle className="h-4 w-4" />
-                <span>{importResult.duplicates} doublons ignorés</span>
+                <span>{importResult.duplicates} ignorés</span>
               </div>
               <div className="flex items-center gap-2 text-red-600">
                 <AlertCircle className="h-4 w-4" />
@@ -333,23 +567,27 @@ export const ImportClientsFromExcel = () => {
 
         {/* Boutons d'action */}
         <div className="flex gap-3">
-          <Button
-            onClick={importClients}
-            disabled={!file || isImporting || !showPreview}
-            className="flex items-center gap-2"
-          >
-            <Upload className="h-4 w-4" />
-            {isImporting ? 'Import en cours...' : 'Importer les clients'}
-          </Button>
+          {showVerification && (
+            <Button
+              onClick={importClients}
+              disabled={selectedCount === 0 || isImporting}
+              className="flex items-center gap-2"
+            >
+              <Upload className="h-4 w-4" />
+              {isImporting ? 'Import en cours...' : `Importer ${selectedCount} clients`}
+            </Button>
+          )}
           
-          {(showPreview || importResult) && (
+          {(showPreview || showVerification || importResult) && (
             <Button
               variant="outline"
               onClick={() => {
                 setFile(null);
                 setShowPreview(false);
+                setShowVerification(false);
                 setImportResult(null);
                 setPreview([]);
+                setVerificationList([]);
                 const input = document.getElementById('excel-file') as HTMLInputElement;
                 if (input) input.value = '';
               }}
