@@ -114,23 +114,47 @@ export default function Clients() {
     return matrix[a.length][b.length];
   };
 
-  // Fetch clients with server-side search when search term is provided
+  // Unified client fetching - always search the entire database
   const { data: clients, isLoading } = useQuery({
     queryKey: ['clients', searchTerm],
     queryFn: async () => {
       if (searchTerm.trim().length > 0) {
-        // Server-side search using Supabase text search
+        // Enhanced server-side search with multiple field combinations
         const normalizedSearch = normalizeString(searchTerm);
+        const searchTerms = normalizedSearch.split(' ').filter(term => term.length > 0);
+        
+        // Build flexible search conditions
+        let searchConditions = [
+          `nom.ilike.%${normalizedSearch}%`,
+          `prenom.ilike.%${normalizedSearch}%`,
+          `email.ilike.%${normalizedSearch}%`,
+          `telephone_principal.ilike.%${searchTerm}%`,
+          `adresse.ilike.%${normalizedSearch}%`
+        ];
+        
+        // Add combined name searches for cases like "ODOH AKUYA VIVIANE"
+        if (searchTerms.length > 1) {
+          searchConditions.push(`nom.ilike.%${searchTerms.join('%')}%`);
+          searchConditions.push(`prenom.ilike.%${searchTerms.join('%')}%`);
+          // Try reversed combination (prénom + nom)
+          const reversedSearch = searchTerms.reverse().join(' ');
+          searchConditions.push(`nom.ilike.%${reversedSearch}%`);
+          searchConditions.push(`prenom.ilike.%${reversedSearch}%`);
+        }
+        
         const { data, error } = await supabase
           .from('clients')
           .select('*')
-          .or(`nom.ilike.%${normalizedSearch}%,prenom.ilike.%${normalizedSearch}%,email.ilike.%${normalizedSearch}%,telephone_principal.ilike.%${searchTerm}%`)
+          .or(searchConditions.join(','))
           .order('nom');
         if (error) throw error;
         return data;
       } else {
-        // Load all clients when no search term (remove any implicit limits)
-        const { data, error } = await supabase.from('clients').select('*').limit(10000).order('nom');
+        // Load ALL clients without any limit
+        const { data, error } = await supabase
+          .from('clients')
+          .select('*')
+          .order('nom');
         if (error) throw error;
         return data;
       }
@@ -291,44 +315,8 @@ export default function Clients() {
     }
   };
 
-  const filteredClients = clients?.filter(client => {
-    if (!searchTerm.trim()) return true;
-    
-    // Enhanced client-side filtering with fuzzy matching
-    const normalizedSearch = normalizeString(searchTerm);
-    
-    // Check all relevant fields with fuzzy matching
-    const searchableFields = [
-      client.nom || '',
-      client.prenom || '',
-      `${client.nom || ''} ${client.prenom || ''}`.trim(),
-      `${client.prenom || ''} ${client.nom || ''}`.trim(),
-      client.email || '',
-      client.telephone_principal || '',
-      client.telephone_secondaire_1 || '',
-      client.telephone_secondaire_2 || '',
-      client.adresse || '',
-      client.contact_urgence_nom || ''
-    ];
-
-    // Phone number matching (exact digits only)
-    const searchDigits = searchTerm.replace(/[^\d]/g, '');
-    if (searchDigits.length >= 3) {
-      const phoneFields = [
-        client.telephone_principal || '',
-        client.telephone_secondaire_1 || '',
-        client.telephone_secondaire_2 || '',
-        client.contact_urgence_telephone || ''
-      ];
-      
-      if (phoneFields.some(phone => phone.replace(/[^\d]/g, '').includes(searchDigits))) {
-        return true;
-      }
-    }
-
-    // Fuzzy text matching
-    return searchableFields.some(field => fuzzyMatch(field, normalizedSearch));
-  }) || [];
+  // Since we now search directly in database, no need for additional client-side filtering
+  const filteredClients = clients || [];
 
   // Pagination logic
   const itemsPerPage = 50;
@@ -489,7 +477,7 @@ export default function Clients() {
         {searchTerm && (
           <div className="flex items-center space-x-2 text-sm text-muted-foreground">
             <Badge variant="outline" className="text-xs">
-              {filteredClients.length} résultat{filteredClients.length !== 1 ? 's' : ''} sur {stats?.totalClients || 0} clients
+              {filteredClients.length} résultat{filteredClients.length !== 1 ? 's' : ''}
             </Badge>
             <Button
               variant="ghost"
