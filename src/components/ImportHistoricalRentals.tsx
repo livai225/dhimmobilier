@@ -7,18 +7,19 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Upload, FileSpreadsheet, Users, Home, Receipt, AlertCircle, CheckCircle, Info } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 
 interface ExcelRowData {
-  nom: string;
-  site: string;
+  dateVersement: string;
+  clientL: string;
+  sites: string;
+  prixLoyer: number;
   montantVerse: number;
-  moisVersement: string;
-  loyerMensuel: number;
-  soldeRestant: number;
+  resteAPayer: number;
 }
 
 interface ImportResult {
@@ -46,6 +47,7 @@ export function ImportHistoricalRentals() {
   const [previewData, setPreviewData] = useState<ExcelRowData[]>([]);
   const [showPreview, setShowPreview] = useState(false);
   const [simulationMode, setSimulationMode] = useState(true);
+  const [clearExistingClients, setClearExistingClients] = useState(false);
 
   // Normalize string for fuzzy matching
   const normalizeString = (str: string): string => {
@@ -132,42 +134,42 @@ export function ImportHistoricalRentals() {
           
           // Try to map columns based on content patterns
           const columnMapping = {
-            nom: -1,
-            site: -1,
+            dateVersement: -1,
+            clientL: -1,
+            sites: -1,
+            prixLoyer: -1,
             montantVerse: -1,
-            moisVersement: -1,
-            loyerMensuel: -1,
-            soldeRestant: -1
+            resteAPayer: -1
           };
 
           // Auto-detect columns based on headers or content
           headers.forEach((header: any, index: number) => {
             const headerStr = String(header || '').toLowerCase().trim();
             
-            if (headerStr.includes('nom') || headerStr.includes('client')) {
-              columnMapping.nom = index;
-            } else if (headerStr.includes('site') || headerStr.includes('propriete') || headerStr.includes('lieu')) {
-              columnMapping.site = index;
-            } else if (headerStr.includes('verse') || headerStr.includes('montant') || headerStr.includes('paye')) {
+            if (headerStr.includes('date') && headerStr.includes('versement')) {
+              columnMapping.dateVersement = index;
+            } else if (headerStr.includes('client_l') || headerStr.includes('client')) {
+              columnMapping.clientL = index;
+            } else if (headerStr.includes('sites') || headerStr.includes('site')) {
+              columnMapping.sites = index;
+            } else if (headerStr.includes('prix') && headerStr.includes('loyer')) {
+              columnMapping.prixLoyer = index;
+            } else if (headerStr.includes('montant') && headerStr.includes('verse')) {
               columnMapping.montantVerse = index;
-            } else if (headerStr.includes('mois') || headerStr.includes('date') || headerStr.includes('periode')) {
-              columnMapping.moisVersement = index;
-            } else if (headerStr.includes('loyer') || headerStr.includes('mensuel')) {
-              columnMapping.loyerMensuel = index;
-            } else if (headerStr.includes('solde') || headerStr.includes('reste') || headerStr.includes('restant')) {
-              columnMapping.soldeRestant = index;
+            } else if (headerStr.includes('reste') && headerStr.includes('payer')) {
+              columnMapping.resteAPayer = index;
             }
           });
 
           // If auto-detection failed, try positional mapping (fallback)
-          if (columnMapping.nom === -1 && headers.length >= 2) {
+          if (columnMapping.dateVersement === -1 && headers.length >= 6) {
             console.log('⚡ Utilisation du mapping positionnel par défaut');
-            columnMapping.nom = 0;
-            columnMapping.site = 1;
-            if (headers.length >= 3) columnMapping.montantVerse = 2;
-            if (headers.length >= 4) columnMapping.moisVersement = 3;
-            if (headers.length >= 5) columnMapping.loyerMensuel = 4;
-            if (headers.length >= 6) columnMapping.soldeRestant = 5;
+            columnMapping.dateVersement = 0;
+            columnMapping.clientL = 1;
+            columnMapping.sites = 2;
+            columnMapping.prixLoyer = 3;
+            columnMapping.montantVerse = 4;
+            columnMapping.resteAPayer = 5;
           }
 
           console.log('🗺️ Mapping des colonnes:', columnMapping);
@@ -180,40 +182,40 @@ export function ImportHistoricalRentals() {
             if (!row || row.length === 0) continue;
 
             // Extract data using column mapping
-            const nom = columnMapping.nom >= 0 ? String(row[columnMapping.nom] || '').trim() : '';
-            const site = columnMapping.site >= 0 ? String(row[columnMapping.site] || '').trim() : '';
+            const dateVersement = columnMapping.dateVersement >= 0 ? String(row[columnMapping.dateVersement] || '').trim() : '';
+            const clientL = columnMapping.clientL >= 0 ? String(row[columnMapping.clientL] || '').trim() : '';
+            const sites = columnMapping.sites >= 0 ? String(row[columnMapping.sites] || '').trim() : '';
+            const prixLoyer = columnMapping.prixLoyer >= 0 ? 
+              parseFloat(String(row[columnMapping.prixLoyer] || '0').replace(/[^\d.-]/g, '')) || 0 : 0;
             const montantVerse = columnMapping.montantVerse >= 0 ? 
               parseFloat(String(row[columnMapping.montantVerse] || '0').replace(/[^\d.-]/g, '')) || 0 : 0;
-            const moisVersement = columnMapping.moisVersement >= 0 ? 
-              String(row[columnMapping.moisVersement] || '').trim() : '';
-            const loyerMensuel = columnMapping.loyerMensuel >= 0 ? 
-              parseFloat(String(row[columnMapping.loyerMensuel] || '0').replace(/[^\d.-]/g, '')) || 0 : 0;
-            const soldeRestant = columnMapping.soldeRestant >= 0 ? 
-              parseFloat(String(row[columnMapping.soldeRestant] || '0').replace(/[^\d.-]/g, '')) || 0 : 0;
+            const resteAPayer = columnMapping.resteAPayer >= 0 ? 
+              parseFloat(String(row[columnMapping.resteAPayer] || '0').replace(/[^\d.-]/g, '')) || 0 : 0;
 
-            // Only include rows with at least nom and site
-            if (nom || site) {
+            // Only include rows with at least clientL and sites
+            if (clientL || sites) {
               parsedData.push({
-                nom,
-                site,
+                dateVersement,
+                clientL,
+                sites,
+                prixLoyer,
                 montantVerse,
-                moisVersement,
-                loyerMensuel,
-                soldeRestant,
+                resteAPayer,
               });
             }
           }
 
           console.log('✅ Données parsées:', {
             totalLignes: parsedData.length,
-            avecNom: parsedData.filter(r => r.nom).length,
-            avecSite: parsedData.filter(r => r.site).length,
+            avecClient: parsedData.filter(r => r.clientL).length,
+            avecSite: parsedData.filter(r => r.sites).length,
             avecMontant: parsedData.filter(r => r.montantVerse > 0).length,
+            avecReste: parsedData.filter(r => r.resteAPayer > 0).length,
             premieres5: parsedData.slice(0, 5)
           });
 
           // Filter out empty rows but be more lenient
-          const validData = parsedData.filter(row => row.nom || row.site);
+          const validData = parsedData.filter(row => row.clientL || row.sites);
           resolve(validData);
         } catch (error) {
           console.error('❌ Erreur parsing Excel:', error);
@@ -269,7 +271,13 @@ export function ImportHistoricalRentals() {
         }
       };
 
-      // Step 1: Fetch existing clients and properties
+      // Step 1: Clear existing clients if requested
+      if (clearExistingClients && !simulate) {
+        await supabase.from('clients').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        toast.info('Clients existants supprimés');
+      }
+
+      // Step 2: Fetch existing clients and properties
       setProgress(10);
       const { data: existingClients } = await supabase.from('clients').select('*');
       const { data: existingProperties } = await supabase.from('proprietes').select('*');
@@ -278,7 +286,7 @@ export function ImportHistoricalRentals() {
         throw new Error('Erreur lors de la récupération des données existantes');
       }
 
-      // Step 2: Process each row
+      // Step 3: Process each row
       const totalRows = previewData.length;
       
       for (let i = 0; i < previewData.length; i++) {
@@ -286,14 +294,14 @@ export function ImportHistoricalRentals() {
         setProgress(10 + (i / totalRows) * 80);
 
         try {
-          // Match or create client
-          let client = findBestClientMatch(row.nom, existingClients);
-          
-          if (!client) {
-            const nameParts = row.nom.split(' ');
+          // Create client directly (simplified approach)
+          let client = null;
+          if (clearExistingClients) {
+            // Always create new client when clearing existing ones
+            const nameParts = row.clientL.split(' ');
             const prenom = nameParts.length > 1 ? nameParts[0] : '';
             const nom = nameParts.length > 1 ? nameParts.slice(1).join(' ') : nameParts[0];
-            
+
             if (!simulate) {
               const { data: newClient, error } = await supabase
                 .from('clients')
@@ -311,16 +319,44 @@ export function ImportHistoricalRentals() {
             }
             
             result.clientsCreated++;
-            result.details.clients.push({ nom: row.nom, action: 'created', id: client?.id });
+            result.details.clients.push({ nom: row.clientL, action: 'created', id: client?.id });
           } else {
-            result.clientsMatched++;
-            result.details.clients.push({ nom: row.nom, action: 'matched', id: client.id });
+            // Try to match existing client
+            client = findBestClientMatch(row.clientL, existingClients);
+            
+            if (!client) {
+              const nameParts = row.clientL.split(' ');
+              const prenom = nameParts.length > 1 ? nameParts[0] : '';
+              const nom = nameParts.length > 1 ? nameParts.slice(1).join(' ') : nameParts[0];
+              
+              if (!simulate) {
+                const { data: newClient, error } = await supabase
+                  .from('clients')
+                  .insert({
+                    nom,
+                    prenom,
+                    telephone_principal: '',
+                  })
+                  .select()
+                  .single();
+
+                if (error) throw error;
+                client = newClient;
+                existingClients.push(newClient);
+              }
+              
+              result.clientsCreated++;
+              result.details.clients.push({ nom: row.clientL, action: 'created', id: client?.id });
+            } else {
+              result.clientsMatched++;
+              result.details.clients.push({ nom: row.clientL, action: 'matched', id: client.id });
+            }
           }
 
           // Match or create property
           let property = existingProperties.find(p => 
-            normalizeString(p.nom || '').includes(normalizeString(row.site)) ||
-            normalizeString(row.site).includes(normalizeString(p.nom || ''))
+            normalizeString(p.nom || '').includes(normalizeString(row.sites)) ||
+            normalizeString(row.sites).includes(normalizeString(p.nom || ''))
           );
 
           if (!property) {
@@ -328,8 +364,8 @@ export function ImportHistoricalRentals() {
               const { data: newProperty, error } = await supabase
                 .from('proprietes')
                 .insert({
-                  nom: row.site,
-                  loyer_mensuel: row.loyerMensuel,
+                  nom: row.sites,
+                  loyer_mensuel: row.prixLoyer,
                   statut: 'Occupé',
                   usage: 'Location'
                 })
@@ -342,7 +378,7 @@ export function ImportHistoricalRentals() {
             }
             
             result.propertiesCreated++;
-            result.details.properties.push({ site: row.site, id: property?.id || 'simulated' });
+            result.details.properties.push({ site: row.sites, id: property?.id || 'simulated' });
           }
 
           // Create location if not exists
@@ -355,25 +391,25 @@ export function ImportHistoricalRentals() {
               .single();
 
             if (!existingLocation) {
-              const cautionTotale = row.loyerMensuel * 5; // 5 mois de caution
+              const cautionTotale = row.prixLoyer * 5; // 5 mois de caution
 
               const { error: locationError } = await supabase
                 .from('locations')
                 .insert({
                   client_id: client.id,
                   propriete_id: property.id,
-                  loyer_mensuel: row.loyerMensuel,
+                  loyer_mensuel: row.prixLoyer,
                   caution_totale: cautionTotale,
                   date_debut: new Date().toISOString().split('T')[0],
-                  statut: row.soldeRestant > 0 ? 'active' : 'en_retard'
+                  statut: row.resteAPayer > 0 ? 'en_retard' : 'active'
                 });
 
               if (locationError) throw locationError;
               result.locationsCreated++;
               result.details.locations.push({
-                client: row.nom,
-                property: row.site,
-                loyer: row.loyerMensuel
+                client: row.clientL,
+                property: row.sites,
+                loyer: row.prixLoyer
               });
             }
           }
@@ -404,22 +440,22 @@ export function ImportHistoricalRentals() {
                 p_type_transaction: 'sortie',
                 p_montant: row.montantVerse,
                 p_type_operation: 'paiement_loyer',
-                p_beneficiaire: row.nom,
-                p_description: `Paiement historique - ${row.site}`
+                p_beneficiaire: row.clientL,
+                p_description: `Paiement historique - ${row.sites}`
               });
             }
 
             result.paymentsImported++;
             result.totalAmount += row.montantVerse;
             result.details.payments.push({
-              client: row.nom,
+              client: row.clientL,
               montant: row.montantVerse,
-              date: row.moisVersement
+              date: row.dateVersement
             });
           }
 
         } catch (error) {
-          result.errors.push(`Ligne ${i + 1} (${row.nom}): ${error.message}`);
+          result.errors.push(`Ligne ${i + 1} (${row.clientL}): ${error.message}`);
         }
       }
 
@@ -491,25 +527,68 @@ export function ImportHistoricalRentals() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <ScrollArea className="h-48 w-full border rounded-md p-4">
-                  <div className="space-y-2">
-                    {previewData.slice(0, 5).map((row, index) => (
-                      <div key={index} className="text-xs bg-muted p-2 rounded">
-                        <strong>{row.nom}</strong> - {row.site} - Loyer: {row.loyerMensuel?.toLocaleString()} FCFA
-                        {row.montantVerse > 0 && (
-                          <span className="text-green-600 ml-2">
-                            Versé: {row.montantVerse.toLocaleString()} FCFA
-                          </span>
-                        )}
+                <ScrollArea className="h-64 w-full border rounded-md">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-muted/50 sticky top-0">
+                        <tr>
+                          <th className="p-2 text-left border-r">Date Versement</th>
+                          <th className="p-2 text-left border-r">Client</th>
+                          <th className="p-2 text-left border-r">Site</th>
+                          <th className="p-2 text-right border-r">Prix Loyer</th>
+                          <th className="p-2 text-right border-r">Montant Versé</th>
+                          <th className="p-2 text-right">Reste à Payer</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {previewData.slice(0, 10).map((row, index) => (
+                          <tr key={index} className="border-b hover:bg-muted/30">
+                            <td className="p-2 border-r">{row.dateVersement}</td>
+                            <td className="p-2 border-r font-medium">{row.clientL}</td>
+                            <td className="p-2 border-r">{row.sites}</td>
+                            <td className="p-2 text-right border-r">{row.prixLoyer.toLocaleString()}</td>
+                            <td className="p-2 text-right border-r text-green-600 font-medium">
+                              {row.montantVerse.toLocaleString()}
+                            </td>
+                            <td className={`p-2 text-right font-medium ${row.resteAPayer > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                              {row.resteAPayer.toLocaleString()}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {previewData.length > 10 && (
+                      <div className="p-3 text-center text-muted-foreground">
+                        ... et {previewData.length - 10} autres lignes
                       </div>
-                    ))}
-                    {previewData.length > 5 && (
-                      <p className="text-xs text-muted-foreground">
-                        ... et {previewData.length - 5} autres lignes
-                      </p>
                     )}
                   </div>
                 </ScrollArea>
+                
+                <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div className="text-center">
+                    <div className="font-bold text-blue-600">{previewData.length}</div>
+                    <div className="text-muted-foreground text-xs">Total lignes</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="font-bold text-green-600">
+                      {previewData.filter(r => r.montantVerse > 0).length}
+                    </div>
+                    <div className="text-muted-foreground text-xs">Avec paiement</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="font-bold text-red-600">
+                      {previewData.filter(r => r.resteAPayer > 0).length}
+                    </div>
+                    <div className="text-muted-foreground text-xs">Avec reste à payer</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="font-bold text-purple-600">
+                      {previewData.reduce((sum, r) => sum + r.montantVerse, 0).toLocaleString()}
+                    </div>
+                    <div className="text-muted-foreground text-xs">Total versé (FCFA)</div>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           )}
@@ -521,6 +600,19 @@ export function ImportHistoricalRentals() {
                 <CardTitle className="text-sm">3. Options d'import</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                <div className="flex items-center space-x-2 mb-4">
+                  <input
+                    type="checkbox"
+                    id="clearClients"
+                    checked={clearExistingClients}
+                    onChange={(e) => setClearExistingClients(e.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  <label htmlFor="clearClients" className="text-sm font-medium">
+                    Vider les clients existants avant import
+                  </label>
+                </div>
+                
                 <div className="flex items-center gap-4">
                   <Button
                     onClick={() => importHistoricalData(true)}
