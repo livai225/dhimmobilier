@@ -14,6 +14,7 @@ import { PaiementLocationDialog } from "@/components/PaiementLocationDialog";
 import { ExportToExcelButton } from "@/components/ExportToExcelButton";
 import { LocationsDashboard } from "@/components/LocationsDashboard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { calculateLocationDebt } from "@/utils/locationUtils";
 
 export default function Locations() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -33,7 +34,8 @@ export default function Locations() {
         .select(`
           *,
           clients(nom, prenom, telephone_principal),
-          proprietes(nom, adresse, loyer_mensuel)
+          proprietes(nom, adresse, loyer_mensuel),
+          paiements_locations(montant)
         `)
         .order("created_at", { ascending: false });
 
@@ -221,9 +223,9 @@ export default function Locations() {
                 <div>
                   <p className="text-sm font-medium">Dette Restante</p>
                   <p className={`text-sm font-medium ${
-                    location.dette_totale > 0 ? 'text-red-600' : 'text-green-600'
+                    calculateLocationDebt(location) > 0 ? 'text-red-600' : 'text-green-600'
                   }`}>
-                    {location.dette_totale?.toLocaleString()} FCFA
+                    {calculateLocationDebt(location)?.toLocaleString()} FCFA
                   </p>
                 </div>
               </div>

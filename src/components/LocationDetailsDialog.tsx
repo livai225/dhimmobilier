@@ -23,6 +23,7 @@ import { useToast } from "@/hooks/use-toast";
 import { PaiementLocationDialog } from "@/components/PaiementLocationDialog";
 import { PaiementCautionDialog } from "@/components/PaiementCautionDialog";
 import { ProtectedAction } from "@/components/ProtectedAction";
+import { calculateLocationDebt, calculateLocationProgress } from "@/utils/locationUtils";
 
 interface LocationDetailsDialogProps {
   location: any;
@@ -102,74 +103,14 @@ export function LocationDetailsDialog({ location, onClose, onUpdate }: LocationD
     },
   });
 
-  const calculateProgress = () => {
-    if (!location?.loyer_mensuel) return { percentage: 0, currentYear: 1, yearProgress: 0 };
-    
-    // Calculate months elapsed since start
-    const startDate = new Date(location.date_debut);
-    const currentDate = new Date();
-    const monthsElapsed = (currentDate.getFullYear() - startDate.getFullYear()) * 12 + 
-                         (currentDate.getMonth() - startDate.getMonth()) + 1;
-    
-    const totalPaid = paiements?.reduce((sum, p) => sum + Number(p.montant), 0) || 0;
-    
-    // Determine current year and calculate progress based on contract type
-    let currentYear = 1;
-    let yearlyDue: number;
-    let accumulatedDue: number;
-    
-    if (location.type_contrat === 'historique') {
-      // Historical contracts: 12 months per year from the start
-      yearlyDue = location.loyer_mensuel * 12;
-      accumulatedDue = yearlyDue;
-      
-      // Find which year we're currently paying for
-      while (totalPaid >= accumulatedDue && currentYear < 20) { // Max 20 years
-        currentYear++;
-        accumulatedDue += yearlyDue;
-      }
-      
-      // Calculate progress for current year
-      const previousYearsDue = (currentYear - 1) * yearlyDue;
-      const currentYearPaid = totalPaid - previousYearsDue;
-      const currentYearDue = yearlyDue;
-      const yearProgress = Math.min((currentYearPaid / currentYearDue) * 100, 100);
-      
-      return { 
-        percentage: yearProgress, 
-        currentYear, 
-        yearProgress: Math.round(yearProgress),
-        currentYearPaid,
-        currentYearDue
-      };
-    } else {
-      // New contracts: 10 months first year, 12 months subsequent years
-      yearlyDue = location.loyer_mensuel * 10; // First year: 10 months
-      accumulatedDue = yearlyDue;
-      
-      // Find which year we're currently paying for
-      while (totalPaid >= accumulatedDue && currentYear < 20) { // Max 20 years
-        currentYear++;
-        yearlyDue = location.loyer_mensuel * 12; // Subsequent years: 12 months
-        accumulatedDue += yearlyDue;
-      }
-      
-      // Calculate progress for current year
-      const previousYearsDue = currentYear === 1 ? 0 : 
-        (location.loyer_mensuel * 10) + ((currentYear - 2) * location.loyer_mensuel * 12);
-      const currentYearPaid = totalPaid - previousYearsDue;
-      const currentYearDue = currentYear === 1 ? location.loyer_mensuel * 10 : location.loyer_mensuel * 12;
-      const yearProgress = Math.min((currentYearPaid / currentYearDue) * 100, 100);
-      
-      return { 
-        percentage: yearProgress, 
-        currentYear, 
-        yearProgress: Math.round(yearProgress),
-        currentYearPaid,
-        currentYearDue
-      };
-    }
+  // Create location object with payments for utility functions
+  const locationWithPayments = {
+    ...location,
+    paiements_locations: paiements || []
   };
+
+  const realDebt = calculateLocationDebt(locationWithPayments);
+  const progress = calculateLocationProgress(locationWithPayments);
 
   const getStatusBadge = (statut: string) => {
     const variants: Record<string, "default" | "destructive" | "outline" | "secondary"> = {
@@ -295,20 +236,20 @@ export function LocationDetailsDialog({ location, onClose, onUpdate }: LocationD
                 <div>
                   <p className="text-sm font-medium">Dette Restante</p>
                   <p className={`text-xl font-bold ${
-                    location.dette_totale > 0 ? 'text-red-600' : 'text-green-600'
+                    realDebt > 0 ? 'text-red-600' : 'text-green-600'
                   }`}>
-                    {location.dette_totale?.toLocaleString()} FCFA
+                    {realDebt?.toLocaleString()} FCFA
                   </p>
                 </div>
 
                 <div>
                   <p className="text-sm font-medium mb-2">Progression des Paiements</p>
-                  <Progress value={calculateProgress().percentage} className="w-full" />
+                  <Progress value={progress.percentage} className="w-full" />
                   <p className="text-xs text-muted-foreground mt-1">
-                    Année {calculateProgress().currentYear} - {calculateProgress().yearProgress}% des paiements annuels
+                    Année {progress.currentYear} - {progress.yearProgress}% des paiements annuels
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {calculateProgress().currentYearPaid?.toLocaleString()} / {calculateProgress().currentYearDue?.toLocaleString()} FCFA
+                    {progress.currentYearPaid?.toLocaleString()} / {progress.currentYearDue?.toLocaleString()} FCFA
                   </p>
                 </div>
               </CardContent>
