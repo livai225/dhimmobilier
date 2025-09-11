@@ -54,18 +54,23 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
   };
 
   const generateAvailableMonths = () => {
-    const months = [];
-    const startingMonth = calculateStartingMonth();
-    for (let i = 0; i < 24; i++) {
-      const date = addMonths(startingMonth, i);
+    // Afficher tous les mois à partir de la date de début du contrat,
+    // sur une période suffisamment longue (20 ans = 240 mois),
+    // et ne pas exclure les mois déjà payés (les marquer seulement dans le label)
+    const months: { value: string; label: string }[] = [];
+    const startMonth = startOfMonth(new Date(location.date_debut));
+    const TOTAL_MONTHS = 240; // 20 ans
+
+    for (let i = 0; i < TOTAL_MONTHS; i++) {
+      const date = addMonths(startMonth, i);
       const monthValue = format(date, "yyyy-MM");
-      if (!paidMonths.includes(monthValue)) {
-        months.push({
-          value: monthValue,
-          label: format(date, "MMMM yyyy", { locale: fr })
-        });
-      }
+      const isPaid = paidMonths.includes(monthValue);
+      months.push({
+        value: monthValue,
+        label: `${format(date, "MMMM yyyy", { locale: fr })}${isPaid ? " • déjà payé" : ""}`
+      });
     }
+
     return months;
   };
 
