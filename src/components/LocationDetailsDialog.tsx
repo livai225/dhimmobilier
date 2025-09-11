@@ -113,32 +113,62 @@ export function LocationDetailsDialog({ location, onClose, onUpdate }: LocationD
     
     const totalPaid = paiements?.reduce((sum, p) => sum + Number(p.montant), 0) || 0;
     
-    // Determine current year and calculate progress for that year
+    // Determine current year and calculate progress based on contract type
     let currentYear = 1;
-    let yearlyDue = location.loyer_mensuel * 10; // First year: 10 months
-    let accumulatedDue = yearlyDue;
+    let yearlyDue: number;
+    let accumulatedDue: number;
     
-    // Find which year we're currently paying for
-    while (totalPaid >= accumulatedDue && currentYear < 20) { // Max 20 years
-      currentYear++;
-      yearlyDue = location.loyer_mensuel * 12; // Subsequent years: 12 months
-      accumulatedDue += yearlyDue;
+    if (location.type_contrat === 'historique') {
+      // Historical contracts: 12 months per year from the start
+      yearlyDue = location.loyer_mensuel * 12;
+      accumulatedDue = yearlyDue;
+      
+      // Find which year we're currently paying for
+      while (totalPaid >= accumulatedDue && currentYear < 20) { // Max 20 years
+        currentYear++;
+        accumulatedDue += yearlyDue;
+      }
+      
+      // Calculate progress for current year
+      const previousYearsDue = (currentYear - 1) * yearlyDue;
+      const currentYearPaid = totalPaid - previousYearsDue;
+      const currentYearDue = yearlyDue;
+      const yearProgress = Math.min((currentYearPaid / currentYearDue) * 100, 100);
+      
+      return { 
+        percentage: yearProgress, 
+        currentYear, 
+        yearProgress: Math.round(yearProgress),
+        currentYearPaid,
+        currentYearDue
+      };
+    } else {
+      // New contracts: 10 months first year, 12 months subsequent years
+      yearlyDue = location.loyer_mensuel * 10; // First year: 10 months
+      accumulatedDue = yearlyDue;
+      
+      // Find which year we're currently paying for
+      while (totalPaid >= accumulatedDue && currentYear < 20) { // Max 20 years
+        currentYear++;
+        yearlyDue = location.loyer_mensuel * 12; // Subsequent years: 12 months
+        accumulatedDue += yearlyDue;
+      }
+      
+      // Calculate progress for current year
+      const previousYearsDue = currentYear === 1 ? 0 : 
+        (location.loyer_mensuel * 10) + ((currentYear - 2) * location.loyer_mensuel * 12);
+      const currentYearPaid = totalPaid - previousYearsDue;
+      const currentYearDue = currentYear === 1 ? location.loyer_mensuel * 10 : location.loyer_mensuel * 12;
+      const yearProgress = Math.min((currentYearPaid / currentYearDue) * 100, 100);
+      
+      return { 
+        percentage: yearProgress, 
+        currentYear, 
+        yearProgress: Math.round(yearProgress),
+        currentYearPaid,
+        currentYearDue
+      };
     }
-    
-    // Calculate progress for current year
-    const previousYearsDue = currentYear === 1 ? 0 : 
-      (location.loyer_mensuel * 10) + ((currentYear - 2) * location.loyer_mensuel * 12);
-    const currentYearPaid = totalPaid - previousYearsDue;
-    const currentYearDue = currentYear === 1 ? location.loyer_mensuel * 10 : location.loyer_mensuel * 12;
-    const yearProgress = Math.min((currentYearPaid / currentYearDue) * 100, 100);
-    
-    return { 
-      percentage: yearProgress, 
-      currentYear, 
-      yearProgress: Math.round(yearProgress),
-      currentYearPaid,
-      currentYearDue
-    };
   };
 
   const getStatusBadge = (statut: string) => {
@@ -224,26 +254,40 @@ export function LocationDetailsDialog({ location, onClose, onUpdate }: LocationD
                 <Separator />
 
                 <div className="space-y-2">
-                  <p className="text-sm font-medium">Détail de la Caution (5 mois)</p>
-                  <div className="space-y-1 text-sm">
-                    <div className="flex justify-between">
-                      <span>2 mois de garantie:</span>
-                      <span>{location.garantie_2_mois?.toLocaleString()} FCFA</span>
+                  <p className="text-sm font-medium">
+                    {location.type_contrat === 'historique' 
+                      ? 'Caution (Ancien locataire)' 
+                      : 'Détail de la Caution (5 mois)'}
+                  </p>
+                  {location.type_contrat === 'historique' ? (
+                    <div className="text-sm text-muted-foreground">
+                      <p>Ancien locataire - Caution payée antérieurement</p>
+                      <div className="flex justify-between font-bold text-foreground mt-2">
+                        <span>Total versé:</span>
+                        <span className="text-green-600">{location.caution_totale?.toLocaleString()} FCFA</span>
+                      </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span>2 mois de loyer d'avance:</span>
-                      <span>{location.loyer_avance_2_mois?.toLocaleString()} FCFA</span>
+                  ) : (
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between">
+                        <span>2 mois de garantie:</span>
+                        <span>{location.garantie_2_mois?.toLocaleString()} FCFA</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>2 mois de loyer d'avance:</span>
+                        <span>{location.loyer_avance_2_mois?.toLocaleString()} FCFA</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>1 mois d'agence:</span>
+                        <span>{location.frais_agence_1_mois?.toLocaleString()} FCFA</span>
+                      </div>
+                      <Separator />
+                      <div className="flex justify-between font-bold">
+                        <span>Total versé:</span>
+                        <span className="text-green-600">{location.caution_totale?.toLocaleString()} FCFA</span>
+                      </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span>1 mois d'agence:</span>
-                      <span>{location.frais_agence_1_mois?.toLocaleString()} FCFA</span>
-                    </div>
-                    <Separator />
-                    <div className="flex justify-between font-bold">
-                      <span>Total versé:</span>
-                      <span className="text-green-600">{location.caution_totale?.toLocaleString()} FCFA</span>
-                    </div>
-                  </div>
+                  )}
                 </div>
 
                 <Separator />

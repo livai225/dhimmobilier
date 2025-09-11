@@ -213,7 +213,9 @@ export default function Locations() {
                     {location.caution_totale?.toLocaleString()} FCFA
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    (5 mois)
+                    {location.type_contrat === 'historique' 
+                      ? '(ancien locataire)' 
+                      : '(5 mois)'}
                   </p>
                 </div>
                 <div>
