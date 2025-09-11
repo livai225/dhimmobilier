@@ -223,9 +223,15 @@ export default function Locations() {
                 <div>
                   <p className="text-sm font-medium">Dette Restante</p>
                   <p className={`text-sm font-medium ${
-                    calculateLocationDebt(location) > 0 ? 'text-red-600' : 'text-green-600'
+                    calculateLocationDebt({
+                      ...location,
+                      paiements_locations: location.paiements_locations || []
+                    }) > 0 ? 'text-red-600' : 'text-green-600'
                   }`}>
-                    {calculateLocationDebt(location)?.toLocaleString()} FCFA
+                    {calculateLocationDebt({
+                      ...location,
+                      paiements_locations: location.paiements_locations || []
+                    })?.toLocaleString()} FCFA
                   </p>
                 </div>
               </div>
