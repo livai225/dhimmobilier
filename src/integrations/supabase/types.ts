@@ -1150,6 +1150,10 @@ export type Database = {
         }
         Returns: string
       }
+      recalculate_all_location_debts: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       recalculate_cash_balances: {
         Args: Record<PropertyKey, never>
         Returns: undefined
