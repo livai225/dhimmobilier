@@ -100,7 +100,7 @@ export function ImportHistoricalRentals() {
     return bestMatch;
   };
 
-  // Parse Excel file
+  // Parse Excel file with automatic column detection
   const parseExcelFile = (file: File): Promise<ExcelRowData[]> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -109,28 +109,114 @@ export function ImportHistoricalRentals() {
           const data = new Uint8Array(e.target?.result as ArrayBuffer);
           const workbook = XLSX.read(data, { type: 'array' });
           const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-          const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+          
+          // First, get all data including headers
+          const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+          
+          console.log('🔍 Données Excel brutes:', {
+            totalRows: jsonData.length,
+            firstRow: jsonData[0],
+            secondRow: jsonData[1],
+            thirdRow: jsonData[2]
+          });
+
+          if (!jsonData || jsonData.length < 2) {
+            console.error('❌ Fichier Excel vide ou mal formaté');
+            reject(new Error('Fichier Excel vide ou mal formaté'));
+            return;
+          }
+
+          // Auto-detect column structure by examining headers and data
+          const headers = jsonData[0] || [];
+          console.log('📋 En-têtes détectés:', headers);
+          
+          // Try to map columns based on content patterns
+          const columnMapping = {
+            nom: -1,
+            site: -1,
+            montantVerse: -1,
+            moisVersement: -1,
+            loyerMensuel: -1,
+            soldeRestant: -1
+          };
+
+          // Auto-detect columns based on headers or content
+          headers.forEach((header: any, index: number) => {
+            const headerStr = String(header || '').toLowerCase().trim();
+            
+            if (headerStr.includes('nom') || headerStr.includes('client')) {
+              columnMapping.nom = index;
+            } else if (headerStr.includes('site') || headerStr.includes('propriete') || headerStr.includes('lieu')) {
+              columnMapping.site = index;
+            } else if (headerStr.includes('verse') || headerStr.includes('montant') || headerStr.includes('paye')) {
+              columnMapping.montantVerse = index;
+            } else if (headerStr.includes('mois') || headerStr.includes('date') || headerStr.includes('periode')) {
+              columnMapping.moisVersement = index;
+            } else if (headerStr.includes('loyer') || headerStr.includes('mensuel')) {
+              columnMapping.loyerMensuel = index;
+            } else if (headerStr.includes('solde') || headerStr.includes('reste') || headerStr.includes('restant')) {
+              columnMapping.soldeRestant = index;
+            }
+          });
+
+          // If auto-detection failed, try positional mapping (fallback)
+          if (columnMapping.nom === -1 && headers.length >= 2) {
+            console.log('⚡ Utilisation du mapping positionnel par défaut');
+            columnMapping.nom = 0;
+            columnMapping.site = 1;
+            if (headers.length >= 3) columnMapping.montantVerse = 2;
+            if (headers.length >= 4) columnMapping.moisVersement = 3;
+            if (headers.length >= 5) columnMapping.loyerMensuel = 4;
+            if (headers.length >= 6) columnMapping.soldeRestant = 5;
+          }
+
+          console.log('🗺️ Mapping des colonnes:', columnMapping);
 
           const parsedData: ExcelRowData[] = [];
           
-          // Skip header row, process data rows
+          // Process data rows (skip header)
           for (let i = 1; i < jsonData.length; i++) {
             const row = jsonData[i] as any[];
-            if (row && row.length > 0 && row[0]) {
-              // Adjust column indices based on your Excel structure
+            if (!row || row.length === 0) continue;
+
+            // Extract data using column mapping
+            const nom = columnMapping.nom >= 0 ? String(row[columnMapping.nom] || '').trim() : '';
+            const site = columnMapping.site >= 0 ? String(row[columnMapping.site] || '').trim() : '';
+            const montantVerse = columnMapping.montantVerse >= 0 ? 
+              parseFloat(String(row[columnMapping.montantVerse] || '0').replace(/[^\d.-]/g, '')) || 0 : 0;
+            const moisVersement = columnMapping.moisVersement >= 0 ? 
+              String(row[columnMapping.moisVersement] || '').trim() : '';
+            const loyerMensuel = columnMapping.loyerMensuel >= 0 ? 
+              parseFloat(String(row[columnMapping.loyerMensuel] || '0').replace(/[^\d.-]/g, '')) || 0 : 0;
+            const soldeRestant = columnMapping.soldeRestant >= 0 ? 
+              parseFloat(String(row[columnMapping.soldeRestant] || '0').replace(/[^\d.-]/g, '')) || 0 : 0;
+
+            // Only include rows with at least nom and site
+            if (nom || site) {
               parsedData.push({
-                nom: String(row[0] || '').trim(),
-                site: String(row[1] || '').trim(),
-                montantVerse: parseFloat(String(row[2] || '0').replace(/[^\d.-]/g, '')) || 0,
-                moisVersement: String(row[3] || '').trim(),
-                loyerMensuel: parseFloat(String(row[4] || '0').replace(/[^\d.-]/g, '')) || 0,
-                soldeRestant: parseFloat(String(row[5] || '0').replace(/[^\d.-]/g, '')) || 0,
+                nom,
+                site,
+                montantVerse,
+                moisVersement,
+                loyerMensuel,
+                soldeRestant,
               });
             }
           }
 
-          resolve(parsedData.filter(row => row.nom && row.site));
+          console.log('✅ Données parsées:', {
+            totalLignes: parsedData.length,
+            avecNom: parsedData.filter(r => r.nom).length,
+            avecSite: parsedData.filter(r => r.site).length,
+            avecMontant: parsedData.filter(r => r.montantVerse > 0).length,
+            premieres5: parsedData.slice(0, 5)
+          });
+
+          // Filter out empty rows but be more lenient
+          const validData = parsedData.filter(row => row.nom || row.site);
+          resolve(validData);
         } catch (error) {
+          console.error('❌ Erreur parsing Excel:', error);
           reject(error);
         }
       };

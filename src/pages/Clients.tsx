@@ -16,7 +16,7 @@ import { ProtectedAction } from "@/components/ProtectedAction";
 import { useToast } from "@/hooks/use-toast";
 import { ClientForm } from "@/components/ClientForm";
 import { ExportToExcelButton } from "@/components/ExportToExcelButton";
-import { ImportHistoricalRentals } from "@/components/ImportHistoricalRentals";
+
 import { ClientDetailsDialog } from "@/components/ClientDetailsDialog";
 import { MobileCard } from "@/components/MobileCard";
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
@@ -373,7 +373,7 @@ export default function Clients() {
               { header: "Adresse", accessor: (r:any) => r.adresse || "" },
             ]}
           />
-          <ImportHistoricalRentals />
+          
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
             <ProtectedAction permission="canCreateClients">
