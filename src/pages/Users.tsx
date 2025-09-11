@@ -343,7 +343,7 @@ export default function Users() {
                 Nouvel Utilisateur
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-lg sm:max-w-xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>
                   {editingUser ? 'Modifier l\'utilisateur' : 'Nouvel utilisateur'}
@@ -351,7 +351,7 @@ export default function Users() {
               </DialogHeader>
               
               <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="prenom">Prénom *</Label>
                     <Input
@@ -393,7 +393,7 @@ export default function Users() {
 
                 <Separator />
                 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="username" className="flex items-center gap-2">
                       <User className="h-4 w-4" />
@@ -467,7 +467,7 @@ export default function Users() {
                         Accordez des permissions spécifiques en plus de celles du rôle.
                       </p>
                       
-                      <div className="grid grid-cols-1 gap-3 max-h-48 overflow-y-auto border rounded-md p-3">
+                      <div className="grid grid-cols-1 gap-3 max-h-32 sm:max-h-48 overflow-y-auto border rounded-md p-3">
                         {availablePermissions.map((permission) => (
                           <div key={permission.id} className="flex items-start space-x-3">
                             <Checkbox
