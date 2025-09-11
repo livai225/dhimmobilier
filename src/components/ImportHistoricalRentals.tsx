@@ -308,7 +308,7 @@ export function ImportHistoricalRentals() {
                 .insert({
                   nom,
                   prenom,
-                  telephone_principal: '',
+                  telephone_principal: null, // Allow null for historical clients
                 })
                 .select()
                 .single();
@@ -335,7 +335,7 @@ export function ImportHistoricalRentals() {
                   .insert({
                     nom,
                     prenom,
-                    telephone_principal: '',
+                    telephone_principal: null, // Allow null for historical clients
                   })
                   .select()
                   .single();
@@ -391,15 +391,15 @@ export function ImportHistoricalRentals() {
               .single();
 
             if (!existingLocation) {
-              const cautionTotale = row.prixLoyer * 5; // 5 mois de caution
-
+              // Historical clients don't have caution - they already paid it long ago
               const { error: locationError } = await supabase
                 .from('locations')
                 .insert({
                   client_id: client.id,
                   propriete_id: property.id,
                   loyer_mensuel: row.prixLoyer,
-                  caution_totale: cautionTotale,
+                  caution_totale: 0, // No caution for historical clients
+                  type_contrat: 'historique', // Mark as historical contract
                   date_debut: new Date().toISOString().split('T')[0],
                   statut: row.resteAPayer > 0 ? 'en_retard' : 'active'
                 });
@@ -455,7 +455,8 @@ export function ImportHistoricalRentals() {
           }
 
         } catch (error) {
-          result.errors.push(`Ligne ${i + 1} (${row.clientL}): ${error.message}`);
+          console.error(`Erreur ligne ${i + 1}:`, error);
+          result.errors.push(`Ligne ${i + 1} (${row.clientL || 'Client inconnu'}): ${error?.message || 'Erreur inconnue'}`);
         }
       }
 

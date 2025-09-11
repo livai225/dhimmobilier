@@ -442,6 +442,7 @@ export type Database = {
           loyer_mensuel: number
           propriete_id: string
           statut: string
+          type_contrat: string
           updated_at: string
         }
         Insert: {
@@ -459,6 +460,7 @@ export type Database = {
           loyer_mensuel: number
           propriete_id: string
           statut?: string
+          type_contrat?: string
           updated_at?: string
         }
         Update: {
@@ -476,6 +478,7 @@ export type Database = {
           loyer_mensuel?: number
           propriete_id?: string
           statut?: string
+          type_contrat?: string
           updated_at?: string
         }
         Relationships: [
