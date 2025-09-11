@@ -14,7 +14,7 @@ import { PaiementLocationDialog } from "@/components/PaiementLocationDialog";
 import { ExportToExcelButton } from "@/components/ExportToExcelButton";
 import { LocationsDashboard } from "@/components/LocationsDashboard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { calculateLocationDebt } from "@/utils/locationUtils";
+import { calculateLocationDebt, calculateLocationProgress } from "@/utils/locationUtils";
 
 export default function Locations() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -211,7 +211,7 @@ export default function Locations() {
                 </div>
                 <div>
                   <p className="text-sm font-medium">Caution Versée</p>
-                  <p className="text-sm text-green-600">
+                  <p className="text-lg font-bold text-green-600">
                     {location.caution_totale?.toLocaleString()} FCFA
                   </p>
                   <p className="text-xs text-muted-foreground">
@@ -221,17 +221,15 @@ export default function Locations() {
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm font-medium">Dette Restante</p>
-                  <p className={`text-sm font-medium ${
-                    calculateLocationDebt({
-                      ...location,
-                      paiements_locations: location.paiements_locations || []
-                    }) > 0 ? 'text-red-600' : 'text-green-600'
-                  }`}>
-                    {calculateLocationDebt({
-                      ...location,
-                      paiements_locations: location.paiements_locations || []
-                    })?.toLocaleString()} FCFA
+                  <p className="text-sm font-medium">Montant restant à payer</p>
+                  <p className="text-lg font-bold text-orange-600">
+                    {(() => {
+                      const progress = calculateLocationProgress({
+                        ...location,
+                        paiements_locations: location.paiements_locations || []
+                      });
+                      return progress.currentYearDue?.toLocaleString();
+                    })()} FCFA
                   </p>
                 </div>
               </div>

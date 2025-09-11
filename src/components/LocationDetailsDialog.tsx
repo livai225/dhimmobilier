@@ -233,12 +233,19 @@ export function LocationDetailsDialog({ location, onClose, onUpdate }: LocationD
 
                 <Separator />
 
-                <div>
-                  <p className="text-sm font-medium">Dette Restante</p>
-                  <p className={`text-xl font-bold ${
-                    realDebt > 0 ? 'text-red-600' : 'text-green-600'
-                  }`}>
-                    {realDebt?.toLocaleString()} FCFA
+                {realDebt > 0 && (
+                  <div>
+                    <p className="text-sm font-medium">Dette Restante</p>
+                    <p className="text-xl font-bold text-red-600">
+                      {realDebt?.toLocaleString()} FCFA
+                    </p>
+                  </div>
+                )}
+                
+                <div className="mt-2 p-2 bg-orange-50 border border-orange-200 rounded">
+                  <p className="text-xs font-medium text-orange-800">Montant restant à payer:</p>
+                  <p className="text-sm font-bold text-orange-900">
+                    {progress.currentYearDue?.toLocaleString()} FCFA
                   </p>
                 </div>
 
