@@ -18,6 +18,7 @@ import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { ExportToExcelButton } from "@/components/ExportToExcelButton";
 import { ProtectedAction } from "@/components/ProtectedAction";
+import { ImportHistoricalSubscriptions } from "@/components/ImportHistoricalSubscriptions";
 
 export default function Souscriptions() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -156,6 +157,7 @@ export default function Souscriptions() {
               { header: "Prix total", accessor: (r:any) => r.prix_total },
             ]}
           />
+          <ImportHistoricalSubscriptions />
           <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
             <DialogTrigger asChild>
               <Button className="w-full sm:w-auto">
