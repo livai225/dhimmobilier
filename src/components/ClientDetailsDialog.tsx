@@ -65,59 +65,30 @@ export function ClientDetailsDialog({ client, open, onOpenChange }: ClientDetail
 
   useEffect(() => {
     if (!client) return;
-    // Tenter de charger depuis Supabase, sinon fallback localStorage
-    (async () => {
-      try {
-        const { data, error } = await supabase
-          .from('client_notes')
-          .select('id, note, created_at')
-          .eq('client_id', client.id)
-          .order('created_at', { ascending: false });
-        if (!error && data) {
-          setServerNotesEnabled(true);
-          setNotes(data.map((r: any) => ({ id: r.id, text: r.note, date: r.created_at })));
-        } else {
-          setServerNotesEnabled(false);
-          // fallback local
-          const n = JSON.parse(localStorage.getItem(storageKeys.notes) || "[]");
-          setNotes(Array.isArray(n) ? n : []);
-        }
-      } catch {
-        setServerNotesEnabled(false);
-        try {
-          const n = JSON.parse(localStorage.getItem(storageKeys.notes) || "[]");
-          setNotes(Array.isArray(n) ? n : []);
-        } catch {
-          setNotes([]);
-        }
-      }
+    
+    // Load notes from localStorage only
+    setServerNotesEnabled(false);
+    try {
+      const n = JSON.parse(localStorage.getItem(storageKeys.notes) || "[]");
+      setNotes(Array.isArray(n) ? n : []);
+    } catch {
+      setNotes([]);
+    }
 
-      try {
-        const f = JSON.parse(localStorage.getItem(storageKeys.files) || "[]");
-        setFiles(Array.isArray(f) ? f : []);
-      } catch {
-        setFiles([]);
-      }
-    })();
+    // Load files from localStorage
+    try {
+      const f = JSON.parse(localStorage.getItem(storageKeys.files) || "[]");
+      setFiles(Array.isArray(f) ? f : []);
+    } catch {
+      setFiles([]);
+    }
   }, [client, storageKeys]);
 
   const addNote = async () => {
     if (!newNote.trim() || !client) return;
     const entryLocal = { id: crypto.randomUUID(), text: newNote.trim(), date: new Date().toISOString() };
-    if (serverNotesEnabled) {
-      const { data, error } = await supabase
-        .from('client_notes')
-        .insert({ client_id: client.id, note: newNote.trim() })
-        .select('id, note, created_at')
-        .single();
-      if (!error && data) {
-        const entry = { id: data.id, text: data.note, date: data.created_at };
-        setNotes([entry, ...notes]);
-        setNewNote("");
-        return;
-      }
-    }
-    // fallback local
+    
+    // Store in localStorage only
     const next = [entryLocal, ...notes];
     setNotes(next);
     localStorage.setItem(storageKeys.notes, JSON.stringify(next));
@@ -125,10 +96,6 @@ export function ClientDetailsDialog({ client, open, onOpenChange }: ClientDetail
   };
 
   const deleteNote = async (id: string) => {
-    if (serverNotesEnabled) {
-      // Essayer de supprimer côté serveur, ignorer l'erreur si la note n'existe pas
-      await supabase.from('client_notes').delete().eq('id', id);
-    }
     const next = notes.filter(n => n.id !== id);
     setNotes(next);
     localStorage.setItem(storageKeys.notes, JSON.stringify(next));
