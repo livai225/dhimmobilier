@@ -19,17 +19,31 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 
+const phoneSchema = z
+  .string()
+  .trim()
+  .min(8, "Numéro trop court")
+  .max(25, "Numéro trop long")
+  .regex(/^[+0-9()\-\s]*$/, "Caractères non autorisés")
+  .optional()
+  .or(z.literal(""));
+
 const clientSchema = z.object({
-  nom: z.string().min(1, "Le nom est obligatoire"),
-  prenom: z.string().optional(),
-  email: z.string().email("Email invalide").optional().or(z.literal("")),
-  telephone_principal: z.string().optional(),
-  telephone_secondaire_1: z.string().optional(),
-  telephone_secondaire_2: z.string().optional(),
-  adresse: z.string().optional(),
-  contact_urgence_nom: z.string().optional(),
-  contact_urgence_telephone: z.string().optional(),
-  contact_urgence_relation: z.string().optional(),
+  nom: z.string().trim().min(1, "Le nom est obligatoire"),
+  prenom: z.string().trim().optional().or(z.literal("")),
+  email: z
+    .string()
+    .trim()
+    .email("Email invalide")
+    .optional()
+    .or(z.literal("")),
+  telephone_principal: phoneSchema,
+  telephone_secondaire_1: phoneSchema,
+  telephone_secondaire_2: phoneSchema,
+  adresse: z.string().trim().optional().or(z.literal("")),
+  contact_urgence_nom: z.string().trim().optional().or(z.literal("")),
+  contact_urgence_telephone: phoneSchema,
+  contact_urgence_relation: z.string().trim().optional().or(z.literal("")),
 });
 
 type ClientFormData = z.infer<typeof clientSchema>;
@@ -61,18 +75,18 @@ export function ClientForm({ client, onSuccess }: ClientFormProps) {
 
   const mutation = useMutation({
     mutationFn: async (data: ClientFormData) => {
-      // Clean data - convert empty strings to null for optional fields
+      // Clean data - trim + convert empty strings to null pour les champs optionnels
       const cleanData = {
-        nom: data.nom, // Required field, keep as is
-        prenom: data.prenom || null,
-        email: data.email || null,
-        telephone_principal: data.telephone_principal || null,
-        telephone_secondaire_1: data.telephone_secondaire_1 || null,
-        telephone_secondaire_2: data.telephone_secondaire_2 || null,
-        adresse: data.adresse || null,
-        contact_urgence_nom: data.contact_urgence_nom || null,
-        contact_urgence_telephone: data.contact_urgence_telephone || null,
-        contact_urgence_relation: data.contact_urgence_relation || null,
+        nom: data.nom?.trim(),
+        prenom: data.prenom?.trim() || null,
+        email: data.email?.trim() || null,
+        telephone_principal: data.telephone_principal?.trim() || null,
+        telephone_secondaire_1: data.telephone_secondaire_1?.trim() || null,
+        telephone_secondaire_2: data.telephone_secondaire_2?.trim() || null,
+        adresse: data.adresse?.trim() || null,
+        contact_urgence_nom: data.contact_urgence_nom?.trim() || null,
+        contact_urgence_telephone: data.contact_urgence_telephone?.trim() || null,
+        contact_urgence_relation: data.contact_urgence_relation?.trim() || null,
       };
 
       if (client) {
@@ -110,6 +124,12 @@ export function ClientForm({ client, onSuccess }: ClientFormProps) {
     mutation.mutate(data);
   };
 
+  // Formatage simple des numéros (trim espaces multiples)
+  const normalizePhone = (val?: string) =>
+    (val || "")
+      .replace(/\s+/g, " ")
+      .trim();
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -118,7 +138,7 @@ export function ClientForm({ client, onSuccess }: ClientFormProps) {
             <TabsTrigger value="basic">Informations de base</TabsTrigger>
             <TabsTrigger value="contact">Contact d'urgence</TabsTrigger>
           </TabsList>
-          
+
           <TabsContent value="basic" className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
@@ -130,7 +150,7 @@ export function ClientForm({ client, onSuccess }: ClientFormProps) {
                       Nom <span className="text-destructive">*</span>
                     </FormLabel>
                     <FormControl>
-                      <Input placeholder="Nom du client" {...field} />
+                      <Input placeholder="Nom du client" autoFocus={!client} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -159,10 +179,12 @@ export function ClientForm({ client, onSuccess }: ClientFormProps) {
                 <FormItem>
                   <FormLabel>Email</FormLabel>
                   <FormControl>
-                    <Input 
-                      type="email" 
-                      placeholder="client@exemple.com" 
-                      {...field} 
+                    <Input
+                      type="email"
+                      inputMode="email"
+                      placeholder="client@exemple.com"
+                      {...field}
+                      onBlur={(e) => form.setValue("email", e.target.value.trim())}
                     />
                   </FormControl>
                   <FormMessage />
@@ -177,7 +199,7 @@ export function ClientForm({ client, onSuccess }: ClientFormProps) {
                   Ajoutez les numéros de téléphone du client. Le téléphone principal est recommandé.
                 </FormDescription>
               </div>
-              
+
               <FormField
                 control={form.control}
                 name="telephone_principal"
@@ -185,9 +207,11 @@ export function ClientForm({ client, onSuccess }: ClientFormProps) {
                   <FormItem>
                     <FormLabel>Téléphone principal</FormLabel>
                     <FormControl>
-                      <Input 
-                        placeholder="Ex: +225 01 23 45 67 89" 
-                        {...field} 
+                      <Input
+                        placeholder="Ex: +225 01 23 45 67 89"
+                        inputMode="tel"
+                        {...field}
+                        onBlur={(e) => form.setValue("telephone_principal", normalizePhone(e.target.value))}
                       />
                     </FormControl>
                     <FormMessage />
@@ -203,9 +227,11 @@ export function ClientForm({ client, onSuccess }: ClientFormProps) {
                     <FormItem>
                       <FormLabel>Téléphone secondaire 1 (optionnel)</FormLabel>
                       <FormControl>
-                        <Input 
-                          placeholder="Ex: +225 01 23 45 67 89" 
-                          {...field} 
+                        <Input
+                          placeholder="Ex: +225 01 23 45 67 89"
+                          inputMode="tel"
+                          {...field}
+                          onBlur={(e) => form.setValue("telephone_secondaire_1", normalizePhone(e.target.value))}
                         />
                       </FormControl>
                       <FormMessage />

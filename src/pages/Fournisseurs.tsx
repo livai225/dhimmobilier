@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,7 @@ import { ExportToExcelButton } from "@/components/ExportToExcelButton";
 
 export default function Fournisseurs() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selectedSecteur, setSelectedSecteur] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingFournisseur, setEditingFournisseur] = useState(null);
@@ -37,7 +38,7 @@ export default function Fournisseurs() {
   const queryClient = useQueryClient();
 
   // Fetch suppliers with their sectors
-  const { data: fournisseurs = [], isLoading } = useQuery({
+  const { data: fournisseurs = [], isLoading, isFetching } = useQuery({
     queryKey: ["fournisseurs"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -93,10 +94,16 @@ export default function Fournisseurs() {
   });
 
   // Filter suppliers
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchTerm), 300);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
+
   const filteredFournisseurs = fournisseurs.filter((fournisseur) => {
-    const matchesSearch = fournisseur.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      fournisseur.contact?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      fournisseur.email?.toLowerCase().includes(searchTerm.toLowerCase());
+    const term = debouncedSearch.toLowerCase();
+    const matchesSearch = fournisseur.nom.toLowerCase().includes(term) ||
+      fournisseur.contact?.toLowerCase().includes(term) ||
+      fournisseur.email?.toLowerCase().includes(term);
     
     const matchesSecteur = !selectedSecteur || fournisseur.secteur_id === selectedSecteur;
     
@@ -149,7 +156,7 @@ export default function Fournisseurs() {
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
             <ProtectedAction permission="canCreateSuppliers">
-              <Button onClick={() => setEditingFournisseur(null)}>
+              <Button onClick={() => { setEditingFournisseur(null); setIsDialogOpen(true); }}>
                 <Plus className="h-4 w-4 mr-2" />
                 Nouveau fournisseur
               </Button>
@@ -187,6 +194,9 @@ export default function Fournisseurs() {
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
           />
+          {!!debouncedSearch && (
+            <Button variant="ghost" size="sm" className="absolute right-1 top-1/2 -translate-y-1/2 h-7 px-2" onClick={() => setSearchTerm("")}>Effacer</Button>
+          )}
         </div>
         <select
           value={selectedSecteur}
@@ -218,11 +228,15 @@ export default function Fournisseurs() {
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow>
-                <TableCell colSpan={7} className="text-center py-8">
-                  Chargement...
-                </TableCell>
-              </TableRow>
+              <>
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <TableRow key={`skeleton-${i}`}>
+                    <TableCell colSpan={7}>
+                      <div className="h-10 w-full rounded-md bg-muted animate-pulse" />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </>
             ) : filteredFournisseurs.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
@@ -275,6 +289,13 @@ export default function Fournisseurs() {
                   </TableCell>
                 </TableRow>
               ))
+            )}
+            {isFetching && !isLoading && filteredFournisseurs.length > 0 && (
+              <TableRow>
+                <TableCell colSpan={7}>
+                  <div className="h-8 w-full rounded bg-muted animate-pulse" />
+                </TableCell>
+              </TableRow>
             )}
           </TableBody>
         </Table>

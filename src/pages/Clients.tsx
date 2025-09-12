@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, Edit, Trash2, Users, Phone, Mail, MapPin, AlertTriangle, Search, TrendingUp, Activity, Eye } from "lucide-react";
+import { Plus, Edit, Trash2, Users, Phone, Mail, MapPin, AlertTriangle, Search, TrendingUp, Activity, Eye, Loader2, ArrowUpDown } from "lucide-react";
 import { ProtectedAction } from "@/components/ProtectedAction";
 import { useToast } from "@/hooks/use-toast";
 import { ClientForm } from "@/components/ClientForm";
@@ -41,8 +41,15 @@ export default function Clients() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  // Filtres rapides
+  const [filterMissingPhone, setFilterMissingPhone] = useState(false);
+  const [filterMissingUrgence, setFilterMissingUrgence] = useState(false);
+  // Tri
+  const [sortBy, setSortBy] = useState<"nom" | "email" | "telephone" | "created_at">("nom");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [formData, setFormData] = useState({
     nom: "",
     prenom: "",
@@ -58,6 +65,13 @@ export default function Clients() {
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [searchTerm]);
 
   // Advanced string normalization function
   const normalizeString = (str: string): string => {
@@ -115,50 +129,88 @@ export default function Clients() {
     return matrix[a.length][b.length];
   };
 
-  // Unified client fetching - always search the entire database
-  const { data: clients, isLoading } = useQuery({
-    queryKey: ['clients', searchTerm],
+  // Pagination côté serveur avec tri et filtres
+  const itemsPerPage = 50;
+  const { data: clients, isLoading, isFetching } = useQuery({
+    queryKey: ['clients', debouncedSearchTerm, filterMissingPhone, filterMissingUrgence, currentPage, itemsPerPage, sortBy, sortDir],
     queryFn: async () => {
-      if (searchTerm.trim().length > 0) {
-        // Enhanced server-side search with multiple field combinations
-        const normalizedSearch = normalizeString(searchTerm);
-        const searchTerms = normalizedSearch.split(' ').filter(term => term.length > 0);
-        
-        // Build flexible search conditions
-        let searchConditions = [
+      const term = debouncedSearchTerm;
+      const offset = (currentPage - 1) * itemsPerPage;
+      const end = offset + itemsPerPage - 1;
+
+      let query = supabase
+        .from('clients')
+        .select('*');
+
+      // Recherche multi-champs
+      if (term.trim().length > 0) {
+        const normalizedSearch = normalizeString(term);
+        const searchWords = normalizedSearch.split(' ').filter(w => w.length > 0);
+        const conditions = [
           `nom.ilike.%${normalizedSearch}%`,
           `prenom.ilike.%${normalizedSearch}%`,
           `email.ilike.%${normalizedSearch}%`,
-          `telephone_principal.ilike.%${searchTerm}%`,
+          `telephone_principal.ilike.%${term}%`,
           `adresse.ilike.%${normalizedSearch}%`
         ];
-        
-        // Add combined name searches for cases like "ODOH AKUYA VIVIANE"
-        if (searchTerms.length > 1) {
-          searchConditions.push(`nom.ilike.%${searchTerms.join('%')}%`);
-          searchConditions.push(`prenom.ilike.%${searchTerms.join('%')}%`);
-          // Try reversed combination (prénom + nom)
-          const reversedSearch = searchTerms.reverse().join(' ');
-          searchConditions.push(`nom.ilike.%${reversedSearch}%`);
-          searchConditions.push(`prenom.ilike.%${reversedSearch}%`);
+        if (searchWords.length > 1) {
+          conditions.push(`nom.ilike.%${searchWords.join('%')}%`);
+          conditions.push(`prenom.ilike.%${searchWords.join('%')}%`);
+          const reversed = [...searchWords].reverse().join(' ');
+          conditions.push(`nom.ilike.%${reversed}%`);
+          conditions.push(`prenom.ilike.%${reversed}%`);
         }
-        
-        const { data, error } = await supabase
-          .from('clients')
-          .select('*')
-          .or(searchConditions.join(','))
-          .order('nom');
-        if (error) throw error;
-        return data;
-      } else {
-        // Load ALL clients without any limit
-        const { data, error } = await supabase
-          .from('clients')
-          .select('*')
-          .order('nom');
-        if (error) throw error;
-        return data;
+        query = query.or(conditions.join(','));
       }
+
+      // Filtres rapides côté serveur
+      if (filterMissingPhone) query = query.is('telephone_principal', null);
+      if (filterMissingUrgence) query = query.is('contact_urgence_nom', null);
+
+      // Tri côté serveur
+      const sortColumn = sortBy === 'telephone' ? 'telephone_principal' : (sortBy === 'email' ? 'email' : (sortBy === 'created_at' ? 'created_at' : 'nom'));
+      query = query.order(sortColumn, { ascending: sortDir === 'asc' });
+
+      // Pagination
+      const { data, error } = await query.range(offset, end);
+      if (error) throw error;
+      return data || [];
+    },
+    placeholderData: (prev) => prev,
+  });
+
+  // Compte total pour pagination
+  const { data: totalCount = 0 } = useQuery({
+    queryKey: ['clients-count', debouncedSearchTerm, filterMissingPhone, filterMissingUrgence],
+    queryFn: async () => {
+      const term = debouncedSearchTerm;
+      let query = supabase.from('clients').select('*', { count: 'exact', head: true });
+
+      if (term.trim().length > 0) {
+        const normalizedSearch = normalizeString(term);
+        const searchWords = normalizedSearch.split(' ').filter(w => w.length > 0);
+        const conditions = [
+          `nom.ilike.%${normalizedSearch}%`,
+          `prenom.ilike.%${normalizedSearch}%`,
+          `email.ilike.%${normalizedSearch}%`,
+          `telephone_principal.ilike.%${term}%`,
+          `adresse.ilike.%${normalizedSearch}%`
+        ];
+        if (searchWords.length > 1) {
+          conditions.push(`nom.ilike.%${searchWords.join('%')}%`);
+          conditions.push(`prenom.ilike.%${searchWords.join('%')}%`);
+          const reversed = [...searchWords].reverse().join(' ');
+          conditions.push(`nom.ilike.%${reversed}%`);
+          conditions.push(`prenom.ilike.%${reversed}%`);
+        }
+        query = query.or(conditions.join(','));
+      }
+      if (filterMissingPhone) query = query.is('telephone_principal', null);
+      if (filterMissingUrgence) query = query.is('contact_urgence_nom', null);
+
+      const { count, error } = await query;
+      if (error) throw error;
+      return count || 0;
     },
   });
 
@@ -316,15 +368,9 @@ export default function Clients() {
     }
   };
 
-  // Since we now search directly in database, no need for additional client-side filtering
-  const filteredClients = clients || [];
-
-  // Pagination logic
-  const itemsPerPage = 50;
-  const totalPages = Math.ceil(filteredClients.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentClients = filteredClients.slice(startIndex, endIndex);
+  // Pagination calculée via totalCount et page courante
+  const totalPages = Math.max(1, Math.ceil((totalCount as number) / itemsPerPage));
+  const currentClients = clients || [];
 
   // Reset to first page when search changes with debouncing
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -337,8 +383,8 @@ export default function Clients() {
       console.log('🔍 Recherche:', {
         terme: value,
         normalise: normalizeString(value),
-        clientsTotal: clients?.length || 0,
-        resultats: filteredClients.length
+        clientsPageCount: (clients || []).length,
+        totalCount
       });
     }
   };
@@ -355,16 +401,15 @@ export default function Clients() {
         <div>
           <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Clients</h2>
           <p className="text-muted-foreground">
-            {searchTerm.trim() ? 
-              `${filteredClients.length} résultats sur ${stats?.totalClients || 0} clients` :
-              `${stats?.totalClients || 0} clients au total`
-            }
+            {searchTerm.trim() || filterMissingPhone || filterMissingUrgence
+              ? `${totalCount as number} résultats`
+              : `${stats?.totalClients || 0} clients au total`}
           </p>
         </div>
         <div className="flex flex-col space-y-2 sm:flex-row sm:space-x-2 sm:space-y-0">
           <ExportToExcelButton
             filename={`clients_${new Date().toISOString().slice(0,10)}`}
-            rows={filteredClients}
+            rows={currentClients}
             columns={[
               { header: "Nom", accessor: (r:any) => r.nom },
               { header: "Prénom", accessor: (r:any) => r.prenom || "" },
@@ -377,7 +422,7 @@ export default function Clients() {
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
             <ProtectedAction permission="canCreateClients">
-              <Button onClick={() => { resetForm(); setEditingClient(null); }} className="w-full sm:w-auto">
+              <Button onClick={() => { resetForm(); setEditingClient(null); setIsDialogOpen(true); }} className="w-full sm:w-auto">
                 <Plus className="mr-2 h-4 w-4" />
                 Nouveau client
               </Button>
@@ -465,7 +510,7 @@ export default function Clients() {
         </Card>
       </div>
 
-      {/* Enhanced Search Bar */}
+      {/* Enhanced Search Bar + Quick Filters */}
       <div className="flex flex-col space-y-2 sm:flex-row sm:items-center sm:space-x-4 sm:space-y-0">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -473,13 +518,34 @@ export default function Clients() {
             placeholder="Rechercher par nom, prénom, email, téléphone..."
             value={searchTerm}
             onChange={handleSearchChange}
-            className="pl-8"
+            className="pl-8 pr-8"
           />
+          {isLoading && (
+            <Loader2 className="absolute right-2 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant={filterMissingPhone ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => { setFilterMissingPhone((v) => !v); setCurrentPage(1); }}
+          >
+            Numéro de téléphone manquant
+          </Button>
+          <Button
+            type="button"
+            variant={filterMissingUrgence ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => { setFilterMissingUrgence((v) => !v); setCurrentPage(1); }}
+          >
+            Urgence manquante
+          </Button>
         </div>
         {searchTerm && (
           <div className="flex items-center space-x-2 text-sm text-muted-foreground">
             <Badge variant="outline" className="text-xs">
-              {filteredClients.length} résultat{filteredClients.length !== 1 ? 's' : ''}
+              {totalCount as number} résultat{(totalCount as number) !== 1 ? 's' : ''}
             </Badge>
             <Button
               variant="ghost"
@@ -512,11 +578,11 @@ export default function Clients() {
           </CardTitle>
           <CardDescription className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
             <span>
-              {filteredClients.length} client{filteredClients.length !== 1 ? 's' : ''} 
-              {searchTerm && ` trouvé${filteredClients.length !== 1 ? 's' : ''} pour "${searchTerm}"`}
+              {currentClients.length} client{currentClients.length !== 1 ? 's' : ''}
+              {searchTerm && ` trouvé${currentClients.length !== 1 ? 's' : ''} pour "${searchTerm}"`}
               {totalPages > 1 && ` • Page ${currentPage} sur ${totalPages}`}
             </span>
-            {searchTerm && filteredClients.length === 0 && (
+            {searchTerm && currentClients.length === 0 && (
               <span className="text-xs mt-1 sm:mt-0">
                 💡 Astuce: Essayez avec moins de caractères ou vérifiez l'orthographe
               </span>
@@ -525,12 +591,16 @@ export default function Clients() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <p>Chargement...</p>
-          ) : filteredClients.length === 0 ? (
+            <div className="space-y-2">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="h-10 w-full rounded-md bg-muted animate-pulse" />
+              ))}
+            </div>
+          ) : currentClients.length === 0 ? (
               <div className="text-center py-10">
                 <Users className="mx-auto h-12 w-12 text-muted-foreground" />
                 <h3 className="mt-2 text-sm font-semibold">
-                  {searchTerm ? "Aucun client trouvé" : "Aucun client"}
+                  {searchTerm || filterMissingPhone || filterMissingUrgence ? "Aucun client trouvé" : "Aucun client"}
                 </h3>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {searchTerm 
@@ -629,14 +699,56 @@ export default function Clients() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Nom</TableHead>
-                      <TableHead>Contact</TableHead>
-                      <TableHead>Téléphones</TableHead>
-                      <TableHead>Urgence</TableHead>
+                      <TableHead>
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1"
+                          onClick={() => {
+                            setSortBy('nom');
+                            setSortDir((d) => (sortBy === 'nom' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'));
+                          }}
+                        >
+                          Nom <ArrowUpDown className="h-3 w-3" />
+                        </button>
+                      </TableHead>
+                      <TableHead>
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1"
+                          onClick={() => {
+                            setSortBy('email');
+                            setSortDir((d) => (sortBy === 'email' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'));
+                          }}
+                        >
+                          Contact <ArrowUpDown className="h-3 w-3" />
+                        </button>
+                      </TableHead>
+                      <TableHead>
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1"
+                          onClick={() => {
+                            setSortBy('telephone');
+                            setSortDir((d) => (sortBy === 'telephone' ? (d === 'asc' ? 'desc' : 'asc') : 'asc'));
+                          }}
+                        >
+                          Téléphones <ArrowUpDown className="h-3 w-3" />
+                        </button>
+                      </TableHead>
+                      <TableHead>
+                        Urgence
+                      </TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
+                    {isFetching && currentClients.length > 0 && (
+                      <TableRow>
+                        <TableCell colSpan={5}>
+                          <div className="h-8 w-full rounded bg-muted animate-pulse" />
+                        </TableCell>
+                      </TableRow>
+                    )}
                     {currentClients.map((client) => (
                       <TableRow key={client.id}>
                         <TableCell>
@@ -723,7 +835,7 @@ export default function Clients() {
           )}
           
           {/* Pagination */}
-          {totalPages > 1 && filteredClients.length > 0 && (
+          {totalPages > 1 && (totalCount as number) > 0 && (
             <div className="mt-6 flex justify-center">
               <Pagination>
                 <PaginationContent>

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Combobox } from "@/components/ui/combobox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -27,6 +28,8 @@ export default function Caisse() {
   const [typeOperationFilter, setTypeOperationFilter] = useState<string>("");
   const [isExporting, setIsExporting] = useState(false);
   const [journalTab, setJournalTab] = useState<"versement" | "entreprise">("versement");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 50;
   const [entryType, setEntryType] = useState<"versement" | "vente">("versement");
   
   // Receipt dialog state
@@ -148,6 +151,16 @@ export default function Caisse() {
     
     return filtered;
   }, [allTransactions, journalTab, typeOperationFilter]);
+
+  // Reset page when key filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [journalTab, periodRange.start, periodRange.end, typeOperationFilter]);
+
+  // Pagination slice
+  const totalPages = Math.max(1, Math.ceil(transactions.length / itemsPerPage));
+  const offset = (currentPage - 1) * itemsPerPage;
+  const pageTransactions = transactions.slice(offset, offset + itemsPerPage);
 
   const totals = useMemo(() => {
     if (journalTab === "versement") {
@@ -631,14 +644,14 @@ export default function Caisse() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {transactions.length === 0 ? (
+                      {pageTransactions.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={9} className="text-center py-6 text-muted-foreground">
                             Aucune opération pour cette période
                           </TableCell>
                         </TableRow>
                       ) : (
-                        transactions.map((t: any) => {
+                        pageTransactions.map((t: any) => {
                           const agent = agents.find(a => a.id === t.agent_id);
                           return (
                             <TableRow key={t.id}>
@@ -686,6 +699,57 @@ export default function Caisse() {
                     </TableBody>
                   </Table>
                 </div>
+                {totalPages > 1 && (
+                  <div className="mt-4 flex justify-center">
+                    <Pagination>
+                      <PaginationContent>
+                        <PaginationItem>
+                          <PaginationPrevious
+                            href="#"
+                            onClick={(e) => { e.preventDefault(); if (currentPage > 1) setCurrentPage(currentPage - 1); }}
+                            className={currentPage <= 1 ? "pointer-events-none opacity-50" : ""}
+                          />
+                        </PaginationItem>
+                        {currentPage > 3 && (
+                          <>
+                            <PaginationItem>
+                              <PaginationLink href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(1); }}>1</PaginationLink>
+                            </PaginationItem>
+                            {currentPage > 4 && (
+                              <PaginationItem><PaginationEllipsis /></PaginationItem>
+                            )}
+                          </>
+                        )}
+                        {Array.from({ length: totalPages }, (_, i) => i + 1)
+                          .filter(p => p >= Math.max(1, currentPage - 2) && p <= Math.min(totalPages, currentPage + 2))
+                          .map((p) => (
+                            <PaginationItem key={p}>
+                              <PaginationLink href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(p); }} isActive={p === currentPage}>
+                                {p}
+                              </PaginationLink>
+                            </PaginationItem>
+                          ))}
+                        {currentPage < totalPages - 2 && (
+                          <>
+                            {currentPage < totalPages - 3 && (
+                              <PaginationItem><PaginationEllipsis /></PaginationItem>
+                            )}
+                            <PaginationItem>
+                              <PaginationLink href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(totalPages); }}>{totalPages}</PaginationLink>
+                            </PaginationItem>
+                          </>
+                        )}
+                        <PaginationItem>
+                          <PaginationNext
+                            href="#"
+                            onClick={(e) => { e.preventDefault(); if (currentPage < totalPages) setCurrentPage(currentPage + 1); }}
+                            className={currentPage >= totalPages ? "pointer-events-none opacity-50" : ""}
+                          />
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
+                  </div>
+                )}
               </TabsContent>
 
               <TabsContent value="entreprise">
@@ -704,14 +768,14 @@ export default function Caisse() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {transactions.length === 0 ? (
+                      {pageTransactions.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={8} className="text-center py-6 text-muted-foreground">
                             Aucune opération pour cette période
                           </TableCell>
                         </TableRow>
                       ) : (
-                        transactions.map((t: any) => {
+                        pageTransactions.map((t: any) => {
                           const agent = agents.find(a => a.id === t.agent_id);
                           const isVente = t.type_operation === "vente";
                           return (

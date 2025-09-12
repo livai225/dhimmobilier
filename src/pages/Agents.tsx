@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ProtectedAction } from "@/components/ProtectedAction";
@@ -21,6 +21,8 @@ export default function Agents() {
   const [showOperationsDialog, setShowOperationsDialog] = useState(false);
   const [selectedAgentForOperations, setSelectedAgentForOperations] = useState<any>(null);
   const [form, setForm] = useState({ nom: "", prenom: "", code_agent: "", telephone: "", email: "", statut: "actif" });
+  const formCardRef = useRef<HTMLDivElement | null>(null);
+  const firstInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     document.title = "Agents de recouvrement - Gestion";
@@ -100,7 +102,17 @@ export default function Agents() {
           </p>
         </div>
         <ProtectedAction permission="canCreateAgents">
-          <Button className="w-full sm:w-auto">
+          <Button
+            className="w-full sm:w-auto"
+            onClick={() => {
+              // Scroll vers le formulaire et focus sur le premier champ
+              formCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              // léger timeout pour laisser le scroll finir
+              setTimeout(() => {
+                firstInputRef.current?.focus();
+              }, 300);
+            }}
+          >
             <Plus className="h-4 w-4 mr-2" />
             Nouvel agent
           </Button>
@@ -322,7 +334,7 @@ export default function Agents() {
         </Card>
 
         {/* Create Agent Form */}
-        <Card>
+        <Card ref={formCardRef}>
           <CardHeader>
             <CardTitle>Nouvel agent</CardTitle>
           </CardHeader>
@@ -330,6 +342,7 @@ export default function Agents() {
             <div>
               <label className="text-sm font-medium">Prénom</label>
               <Input 
+                ref={firstInputRef}
                 value={form.prenom} 
                 onChange={(e) => setForm({ ...form, prenom: e.target.value })} 
                 className="mt-1"

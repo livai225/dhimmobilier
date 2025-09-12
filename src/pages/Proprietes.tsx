@@ -284,7 +284,7 @@ export default function Proprietes() {
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
             <ProtectedAction permission="canCreateProperties">
-              <Button onClick={() => { resetForm(); setEditingPropriete(null); }} className="w-full sm:w-auto">
+              <Button onClick={() => { resetForm(); setEditingPropriete(null); setIsDialogOpen(true); }} className="w-full sm:w-auto">
                 <Plus className="mr-2 h-4 w-4" />
                 Nouvelle propriété
               </Button>

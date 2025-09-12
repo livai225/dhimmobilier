@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -26,12 +26,14 @@ import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { ExportToExcelButton } from "@/components/ExportToExcelButton";
+import { formatCurrency, formatDateFR } from "@/lib/format";
 import { FactureDetailsDialog } from "@/components/FactureDetailsDialog";
 import { Eye, Download as DownloadIcon } from "lucide-react";
 import { ProtectedAction } from "@/components/ProtectedAction";
 
 export default function Factures() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selectedFournisseur, setSelectedFournisseur] = useState("");
   const [selectedStatut, setSelectedStatut] = useState("");
   const [isFactureDialogOpen, setIsFactureDialogOpen] = useState(false);
@@ -44,7 +46,7 @@ export default function Factures() {
   const queryClient = useQueryClient();
 
   // Fetch invoices with suppliers
-  const { data: factures = [], isLoading } = useQuery({
+  const { data: factures = [], isLoading, isFetching } = useQuery({
     queryKey: ["factures"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -100,11 +102,18 @@ export default function Factures() {
     },
   });
 
+  // Debounce search term
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchTerm), 300);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
+
   // Filter invoices
   const filteredFactures = factures.filter((facture) => {
-    const matchesSearch = facture.numero.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      facture.fournisseur?.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      facture.description?.toLowerCase().includes(searchTerm.toLowerCase());
+    const term = debouncedSearch.toLowerCase();
+    const matchesSearch = facture.numero.toLowerCase().includes(term) ||
+      facture.fournisseur?.nom.toLowerCase().includes(term) ||
+      facture.description?.toLowerCase().includes(term);
     
     const matchesFournisseur = !selectedFournisseur || facture.fournisseur_id === selectedFournisseur;
     
@@ -155,13 +164,7 @@ export default function Factures() {
     }
   };
 
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('fr-FR', {
-      style: 'currency',
-      currency: 'XOF',
-      minimumFractionDigits: 0,
-    }).format(amount || 0);
-  };
+  // formatCurrency now imported from utils
 
   return (
     <div className="space-y-6">
@@ -197,7 +200,7 @@ export default function Factures() {
           <Dialog open={isFactureDialogOpen} onOpenChange={setIsFactureDialogOpen}>
             <DialogTrigger asChild>
             <ProtectedAction permission="canCreateInvoices">
-              <Button onClick={() => setEditingFacture(null)}>
+              <Button onClick={() => { setEditingFacture(null); setIsFactureDialogOpen(true); }}>
                 <Plus className="h-4 w-4 mr-2" />
                 Nouvelle facture
               </Button>
@@ -228,6 +231,9 @@ export default function Factures() {
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
           />
+          {!!debouncedSearch && (
+            <Button variant="ghost" size="sm" className="absolute right-1 top-1/2 -translate-y-1/2 h-7 px-2" onClick={() => setSearchTerm("")}>Effacer</Button>
+          )}
         </div>
         <select
           value={selectedFournisseur}
@@ -330,7 +336,7 @@ export default function Factures() {
                   <TableCell className="font-medium">{facture.numero}</TableCell>
                   <TableCell>{facture.fournisseur?.nom}</TableCell>
                   <TableCell>
-                    {format(new Date(facture.date_facture), "dd/MM/yyyy", { locale: fr })}
+                    {formatDateFR(facture.date_facture)}
                   </TableCell>
                    <TableCell>{formatCurrency(facture.montant_total)}</TableCell>
                    <TableCell>{formatCurrency(facture.montant_paye)}</TableCell>
@@ -391,6 +397,13 @@ export default function Factures() {
                   </TableCell>
                 </TableRow>
               ))
+            )}
+            {isFetching && filteredFactures.length > 0 && (
+              <TableRow>
+                <TableCell colSpan={8}>
+                  <div className="h-8 w-full rounded bg-muted animate-pulse" />
+                </TableCell>
+              </TableRow>
             )}
           </TableBody>
         </Table>

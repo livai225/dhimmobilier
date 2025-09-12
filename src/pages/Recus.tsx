@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Combobox } from "@/components/ui/combobox";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
+
 import { Download, Eye, Receipt, TrendingUp, FileText, Clock } from "lucide-react";
 import { useReceipts, useReceiptStats, ReceiptWithDetails } from "@/hooks/useReceipts";
 import { ReceiptDetailsDialog } from "@/components/ReceiptDetailsDialog";
@@ -19,11 +21,14 @@ export default function Recus() {
     client_id: "all",
     search: "",
   });
-  
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 50;
+
   const [selectedReceipt, setSelectedReceipt] = useState<ReceiptWithDetails | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
 
   const { data: receipts, isLoading } = useReceipts(filters);
+
   const { data: stats } = useReceiptStats();
 
   // Get clients for filter dropdown
@@ -57,6 +62,16 @@ export default function Recus() {
   const handleDownload = (receipt: ReceiptWithDetails) => {
     downloadReceiptPDF(receipt);
   };
+
+  // Reset page on filters change
+  // Note: relying on object key changes; if useReceipts memoizes, this is fine
+  useEffect(() => { setCurrentPage(1); }, [filters.type_operation, filters.client_id, filters.search]);
+
+  // Pagination calculation
+  const total = receipts?.length || 0;
+  const totalPages = Math.max(1, Math.ceil(total / itemsPerPage));
+  const offset = (currentPage - 1) * itemsPerPage;
+  const pageReceipts = (receipts || []).slice(offset, offset + itemsPerPage);
 
   if (isLoading) {
     return (
@@ -228,7 +243,7 @@ export default function Recus() {
         <CardHeader>
           <CardTitle>Liste des reçus</CardTitle>
           <CardDescription>
-            {(receipts?.length || 0)} reçu(s) trouvé(s)
+            {total} reçu(s) • Page {currentPage} / {totalPages}
           </CardDescription>
         </CardHeader>
         <CardContent className="overflow-x-auto">
@@ -246,7 +261,7 @@ export default function Recus() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {receipts?.map((receipt) => {
+              {pageReceipts.map((receipt) => {
                 const operation = operationTypes[receipt.type_operation] || { 
                   label: receipt.type_operation, 
                   color: "bg-gray-500" 
@@ -305,7 +320,7 @@ export default function Recus() {
                   </TableRow>
                 );
               })}
-              {receipts?.length === 0 && (
+              {total === 0 && (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     Aucun reçu trouvé
@@ -314,6 +329,57 @@ export default function Recus() {
               )}
             </TableBody>
             </Table>
+            {totalPages > 1 && (
+              <div className="mt-4 flex justify-center">
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious
+                        href="#"
+                        onClick={(e) => { e.preventDefault(); if (currentPage > 1) setCurrentPage(currentPage - 1); }}
+                        className={currentPage <= 1 ? "pointer-events-none opacity-50" : ""}
+                      />
+                    </PaginationItem>
+                    {currentPage > 3 && (
+                      <>
+                        <PaginationItem>
+                          <PaginationLink href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(1); }}>1</PaginationLink>
+                        </PaginationItem>
+                        {currentPage > 4 && (
+                          <PaginationItem><PaginationEllipsis /></PaginationItem>
+                        )}
+                      </>
+                    )}
+                    {Array.from({ length: totalPages }, (_, i) => i + 1)
+                      .filter(p => p >= Math.max(1, currentPage - 2) && p <= Math.min(totalPages, currentPage + 2))
+                      .map((p) => (
+                        <PaginationItem key={p}>
+                          <PaginationLink href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(p); }} isActive={p === currentPage}>
+                            {p}
+                          </PaginationLink>
+                        </PaginationItem>
+                      ))}
+                    {currentPage < totalPages - 2 && (
+                      <>
+                        {currentPage < totalPages - 3 && (
+                          <PaginationItem><PaginationEllipsis /></PaginationItem>
+                        )}
+                        <PaginationItem>
+                          <PaginationLink href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(totalPages); }}>{totalPages}</PaginationLink>
+                        </PaginationItem>
+                      </>
+                    )}
+                    <PaginationItem>
+                      <PaginationNext
+                        href="#"
+                        onClick={(e) => { e.preventDefault(); if (currentPage < totalPages) setCurrentPage(currentPage + 1); }}
+                        className={currentPage >= totalPages ? "pointer-events-none opacity-50" : ""}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
