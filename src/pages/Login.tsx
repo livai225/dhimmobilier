@@ -23,11 +23,12 @@ export default function Login() {
     setError('');
 
     try {
-      // First, find the user by username in the users table
+      // Find the user by username and verify password
       const { data: userData, error: userError } = await supabase
         .from('users')
-        .select('email')
+        .select('id, nom, prenom, username, password_hash, role, actif')
         .eq('username', username)
+        .eq('actif', true)
         .single();
 
       if (userError || !userData) {
@@ -35,24 +36,26 @@ export default function Login() {
         return;
       }
 
-      // Then authenticate with the email
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: userData.email,
-        password,
-      });
-
-      if (error) {
+      // For now, we'll do simple password verification
+      // In production, you should use proper password hashing (bcrypt, etc.)
+      if (userData.password_hash !== password) {
         setError('Nom d\'utilisateur ou mot de passe incorrect');
         return;
       }
 
-      if (data.user) {
-        toast({
-          title: "Connexion réussie",
-          description: `Bienvenue ${username}`,
-        });
-        navigate('/');
-      }
+      // Set the current user using the useCurrentUser hook
+      const { useCurrentUser } = await import('@/hooks/useCurrentUser');
+      // Since we can't use the hook here, we'll use localStorage directly
+      localStorage.setItem('current_user_id', userData.id);
+
+      toast({
+        title: "Connexion réussie",
+        description: `Bienvenue ${userData.prenom} ${userData.nom}`,
+      });
+      
+      // Redirect to dashboard
+      navigate('/');
+      
     } catch (err) {
       setError('Une erreur inattendue s\'est produite');
       console.error('Login error:', err);

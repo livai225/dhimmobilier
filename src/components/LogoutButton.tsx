@@ -1,25 +1,22 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { LogOut } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 export function LogoutButton() {
+  const { clearUser } = useCurrentUser();
+  const navigate = useNavigate();
+
   const handleLogout = async () => {
     try {
-      const { error } = await supabase.auth.signOut();
-      if (error) {
-        toast({
-          title: "Erreur",
-          description: "Impossible de se déconnecter",
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Déconnexion",
-          description: "Vous avez été déconnecté avec succès",
-        });
-      }
+      clearUser();
+      toast({
+        title: "Déconnexion",
+        description: "Vous avez été déconnecté avec succès",
+      });
+      navigate('/login');
     } catch (err) {
       console.error('Logout error:', err);
       toast({

@@ -205,7 +205,11 @@ export function ImportHistoricalSubscriptions({ inline = false }: { inline?: boo
       setValidation(validateData(data));
       setShowPreview(true);
     } catch (error) {
-      toast.error('Erreur lors de la lecture du fichier Excel');
+      toast({
+        title: "Erreur",
+        description: "Impossible de lire le fichier Excel",
+        variant: "destructive"
+      });
       console.error('Excel parsing error:', error);
     } finally {
       setIsAnalyzing(false);
@@ -215,7 +219,11 @@ export function ImportHistoricalSubscriptions({ inline = false }: { inline?: boo
   // Main import function
   const importHistoricalData = async (simulate: boolean = true) => {
     if (!file || previewData.length === 0) {
-      toast.error('Aucun fichier sélectionné ou données manquantes');
+      toast({
+        title: "Erreur de validation",
+        description: "Aucun fichier sélectionné ou données manquantes",
+        variant: "destructive"
+      });
       return;
     }
 
@@ -301,8 +309,13 @@ export function ImportHistoricalSubscriptions({ inline = false }: { inline?: boo
               .insert({
                 client_id: client.id,
                 propriete_id: property.id,
-                prix_acquisition: row.prixAcquisition,
-                solde: row.resteAPayer,
+                prix_total: row.prixAcquisition,
+                apport_initial: row.soldeAnterieur,
+                montant_mensuel: 0,
+                nombre_mois: 0,
+                date_debut: new Date().toISOString().split('T')[0],
+                solde_restant: row.resteAPayer,
+                type_souscription: 'historique',
                 statut: 'active'
               })
               .select()
@@ -352,14 +365,24 @@ export function ImportHistoricalSubscriptions({ inline = false }: { inline?: boo
       
       if (simulate) {
         setSimulationCompleted(true);
-        toast.success(`Simulation terminée: ${result.souscriptionsCreated} souscriptions seraient créées`);
+        toast({
+          title: "Simulation terminée",
+          description: `${result.souscriptionsCreated} souscriptions seraient créées`
+        });
       } else {
-        toast.success(`Import terminé: ${result.souscriptionsCreated} souscriptions créées`);
+        toast({
+          title: "Import terminé",
+          description: `${result.souscriptionsCreated} souscriptions créées`
+        });
       }
 
     } catch (error) {
       console.error('Import error:', error);
-      toast.error('Erreur lors de l\'import des données');
+      toast({
+        title: "Erreur d'import",
+        description: "Erreur lors de l'import des données",
+        variant: "destructive"
+      });
     } finally {
       setIsImporting(false);
       setProgress(0);
