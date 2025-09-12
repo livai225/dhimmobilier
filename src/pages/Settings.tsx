@@ -9,6 +9,7 @@ import { AlertTriangle, Trash2, Download, Settings as SettingsIcon, Database, Up
 import { useToast } from "@/hooks/use-toast";
 import { ImportClientsFromExcel } from "@/components/ImportClientsFromExcel";
 import { ImportHistoricalRentals } from "@/components/ImportHistoricalRentals";
+import { ImportHistoricalSubscriptions } from "@/components/ImportHistoricalSubscriptions";
 import { DuplicateClientManager } from "@/components/DuplicateClientManager";
 import {
   AlertDialog,
@@ -166,6 +167,10 @@ export default function Settings() {
             <div>
               <h4 className="text-sm font-medium mb-2">Import de données de location historiques</h4>
               <ImportHistoricalRentals />
+            </div>
+            <div>
+              <h4 className="text-sm font-medium mb-2">Import de souscriptions historiques</h4>
+              <ImportHistoricalSubscriptions />
             </div>
           </CardContent>
         </Card>
