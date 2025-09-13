@@ -23,25 +23,12 @@ export default function AuditLogs() {
   // Check if user is admin
   const isAdmin = currentUser?.role === 'admin';
 
-  if (!isAdmin) {
-    return (
-      <div className="p-6">
-        <Card>
-          <CardContent className="flex items-center justify-center py-8">
-            <div className="text-center">
-              <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
-              <h3 className="text-lg font-semibold">Accès refusé</h3>
-              <p className="text-muted-foreground">Seuls les administrateurs peuvent accéder aux logs d'audit.</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
+  // IMPORTANT: Always call hooks, even if we'll conditionally render
   const { data: users = [] } = useQuery({
     queryKey: ['users-for-audit'],
     queryFn: async () => {
+      if (!isAdmin) return []; // Don't fetch if not admin
+      
       const { data, error } = await supabase
         .from('users')
         .select('id, nom, prenom')
@@ -49,12 +36,15 @@ export default function AuditLogs() {
       
       if (error) throw error;
       return data;
-    }
+    },
+    enabled: isAdmin // Only run query if admin
   });
 
   const { data: auditLogs = [], isLoading, refetch } = useQuery({
     queryKey: ['audit-logs', selectedUser, selectedAction, selectedTable, dateRange, searchTerm],
     queryFn: async () => {
+      if (!isAdmin) return []; // Don't fetch if not admin
+      
       let query = supabase
         .from('audit_logs')
         .select(`
@@ -89,8 +79,26 @@ export default function AuditLogs() {
       if (error) throw error;
       return data || [];
     },
-    refetchInterval: 30000 // Auto refresh every 30 seconds
+    enabled: isAdmin, // Only run query if admin
+    refetchInterval: isAdmin ? 30000 : false // Auto refresh only if admin
   });
+
+  // NOW we can do conditional rendering after all hooks are called
+  if (!isAdmin) {
+    return (
+      <div className="p-6">
+        <Card>
+          <CardContent className="flex items-center justify-center py-8">
+            <div className="text-center">
+              <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
+              <h3 className="text-lg font-semibold">Accès refusé</h3>
+              <p className="text-muted-foreground">Seuls les administrateurs peuvent accéder aux logs d'audit.</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   const getActionIcon = (action: string) => {
     switch (action) {
