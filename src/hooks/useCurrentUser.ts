@@ -53,6 +53,12 @@ export const useCurrentUser = () => {
   };
 
   const setUser = async (userId: string) => {
+    // Prevent setting the same user ID to avoid unnecessary re-renders
+    if (currentUser?.id === userId) {
+      return;
+    }
+    
+    console.log('Changing user from', currentUser?.id, 'to', userId);
     setIsLoading(true);
     localStorage.setItem('current_user_id', userId);
     await loadUser(userId);

@@ -15,6 +15,8 @@ export function UserSelector() {
   const { currentUser, setUser, isLoading } = useCurrentUser();
   const [users, setUsers] = useState<User[]>([]);
 
+  const [hasInitialized, setHasInitialized] = useState(false);
+
   useEffect(() => {
     fetchUsers();
   }, []);
@@ -29,10 +31,14 @@ export function UserSelector() {
     if (!error && data) {
       setUsers(data);
       
-      // Auto-select first admin if no user selected
-      if (!currentUser && data.length > 0) {
+      // Auto-select only on first load if no user in localStorage
+      const storedUserId = localStorage.getItem('current_user_id');
+      if (!currentUser && !storedUserId && !hasInitialized && data.length > 0) {
         const adminUser = data.find(u => u.role === 'admin') || data[0];
         setUser(adminUser.id);
+        setHasInitialized(true);
+      } else if (!hasInitialized) {
+        setHasInitialized(true);
       }
     }
   };
