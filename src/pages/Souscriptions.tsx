@@ -160,30 +160,32 @@ export default function Souscriptions() {
               { header: "Prix total", accessor: (r:any) => r.prix_total },
             ]}
           />
-          <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-            <DialogTrigger asChild>
-              <Button className="w-full sm:w-auto">
-                <Plus className="mr-2 h-4 w-4" />
-                Nouvelle souscription
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-4xl">
-              <DialogHeader>
-                <DialogTitle>
-                  {selectedSouscription ? "Modifier la souscription" : "Nouvelle souscription"}
-                </DialogTitle>
-              </DialogHeader>
-              <SouscriptionForm
-                souscription={selectedSouscription}
-                onSuccess={() => {
-                  setIsFormOpen(false);
-                  setSelectedSouscription(null);
-                  refetch();
-                }}
-                baremes={baremes || []}
-              />
-            </DialogContent>
-          </Dialog>
+          <ProtectedAction permission="canCreateSubscriptions">
+            <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+              <DialogTrigger asChild>
+                <Button className="w-full sm:w-auto">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Nouvelle souscription
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-4xl">
+                <DialogHeader>
+                  <DialogTitle>
+                    {selectedSouscription ? "Modifier la souscription" : "Nouvelle souscription"}
+                  </DialogTitle>
+                </DialogHeader>
+                <SouscriptionForm
+                  souscription={selectedSouscription}
+                  onSuccess={() => {
+                    setIsFormOpen(false);
+                    setSelectedSouscription(null);
+                    refetch();
+                  }}
+                  baremes={baremes || []}
+                />
+              </DialogContent>
+            </Dialog>
+          </ProtectedAction>
         </div>
       </div>
 
@@ -298,7 +300,7 @@ export default function Souscriptions() {
 
                   {/* Bouton pour paiement de souscription */}
                   {souscription.solde_restant > 0 && (
-                    <ProtectedAction permission="canCreateSubscriptions">
+                    <ProtectedAction permission="canPayRents">
                       <Button
                         variant="outline"
                         size="sm"

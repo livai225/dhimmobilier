@@ -14,6 +14,7 @@ import { PaiementLocationDialog } from "@/components/PaiementLocationDialog";
 import { ExportToExcelButton } from "@/components/ExportToExcelButton";
 import { LocationsDashboard } from "@/components/LocationsDashboard";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
+import { ProtectedAction } from "@/components/ProtectedAction";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { calculateLocationDebt, calculateLocationProgress } from "@/utils/locationUtils";
 
@@ -132,10 +133,12 @@ export default function Locations() {
               { header: "Début", accessor: (r:any) => r.date_debut ? new Date(r.date_debut).toLocaleDateString('fr-FR') : "" },
             ]}
           />
-          <Button onClick={() => setShowLocationForm(true)} className="w-full sm:w-auto">
-            <Plus className="w-4 h-4 mr-2" />
-            Nouvelle Location
-          </Button>
+          <ProtectedAction permission="canCreateRentals">
+            <Button onClick={() => setShowLocationForm(true)} className="w-full sm:w-auto">
+              <Plus className="w-4 h-4 mr-2" />
+              Nouvelle Location
+            </Button>
+          </ProtectedAction>
         </div>
       </div>
 
