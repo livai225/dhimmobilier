@@ -20,7 +20,8 @@ import {
   Receipt,
   Settings,
   Wallet,
-  UserCog
+  UserCog,
+  Shield
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
@@ -91,6 +92,12 @@ const menuItems = [
     url: "/users",
     icon: UserCog,
     permission: "canManageUsers" as const,
+  },
+  {
+    title: "Logs d'Audit",
+    url: "/audit-logs",
+    icon: Shield,
+    permission: "isAdmin" as const,
   },
 ];
 

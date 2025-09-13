@@ -22,6 +22,7 @@ import NotFound from "./pages/NotFound";
 import Caisse from "./pages/Caisse";
 import Agents from "./pages/Agents";
 import Users from "./pages/Users";
+import AuditLogs from "./pages/AuditLogs";
 
 import Settings from "./pages/Settings";
 
@@ -63,6 +64,7 @@ const App = () => (
           <Route path="/agents" element={<ProtectedRoute><Layout><Agents /></Layout></ProtectedRoute>} />
           <Route path="/recus" element={<ProtectedRoute><Layout><Recus /></Layout></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute><Layout><Users /></Layout></ProtectedRoute>} />
+          <Route path="/audit-logs" element={<ProtectedRoute><Layout><AuditLogs /></Layout></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><Layout><Settings /></Layout></ProtectedRoute>} />
           <Route path="/receipt-integrity" element={<ProtectedRoute><Layout><ReceiptIntegrity /></Layout></ProtectedRoute>} />
           <Route path="/import-souscriptions-historiques" element={<ProtectedRoute><Layout><ImportSouscriptionsHistoriques /></Layout></ProtectedRoute>} />

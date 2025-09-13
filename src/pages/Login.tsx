@@ -58,6 +58,18 @@ export default function Login() {
       // Since we can't use the hook here, we'll use localStorage directly
       localStorage.setItem('current_user_id', userData.id);
 
+      // Log the login action
+      try {
+        await supabase.rpc('log_audit_event', {
+          p_user_id: userData.id,
+          p_action_type: 'LOGIN',
+          p_table_name: 'auth',
+          p_description: `Connexion réussie depuis ${window.location.hostname}`
+        });
+      } catch (logError) {
+        console.error('Failed to log login event:', logError);
+      }
+
       toast({
         title: "Connexion réussie",
         description: `Bienvenue ${userData.prenom} ${userData.nom}`,

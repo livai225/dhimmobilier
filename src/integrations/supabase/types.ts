@@ -89,6 +89,59 @@ export type Database = {
         }
         Relationships: []
       }
+      audit_logs: {
+        Row: {
+          action_type: string
+          created_at: string | null
+          description: string | null
+          id: string
+          ip_address: string | null
+          new_values: Json | null
+          old_values: Json | null
+          record_id: string | null
+          table_name: string
+          timestamp: string | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          action_type: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          ip_address?: string | null
+          new_values?: Json | null
+          old_values?: Json | null
+          record_id?: string | null
+          table_name: string
+          timestamp?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          action_type?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          ip_address?: string | null
+          new_values?: Json | null
+          old_values?: Json | null
+          record_id?: string | null
+          table_name?: string
+          timestamp?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_logs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       available_permissions: {
         Row: {
           category: string
@@ -1094,6 +1147,18 @@ export type Database = {
       get_solde_caisse_entreprise: {
         Args: Record<PropertyKey, never>
         Returns: number
+      }
+      log_audit_event: {
+        Args: {
+          p_action_type: string
+          p_description?: string
+          p_new_values?: Json
+          p_old_values?: Json
+          p_record_id?: string
+          p_table_name: string
+          p_user_id: string
+        }
+        Returns: string
       }
       pay_caution_with_cash: {
         Args: {

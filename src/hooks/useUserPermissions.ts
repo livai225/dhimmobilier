@@ -78,6 +78,8 @@ export const useUserPermissions = () => {
       canCreateSuppliers: false,
       canCreateInvoices: false,
       canCreateAgents: false,
+      // Admin specific permissions
+      isAdmin: false,
       // Utilitaires
       loading: false,
       refreshPermissions: () => Promise.resolve()
@@ -128,6 +130,9 @@ export const useUserPermissions = () => {
     
     // Nouvelles permissions de création
     ...creationPermissions,
+    
+    // Admin specific permissions
+    isAdmin: isAdmin,
     
     // Utilitaires
     loading,
