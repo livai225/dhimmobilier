@@ -108,7 +108,7 @@ export const useUserPermissions = () => {
     canPayRents: isAdmin || isComptable,
     canPayLandRights: isAdmin || isComptable,
     canPayInvoices: isAdmin || isComptable,
-    canViewReceipts: isAdmin || isComptable,
+    canViewReceipts: isAdmin || isComptable || isSecretaire,
     
     // Secrétaire permissions (opérationnel uniquement)
     canMakeDeposits: isAdmin || isSecretaire,
@@ -124,9 +124,9 @@ export const useUserPermissions = () => {
     canAccessInvoices: isAdmin || isComptable,
     canAccessSubscriptions: isAdmin || isSecretaire,
     canAccessRentals: isAdmin || isSecretaire,
-    canAccessCashbox: isAdmin || isComptable, // Seuls admin et comptable voient l'état financier complet
+    canAccessCashbox: isAdmin || isComptable || isSecretaire, // Accès caisse pour secrétaire
     canAccessAgents: isAdmin,
-    canAccessReceipts: isAdmin || isComptable,
+    canAccessReceipts: isAdmin || isComptable || isSecretaire, // Accès reçus pour secrétaire
     
     // Nouvelles permissions de création
     ...creationPermissions,
