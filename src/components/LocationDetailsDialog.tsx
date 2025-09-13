@@ -323,14 +323,16 @@ export function LocationDetailsDialog({ location, onClose, onUpdate }: LocationD
             <div className="flex flex-col sm:flex-row gap-2">
               {location.statut === 'active' && (
                 <>
-                  <Button
-                    onClick={() => setShowPaiementDialog(true)}
-                    className="flex items-center justify-center gap-2 w-full sm:w-auto"
-                    size="sm"
-                  >
-                    <CreditCard className="w-4 h-4" />
-                    <span className="sm:inline">Nouveau Paiement</span>
-                  </Button>
+                  <ProtectedAction permission="canPayRents">
+                    <Button
+                      onClick={() => setShowPaiementDialog(true)}
+                      className="flex items-center justify-center gap-2 w-full sm:w-auto"
+                      size="sm"
+                    >
+                      <CreditCard className="w-4 h-4" />
+                      <span className="sm:inline">Nouveau Paiement</span>
+                    </Button>
+                  </ProtectedAction>
                   <Button
                     variant="destructive"
                     onClick={handleTerminateLocation}

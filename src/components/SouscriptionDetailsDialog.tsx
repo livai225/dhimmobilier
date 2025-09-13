@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { ProtectedAction } from "./ProtectedAction";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -175,10 +176,12 @@ export function SouscriptionDetailsDialog({
                 Paiement souscription
               </Button>
             )}
-            <Button onClick={onNewDroitTerrePayment} size="sm" variant="outline" className="w-full sm:w-auto">
-              <Coins className="mr-2 h-4 w-4" />
-              Droit de terre
-            </Button>
+            <ProtectedAction permission="canPayLandRights">
+              <Button onClick={onNewDroitTerrePayment} size="sm" variant="outline" className="w-full sm:w-auto">
+                <Coins className="mr-2 h-4 w-4" />
+                Droit de terre
+              </Button>
+            </ProtectedAction>
           </div>
         </DialogHeader>
 
