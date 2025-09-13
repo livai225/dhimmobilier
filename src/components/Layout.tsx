@@ -3,7 +3,6 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import BalanceBadge from "@/components/BalanceBadge";
-import { UserSelector } from "@/components/UserSelector";
 import { LogoutButton } from "@/components/LogoutButton";
 
 interface LayoutProps {
@@ -25,7 +24,6 @@ export function Layout({ children }: LayoutProps) {
             </div>
             <div className="flex items-center gap-3">
               <BalanceBadge />
-              <UserSelector />
               <LogoutButton />
               <ThemeToggle />
             </div>
