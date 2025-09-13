@@ -16,7 +16,7 @@ export const getDefaultRouteForRole = (user: User): string => {
 export const getFirstAvailableRoute = (role: string): string => {
   const routes = {
     admin: ['/'],
-    comptable: ['/'],
+    comptable: ['/', '/clients', '/proprietes', '/fournisseurs', '/factures', '/caisse', '/recus'],
     secretaire: ['/clients', '/proprietes', '/souscriptions', '/locations', '/agents', '/recus']
   };
   

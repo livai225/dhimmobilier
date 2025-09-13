@@ -92,7 +92,7 @@ export const useUserPermissions = () => {
 
   // Permissions de création (combinaison rôle + permissions personnalisées)
   const creationPermissions = {
-    canCreateClients: isAdmin || hasCustomPermission('can_create_clients'),
+    canCreateClients: isAdmin || isComptable || hasCustomPermission('can_create_clients'),
     canCreateProperties: isAdmin || hasCustomPermission('can_create_properties'),
     canCreateSuppliers: (isAdmin || isComptable) || hasCustomPermission('can_create_suppliers'),
     canCreateInvoices: (isAdmin || isComptable) || hasCustomPermission('can_create_invoices'),
@@ -118,8 +118,8 @@ export const useUserPermissions = () => {
     
     // Page access permissions
     canAccessDashboard: isAdmin || isComptable, // Seuls admin et comptable voient le dashboard financier
-    canAccessClients: isAdmin || isSecretaire,
-    canAccessProperties: isAdmin || isSecretaire,
+    canAccessClients: isAdmin || isComptable || isSecretaire, // Comptable a besoin d'accès aux clients pour la facturation
+    canAccessProperties: isAdmin || isComptable || isSecretaire, // Comptable a besoin d'accès aux propriétés pour la facturation
     canAccessSuppliers: isAdmin || isComptable,
     canAccessInvoices: isAdmin || isComptable,
     canAccessSubscriptions: isAdmin || isSecretaire,
