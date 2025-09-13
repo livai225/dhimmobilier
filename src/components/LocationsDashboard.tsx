@@ -4,9 +4,31 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from "recharts";
-import { Home, TrendingUp, AlertTriangle, DollarSign, Users, Calendar } from "lucide-react";
+import { Home, TrendingUp, AlertTriangle, DollarSign, Users, Calendar, AlertCircle } from "lucide-react";
+import { useUserPermissions } from "@/hooks/useUserPermissions";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export function LocationsDashboard() {
+  const { canAccessDashboard } = useUserPermissions();
+
+  if (!canAccessDashboard) {
+    return (
+      <div className="p-6">
+        <Card>
+          <CardContent className="flex items-center justify-center py-8">
+            <div className="text-center">
+              <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
+              <h3 className="text-lg font-semibold">Accès refusé</h3>
+              <p className="text-muted-foreground">
+                Vous n'avez pas les permissions nécessaires pour accéder au tableau de bord des locations.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   const { data: locations = [] } = useQuery({
     queryKey: ["locations_dashboard"],
     queryFn: async () => {

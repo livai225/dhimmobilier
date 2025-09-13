@@ -18,6 +18,7 @@ import { ExportToExcelButton } from "@/components/ExportToExcelButton";
 import { PropertiesDashboard } from "@/components/PropertiesDashboard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useUserPermissions } from "@/hooks/useUserPermissions";
 
 interface Propriete {
   id: string;
@@ -41,6 +42,7 @@ interface TypePropriete {
 }
 
 export default function Proprietes() {
+  const { canAccessDashboard } = useUserPermissions();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPropriete, setEditingPropriete] = useState<Propriete | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -315,15 +317,19 @@ export default function Proprietes() {
         </div>
       </div>
 
-      <Tabs defaultValue="dashboard" className="space-y-4">
+      <Tabs defaultValue={canAccessDashboard ? "dashboard" : "list"} className="space-y-4">
         <TabsList>
-          <TabsTrigger value="dashboard">Tableau de Bord</TabsTrigger>
+          {canAccessDashboard && (
+            <TabsTrigger value="dashboard">Tableau de Bord</TabsTrigger>
+          )}
           <TabsTrigger value="list">Liste des Propriétés</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="dashboard">
-          <PropertiesDashboard />
-        </TabsContent>
+        {canAccessDashboard && (
+          <TabsContent value="dashboard">
+            <PropertiesDashboard />
+          </TabsContent>
+        )}
 
         <TabsContent value="list">
           {/* Filters Section */}

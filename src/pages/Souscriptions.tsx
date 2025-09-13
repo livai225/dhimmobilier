@@ -11,6 +11,7 @@ import { SouscriptionDetailsDialog } from "@/components/SouscriptionDetailsDialo
 import { PaiementSouscriptionEcheanceDialog } from "@/components/PaiementSouscriptionEcheanceDialog";
 import { PaiementDroitTerreDialog } from "@/components/PaiementDroitTerreDialog";
 import { SouscriptionsDashboard } from "@/components/SouscriptionsDashboard";
+import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, Eye, CreditCard, Calendar, Trash2, Coins, BarChart3 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
@@ -20,6 +21,7 @@ import { ExportToExcelButton } from "@/components/ExportToExcelButton";
 import { ProtectedAction } from "@/components/ProtectedAction";
 
 export default function Souscriptions() {
+  const { canAccessDashboard } = useUserPermissions();
   const [searchTerm, setSearchTerm] = useState("");
   const [phaseFilter, setPhaseFilter] = useState<string>("all");
   const [selectedSouscription, setSelectedSouscription] = useState<any>(null);
@@ -139,13 +141,15 @@ export default function Souscriptions() {
       <div className="flex flex-col space-y-4 lg:flex-row lg:items-center lg:justify-between lg:space-y-0 mb-6">
         <h1 className="text-2xl md:text-3xl font-bold">Gestion des Souscriptions</h1>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setShowDashboard(!showDashboard)}
-          >
-            <BarChart3 className="mr-2 h-4 w-4" />
-            {showDashboard ? "Masquer" : "Afficher"} le tableau de bord
-          </Button>
+          {canAccessDashboard && (
+            <Button
+              variant="outline"
+              onClick={() => setShowDashboard(!showDashboard)}
+            >
+              <BarChart3 className="mr-2 h-4 w-4" />
+              {showDashboard ? "Masquer" : "Afficher"} le tableau de bord
+            </Button>
+          )}
           <ExportToExcelButton
             filename={`souscriptions_${new Date().toISOString().slice(0,10)}`}
             rows={filteredSouscriptions || []}
@@ -184,7 +188,7 @@ export default function Souscriptions() {
       </div>
 
       {/* Dashboard */}
-      {showDashboard && <SouscriptionsDashboard />}
+      {showDashboard && canAccessDashboard && <SouscriptionsDashboard />}
 
       {/* Filters */}
       <div className="flex gap-4 mb-6">

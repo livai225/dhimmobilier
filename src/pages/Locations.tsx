@@ -13,10 +13,12 @@ import { LocationDetailsDialog } from "@/components/LocationDetailsDialog";
 import { PaiementLocationDialog } from "@/components/PaiementLocationDialog";
 import { ExportToExcelButton } from "@/components/ExportToExcelButton";
 import { LocationsDashboard } from "@/components/LocationsDashboard";
+import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { calculateLocationDebt, calculateLocationProgress } from "@/utils/locationUtils";
 
 export default function Locations() {
+  const { canAccessDashboard } = useUserPermissions();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [showLocationForm, setShowLocationForm] = useState(false);
@@ -137,15 +139,19 @@ export default function Locations() {
         </div>
       </div>
 
-      <Tabs defaultValue="list" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 mb-6">
-          <TabsTrigger value="dashboard">📊 Dashboard</TabsTrigger>
+      <Tabs defaultValue={canAccessDashboard ? "dashboard" : "list"} className="w-full">
+        <TabsList className={`grid w-full ${canAccessDashboard ? 'grid-cols-2' : 'grid-cols-1'} mb-6`}>
+          {canAccessDashboard && (
+            <TabsTrigger value="dashboard">📊 Dashboard</TabsTrigger>
+          )}
           <TabsTrigger value="list">📋 Liste des locations</TabsTrigger>
         </TabsList>
         
-        <TabsContent value="dashboard" className="space-y-6">
-          <LocationsDashboard />
-        </TabsContent>
+        {canAccessDashboard && (
+          <TabsContent value="dashboard" className="space-y-6">
+            <LocationsDashboard />
+          </TabsContent>
+        )}
         
         <TabsContent value="list" className="space-y-6">
           {/* Filters */}

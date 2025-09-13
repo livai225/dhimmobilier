@@ -1,9 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Building, TrendingUp, MapPin, DollarSign, BarChart3, PieChart as PieChartIcon } from "lucide-react";
+import { Building, TrendingUp, MapPin, DollarSign, BarChart3, PieChart as PieChartIcon, AlertCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
+import { useUserPermissions } from "@/hooks/useUserPermissions";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--secondary))', 'hsl(var(--accent))', 'hsl(var(--muted))'];
 
@@ -18,9 +20,15 @@ interface DashboardStats {
 }
 
 export function PropertiesDashboard() {
+  const { canAccessDashboard } = useUserPermissions();
+
   const { data: dashboardStats, isLoading } = useQuery({
     queryKey: ['properties-dashboard'],
     queryFn: async (): Promise<DashboardStats> => {
+      if (!canAccessDashboard) {
+        throw new Error('Accès non autorisé au tableau de bord');
+      }
+      
       // Fetch properties with related data
       const { data: properties, error: propError } = await supabase
         .from('proprietes')
@@ -157,6 +165,7 @@ export function PropertiesDashboard() {
         zonePerformance
       };
     },
+    enabled: canAccessDashboard
   });
 
   const formatCurrency = (amount: number) => {
@@ -167,11 +176,42 @@ export function PropertiesDashboard() {
     }).format(amount).replace('XOF', 'FCFA');
   };
 
+  if (!canAccessDashboard) {
+    return (
+      <div className="p-6">
+        <Card>
+          <CardContent className="flex items-center justify-center py-8">
+            <div className="text-center">
+              <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
+              <h3 className="text-lg font-semibold">Accès refusé</h3>
+              <p className="text-muted-foreground">
+                Vous n'avez pas les permissions nécessaires pour accéder au tableau de bord financier.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (isLoading) {
     return <div className="p-6">Chargement du tableau de bord...</div>;
   }
 
-  const stats = dashboardStats!;
+  if (!dashboardStats) {
+    return (
+      <div className="p-6">
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            Impossible de charger les données du tableau de bord.
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
+  const stats = dashboardStats;
 
   return (
     <div className="space-y-6">

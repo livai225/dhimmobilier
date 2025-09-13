@@ -10,9 +10,12 @@ import {
   AlertTriangle,
   Calendar,
   Building2,
-  Target
+  Target,
+  AlertCircle
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RechartsPieChart, Cell, Pie } from "recharts";
+import { useUserPermissions } from "@/hooks/useUserPermissions";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const PHASE_COLORS = {
   souscription: "hsl(var(--primary))",
@@ -22,6 +25,26 @@ const PHASE_COLORS = {
 };
 
 export function SouscriptionsDashboard() {
+  const { canAccessDashboard } = useUserPermissions();
+
+  if (!canAccessDashboard) {
+    return (
+      <div className="p-6">
+        <Card>
+          <CardContent className="flex items-center justify-center py-8">
+            <div className="text-center">
+              <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
+              <h3 className="text-lg font-semibold">Accès refusé</h3>
+              <p className="text-muted-foreground">
+                Vous n'avez pas les permissions nécessaires pour accéder au tableau de bord des souscriptions.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   // Fetch dashboard data
   const { data: dashboardData, isLoading } = useQuery({
     queryKey: ["souscriptions-dashboard"],
