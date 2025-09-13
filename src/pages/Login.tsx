@@ -9,6 +9,16 @@ import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Eye, EyeOff, LogIn, Building2 } from 'lucide-react';
 
+// Function to decode base64 password hash
+  const decodeBase64 = (encoded: string): string => {
+    try {
+      return atob(encoded);
+    } catch (error) {
+      console.error('Error decoding base64:', error);
+      return encoded; // Return original if decode fails
+    }
+  };
+
 export default function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -36,9 +46,9 @@ export default function Login() {
         return;
       }
 
-      // For now, we'll do simple password verification
-      // In production, you should use proper password hashing (bcrypt, etc.)
-      if (userData.password_hash !== password) {
+      // Decode the base64 password hash and compare with entered password
+      const decodedPassword = decodeBase64(userData.password_hash);
+      if (decodedPassword !== password) {
         setError('Nom d\'utilisateur ou mot de passe incorrect');
         return;
       }
