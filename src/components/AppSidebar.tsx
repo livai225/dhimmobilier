@@ -23,8 +23,10 @@ import {
   UserCog,
   Shield
 } from "lucide-react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { getFirstAvailableRoute } from "@/utils/roleBasedRedirect";
 import React from "react";
 
 const menuItems = [
@@ -104,19 +106,21 @@ const menuItems = [
 
 export function AppSidebar() {
   const location = useLocation();
+  const navigate = useNavigate();
   const permissions = useUserPermissions();
+  const { currentUser } = useCurrentUser();
 
   const filteredMenuItems = menuItems.filter(item => 
     permissions[item.permission]
   );
 
-  // Auto-redirect secretary users from dashboard to their first available page
+  // Auto-redirect users from dashboard to their appropriate page
   React.useEffect(() => {
-    if (location.pathname === '/' && !permissions.canAccessDashboard && filteredMenuItems.length > 0) {
-      const firstAvailableItem = filteredMenuItems[0];
-      window.location.replace(firstAvailableItem.url);
+    if (location.pathname === '/' && !permissions.canAccessDashboard && currentUser) {
+      const defaultRoute = getFirstAvailableRoute(currentUser.role);
+      navigate(defaultRoute, { replace: true });
     }
-  }, [location.pathname, permissions.canAccessDashboard, filteredMenuItems]);
+  }, [location.pathname, permissions.canAccessDashboard, currentUser, navigate]);
 
   return (
     <Sidebar>

@@ -75,8 +75,12 @@ export default function Login() {
         description: `Bienvenue ${userData.prenom} ${userData.nom}`,
       });
       
-      // Redirect to dashboard
-      navigate('/');
+      // Import role-based redirect utility
+      const { getDefaultRouteForRole } = await import('@/utils/roleBasedRedirect');
+      
+      // Redirect based on user role
+      const defaultRoute = getDefaultRouteForRole(userData);
+      navigate(defaultRoute);
       
     } catch (err) {
       setError('Une erreur inattendue s\'est produite');
