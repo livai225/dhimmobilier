@@ -7,6 +7,7 @@ import { Users, Building, FileText, TrendingUp, AlertCircle, CheckCircle, Home, 
 import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
 import { useNavigate } from "react-router-dom";
 import { BalanceBadge } from "@/components/BalanceBadge";
+import { ProtectedAction } from "@/components/ProtectedAction";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -187,7 +188,8 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="container mx-auto p-2 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
+    <ProtectedAction permission="canAccessDashboard" showMessage={true}>
+      <div className="container mx-auto p-2 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
       {/* Header */}
       <div className="flex flex-col space-y-4 lg:flex-row lg:items-center lg:justify-between lg:space-y-0">
         <div>
@@ -633,5 +635,6 @@ export default function Dashboard() {
         </Card>
       </div>
     </div>
+    </ProtectedAction>
   );
 }

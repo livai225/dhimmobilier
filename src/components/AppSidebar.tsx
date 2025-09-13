@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
+import React from "react";
 
 const menuItems = [
   {
@@ -109,6 +110,14 @@ export function AppSidebar() {
     permissions[item.permission]
   );
 
+  // Auto-redirect secretary users from dashboard to their first available page
+  React.useEffect(() => {
+    if (location.pathname === '/' && !permissions.canAccessDashboard && filteredMenuItems.length > 0) {
+      const firstAvailableItem = filteredMenuItems[0];
+      window.location.replace(firstAvailableItem.url);
+    }
+  }, [location.pathname, permissions.canAccessDashboard, filteredMenuItems]);
+
   return (
     <Sidebar>
       <SidebarContent>
@@ -135,14 +144,16 @@ export function AppSidebar() {
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild>
-              <Link to="/settings">
-                <Settings />
-                <span>Paramètres</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          {permissions.isAdmin && (
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild>
+                <Link to="/settings">
+                  <Settings />
+                  <span>Paramètres</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
         </SidebarMenu>
       </SidebarFooter>
     </Sidebar>

@@ -22,6 +22,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { ProtectedAction } from "@/components/ProtectedAction";
 
 export default function Settings() {
   const { toast } = useToast();
@@ -116,7 +117,8 @@ export default function Settings() {
   const canDeleteClients = confirmClientText === "SUPPRIMER TOUS LES CLIENTS";
 
   return (
-    <div className="container mx-auto p-4 lg:p-6 max-w-4xl">
+    <ProtectedAction permission="isAdmin" showMessage={true}>
+      <div className="container mx-auto p-4 lg:p-6 max-w-4xl">
       <div className="flex items-center gap-2 mb-6">
         <SettingsIcon className="w-8 h-8" />
         <div>
@@ -336,5 +338,6 @@ export default function Settings() {
         </Card>
       </div>
     </div>
+    </ProtectedAction>
   );
 }

@@ -104,27 +104,27 @@ export const useUserPermissions = () => {
     canAccessAll: isAdmin,
     canManageUsers: isAdmin,
     
-    // Comptable permissions
+    // Comptable permissions (finances uniquement)
     canPayRents: isAdmin || isComptable,
     canPayLandRights: isAdmin || isComptable,
     canPayInvoices: isAdmin || isComptable,
     canViewReceipts: isAdmin || isComptable,
     
-    // Secrétaire permissions
+    // Secrétaire permissions (opérationnel uniquement)
     canMakeDeposits: isAdmin || isSecretaire,
-    canMakeExpenses: isAdmin || isSecretaire,
+    canMakeExpenses: isAdmin, // Seuls les admins peuvent faire des dépenses d'entreprise
     canCreateSubscriptions: isAdmin || isSecretaire,
     canCreateRentals: isAdmin || isSecretaire,
     
     // Page access permissions
-    canAccessDashboard: isAdmin || isComptable,
+    canAccessDashboard: isAdmin || isComptable, // Seuls admin et comptable voient le dashboard financier
     canAccessClients: isAdmin || isSecretaire,
     canAccessProperties: isAdmin || isSecretaire,
     canAccessSuppliers: isAdmin || isComptable,
     canAccessInvoices: isAdmin || isComptable,
     canAccessSubscriptions: isAdmin || isSecretaire,
     canAccessRentals: isAdmin || isSecretaire,
-    canAccessCashbox: isAdmin || isSecretaire,
+    canAccessCashbox: isAdmin || isComptable, // Seuls admin et comptable voient l'état financier complet
     canAccessAgents: isAdmin,
     canAccessReceipts: isAdmin || isComptable,
     

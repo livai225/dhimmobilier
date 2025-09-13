@@ -16,8 +16,12 @@ import * as XLSX from 'xlsx';
 import { ReceiptDetailsDialog } from "@/components/ReceiptDetailsDialog";
 import { ReceiptWithDetails } from "@/hooks/useReceipts";
 import { ArticleForm } from "@/components/ArticleForm";
+import { ProtectedAction } from "@/components/ProtectedAction";
+import { useUserPermissions } from "@/hooks/useUserPermissions";
+import React from "react";
 
 export default function Caisse() {
+  const permissions = useUserPermissions();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [period, setPeriod] = useState<"day" | "week" | "month" | "year">("month");
@@ -28,6 +32,13 @@ export default function Caisse() {
   const [typeOperationFilter, setTypeOperationFilter] = useState<string>("");
   const [isExporting, setIsExporting] = useState(false);
   const [journalTab, setJournalTab] = useState<"versement" | "entreprise">("versement");
+  
+  // Force secretary users to stay on versement tab
+  React.useEffect(() => {
+    if (!permissions.canAccessDashboard && journalTab === "entreprise") {
+      setJournalTab("versement");
+    }
+  }, [permissions.canAccessDashboard, journalTab]);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 50;
   const [entryType, setEntryType] = useState<"versement" | "vente">("versement");
@@ -405,7 +416,8 @@ export default function Caisse() {
   };
 
   return (
-    <div className="container mx-auto p-2 sm:p-4">
+    <ProtectedAction permission="canAccessCashbox" showMessage={true}>
+      <div className="container mx-auto p-2 sm:p-4">
       <div className="flex items-start justify-between gap-4 flex-col sm:flex-row">
         <div className="flex flex-col gap-4 flex-1">
           {/* Solde caisse versement (affiché en principal) */}
@@ -419,16 +431,18 @@ export default function Caisse() {
             </CardContent>
           </Card>
 
-          {/* Solde de caisse (ex-chiffre d'affaires) */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Solde de caisse entreprise</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-600">{soldeCaisseEntreprise.toLocaleString()} FCFA</div>
-              <p className="text-sm text-muted-foreground">Revenus totaux - dépenses entreprise</p>
-            </CardContent>
-          </Card>
+          {/* Solde de caisse entreprise - masqué pour les secrétaires */}
+          {permissions.canAccessDashboard && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Solde de caisse entreprise</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">{soldeCaisseEntreprise.toLocaleString()} FCFA</div>
+                <p className="text-sm text-muted-foreground">Revenus totaux - dépenses entreprise</p>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         <Card className="w-full sm:max-w-md">
@@ -437,10 +451,10 @@ export default function Caisse() {
           </CardHeader>
           <CardContent className="space-y-3">
             <Tabs value={tab} onValueChange={(v: any) => setTab(v)}>
-              <TabsList className="grid grid-cols-2">
-                <TabsTrigger value="entree">Entrée (versement)</TabsTrigger>
-                <TabsTrigger value="depense">Dépense</TabsTrigger>
-              </TabsList>
+               <TabsList className={permissions.canMakeExpenses ? "grid grid-cols-2" : "grid grid-cols-1"}>
+                 <TabsTrigger value="entree">Entrée (versement)</TabsTrigger>
+                 {permissions.canMakeExpenses && <TabsTrigger value="depense">Dépense</TabsTrigger>}
+               </TabsList>
               <TabsContent value="entree" className="space-y-3">
                 <div>
                   <label className="text-sm">Type d'entrée</label>
@@ -566,9 +580,9 @@ export default function Caisse() {
           </CardHeader>
           <CardContent>
             <Tabs value={journalTab} onValueChange={(v: any) => setJournalTab(v)} className="space-y-4">
-              <TabsList className="grid grid-cols-2">
+              <TabsList className={permissions.canAccessDashboard ? "grid grid-cols-2" : "grid grid-cols-1"}>
                 <TabsTrigger value="versement">Caisse Versement</TabsTrigger>
-                <TabsTrigger value="entreprise">Caisse Entreprise</TabsTrigger>
+                {permissions.canAccessDashboard && <TabsTrigger value="entreprise">Caisse Entreprise</TabsTrigger>}
               </TabsList>
               
               <div className="flex flex-col sm:flex-row gap-4 mb-3 items-start">
@@ -869,5 +883,6 @@ export default function Caisse() {
         onOpenChange={setIsReceiptDialogOpen}
       />
     </div>
+    </ProtectedAction>
   );
 }
