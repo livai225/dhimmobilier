@@ -90,13 +90,13 @@ export const useUserPermissions = () => {
   const isComptable = currentUser.role === 'comptable';
   const isSecretaire = currentUser.role === 'secretaire';
 
-  // Permissions de création (combinaison rôle + permissions personnalisées)
+  // Permissions de création (basées uniquement sur les rôles - pas de personnalisation pour éviter l'escalade de privilèges)
   const creationPermissions = {
-    canCreateClients: isAdmin || isComptable || hasCustomPermission('can_create_clients'),
-    canCreateProperties: isAdmin || hasCustomPermission('can_create_properties'),
-    canCreateSuppliers: (isAdmin || isComptable) || hasCustomPermission('can_create_suppliers'),
-    canCreateInvoices: (isAdmin || isComptable) || hasCustomPermission('can_create_invoices'),
-    canCreateAgents: (isAdmin || isComptable) || hasCustomPermission('can_create_agents'),
+    canCreateClients: isAdmin || isComptable, // Comptable peut créer des clients pour la facturation
+    canCreateProperties: isAdmin, // Seuls les admins peuvent créer des propriétés
+    canCreateSuppliers: isAdmin || isComptable, // Comptable peut créer des fournisseurs
+    canCreateInvoices: isAdmin || isComptable, // Comptable peut créer des factures
+    canCreateAgents: isAdmin, // Seuls les admins peuvent créer des agents
   };
 
   return {
