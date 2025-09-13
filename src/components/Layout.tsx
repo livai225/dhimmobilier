@@ -4,6 +4,7 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import BalanceBadge from "@/components/BalanceBadge";
 import { LogoutButton } from "@/components/LogoutButton";
+import { UserInfo } from "@/components/UserInfo";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -24,6 +25,7 @@ export function Layout({ children }: LayoutProps) {
             </div>
             <div className="flex items-center gap-3">
               <BalanceBadge />
+              <UserInfo />
               <LogoutButton />
               <ThemeToggle />
             </div>

@@ -124,7 +124,7 @@ export const useUserPermissions = () => {
     canAccessInvoices: isAdmin || isComptable,
     canAccessSubscriptions: isAdmin || isComptable || isSecretaire, // Comptable peut accéder pour les paiements
     canAccessRentals: isAdmin || isComptable || isSecretaire, // Comptable peut accéder pour les paiements
-    canAccessCashbox: isAdmin || isComptable || isSecretaire, // Accès caisse pour secrétaire
+    canAccessCashbox: isAdmin || isSecretaire, // Accès caisse pour admin et secrétaire seulement
     canAccessAgents: isAdmin,
     canAccessReceipts: isAdmin || isComptable || isSecretaire, // Accès reçus pour secrétaire
     
