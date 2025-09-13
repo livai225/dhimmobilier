@@ -46,7 +46,67 @@ export function LocationsDashboard() {
     enabled: canAccessDashboard, // Only run query if user has permission
   });
 
-  // Now check permissions after hooks are called
+  // Calculate stats with useMemo - always called
+  const stats = useMemo(() => {
+    if (!canAccessDashboard) return {
+      total: 0, active: 0, suspended: 0, terminated: 0,
+      totalRevenue: 0, totalDebt: 0, totalCaution: 0, occupancyRate: 0
+    };
+
+    const total = locations.length;
+    const active = locations.filter(l => l.statut === 'active').length;
+    const suspended = locations.filter(l => l.statut === 'suspendu').length;
+    const terminated = locations.filter(l => l.statut === 'termine').length;
+    
+    const totalRevenue = locations.reduce((sum, l) => sum + Number(l.loyer_mensuel || 0), 0);
+    const totalDebt = locations.reduce((sum, l) => sum + Number(l.dette_totale || 0), 0);
+    const totalCaution = locations.reduce((sum, l) => sum + Number(l.caution_totale || 0), 0);
+    
+    const occupancyRate = total > 0 ? (active / total) * 100 : 0;
+
+    return {
+      total, active, suspended, terminated,
+      totalRevenue, totalDebt, totalCaution, occupancyRate
+    };
+  }, [locations, canAccessDashboard]);
+
+  const monthlyPayments = useMemo(() => {
+    if (!canAccessDashboard) return [];
+    
+    const monthlyData: { [key: string]: number } = {};
+    
+    payments.forEach(payment => {
+      const month = new Date(payment.date_paiement).toLocaleDateString('fr-FR', { 
+        year: 'numeric', 
+        month: 'short' 
+      });
+      monthlyData[month] = (monthlyData[month] || 0) + Number(payment.montant);
+    });
+
+    return Object.entries(monthlyData)
+      .map(([month, amount]) => ({ month, amount }))
+      .sort((a, b) => new Date(a.month).getTime() - new Date(b.month).getTime())
+      .slice(-6); // Derniers 6 mois
+  }, [payments, canAccessDashboard]);
+
+  const revenueByProperty = useMemo(() => {
+    if (!canAccessDashboard) return [];
+    
+    const propertyRevenue: { [key: string]: number } = {};
+    
+    locations.forEach(location => {
+      if (location.proprietes?.nom) {
+        propertyRevenue[location.proprietes.nom] = Number(location.loyer_mensuel || 0);
+      }
+    });
+
+    return Object.entries(propertyRevenue)
+      .map(([name, revenue]) => ({ name, revenue }))
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 10); // Top 10
+  }, [locations, canAccessDashboard]);
+
+  // Now check permissions after all hooks are called
   if (!canAccessDashboard) {
     return (
       <div className="p-6">
@@ -65,67 +125,11 @@ export function LocationsDashboard() {
     );
   }
 
-  const stats = useMemo(() => {
-    const total = locations.length;
-    const active = locations.filter(l => l.statut === 'active').length;
-    const suspended = locations.filter(l => l.statut === 'suspendu').length;
-    const terminated = locations.filter(l => l.statut === 'termine').length;
-    
-    const totalRevenue = locations.reduce((sum, l) => sum + Number(l.loyer_mensuel || 0), 0);
-    const totalDebt = locations.reduce((sum, l) => sum + Number(l.dette_totale || 0), 0);
-    const totalCaution = locations.reduce((sum, l) => sum + Number(l.caution_totale || 0), 0);
-    
-    const occupancyRate = total > 0 ? (active / total) * 100 : 0;
-
-    return {
-      total,
-      active,
-      suspended,
-      terminated,
-      totalRevenue,
-      totalDebt,
-      totalCaution,
-      occupancyRate
-    };
-  }, [locations]);
-
   const statusData = [
     { name: "Actives", value: stats.active, color: "#10b981" },
     { name: "Suspendues", value: stats.suspended, color: "#ef4444" },
     { name: "Terminées", value: stats.terminated, color: "#6b7280" }
   ];
-
-  const monthlyPayments = useMemo(() => {
-    const monthlyData: { [key: string]: number } = {};
-    
-    payments.forEach(payment => {
-      const month = new Date(payment.date_paiement).toLocaleDateString('fr-FR', { 
-        year: 'numeric', 
-        month: 'short' 
-      });
-      monthlyData[month] = (monthlyData[month] || 0) + Number(payment.montant);
-    });
-
-    return Object.entries(monthlyData)
-      .map(([month, amount]) => ({ month, amount }))
-      .sort((a, b) => new Date(a.month).getTime() - new Date(b.month).getTime())
-      .slice(-6); // Derniers 6 mois
-  }, [payments]);
-
-  const revenueByProperty = useMemo(() => {
-    const propertyRevenue: { [key: string]: number } = {};
-    
-    locations.forEach(location => {
-      if (location.proprietes?.nom) {
-        propertyRevenue[location.proprietes.nom] = Number(location.loyer_mensuel || 0);
-      }
-    });
-
-    return Object.entries(propertyRevenue)
-      .map(([name, revenue]) => ({ name, revenue }))
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 10); // Top 10
-  }, [locations]);
 
   return (
     <div className="space-y-6">
