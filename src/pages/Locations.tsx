@@ -257,17 +257,19 @@ export default function Locations() {
                 </Button>
                 
                 {location.statut === 'active' && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setSelectedLocation(location);
-                      setShowPaiementDialog(true);
-                    }}
-                  >
-                    <CreditCard className="w-4 h-4 mr-1" />
-                    Paiement
-                  </Button>
+                  <ProtectedAction permission="canPayRents">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedLocation(location);
+                        setShowPaiementDialog(true);
+                      }}
+                    >
+                      <CreditCard className="w-4 h-4 mr-1" />
+                      Paiement
+                    </Button>
+                  </ProtectedAction>
                 )}
                 
                 <Button
