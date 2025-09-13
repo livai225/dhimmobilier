@@ -141,7 +141,7 @@ export const generateReceiptPDF = (receipt: ReceiptWithDetails, logoDataUrl?: st
   const operationTypes: Record<string, string> = {
     location: "Paiement de loyer",
     caution_location: "Caution de location", 
-    apport_souscription: "Apport de souscription",
+    apport_souscription: "Apport de location",
     droit_terre: "Droit de terre",
     paiement_facture: "Paiement de facture",
     versement_agent: "Versement agent"

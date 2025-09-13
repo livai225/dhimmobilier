@@ -55,7 +55,7 @@ export default function ReceiptIntegrityPage() {
   const getTypeLabel = (type: string) => {
     const types = {
       location: "Paiement de loyer",
-      souscription: "Apport de souscription", 
+      souscription: "Apport de location", 
       facture: "Paiement de facture",
       droit_terre: "Droit de terre"
     };
