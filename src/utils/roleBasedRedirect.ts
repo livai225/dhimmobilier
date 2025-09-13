@@ -3,9 +3,9 @@ import { User } from "@/hooks/useCurrentUser";
 export const getDefaultRouteForRole = (user: User): string => {
   switch (user.role) {
     case 'admin':
-      return '/';
+      return '/dashboard';
     case 'comptable':
-      return '/';
+      return '/dashboard';
     case 'secretaire':
       return '/clients';
     default:
@@ -15,8 +15,8 @@ export const getDefaultRouteForRole = (user: User): string => {
 
 export const getFirstAvailableRoute = (role: string): string => {
   const routes = {
-    admin: ['/'],
-    comptable: ['/', '/clients', '/proprietes', '/fournisseurs', '/factures', '/caisse', '/recus'],
+    admin: ['/dashboard'],
+    comptable: ['/dashboard', '/clients', '/proprietes', '/fournisseurs', '/factures', '/caisse', '/recus'],
     secretaire: ['/clients', '/proprietes', '/souscriptions', '/locations', '/agents', '/recus']
   };
   
