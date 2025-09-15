@@ -233,11 +233,11 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
             const site = String(row[2] || '').trim();
             const numeroTelephone = String(row[3] || '').trim();
             const typeHabitation = String(row[4] || '').trim();
-            const arrieres = parseAmount(row[5]);
+            const arrieres = parseAmount(row[5]); // ARRIERES en colonne F (index 5)
             
             if (!nomEtPrenoms || !site) continue;
 
-            // Parse monthly payments (columns 6-17: JANVIER to DÉCEMBRE)
+            // Parse monthly payments (columns 7-18: JANVIER to DÉCEMBRE)
             const paiementsMensuels: number[] = [];
             for (let j = 6; j < 18; j++) {
               paiementsMensuels.push(parseAmount(row[j]));
