@@ -22,15 +22,19 @@ export const useAuditLog = () => {
         throw new Error('User not authenticated');
       }
 
-      const { data, error } = await supabase.rpc('log_audit_event', {
-        p_user_id: currentUser.id,
-        p_action_type: entry.action_type,
-        p_table_name: entry.table_name,
-        p_record_id: entry.record_id || null,
-        p_old_values: entry.old_values || null,
-        p_new_values: entry.new_values || null,
-        p_description: entry.description || null
-      });
+      const { data, error } = await supabase
+        .from('audit_logs')
+        .insert({
+          user_id: currentUser.id,
+          action_type: entry.action_type,
+          table_name: entry.table_name,
+          record_id: entry.record_id || null,
+          old_values: entry.old_values || null,
+          new_values: entry.new_values || null,
+          description: entry.description || null
+        })
+        .select()
+        .single();
 
       if (error) {
         console.error('Failed to log audit event:', error);

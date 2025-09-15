@@ -5,6 +5,7 @@ import * as z from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAuditLog } from "@/hooks/useAuditLog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -43,6 +44,7 @@ interface PropertyFormProps {
 export function PropertyForm({ property, onSuccess }: PropertyFormProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { logCreate, logUpdate } = useAuditLog();
 
   const form = useForm<PropertyFormData>({
     resolver: zodResolver(propertySchema),
@@ -95,15 +97,27 @@ export function PropertyForm({ property, onSuccess }: PropertyFormProps) {
           .update(processedData)
           .eq("id", property.id);
         if (error) throw error;
+        return { isUpdate: true, data: processedData, id: property.id };
       } else {
-        const { error } = await supabase
+        const { data: newProperty, error } = await supabase
           .from("proprietes")
-          .insert([processedData]);
+          .insert([processedData])
+          .select()
+          .single();
         if (error) throw error;
+        return { isUpdate: false, data: newProperty, id: newProperty.id };
       }
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["proprietes"] });
+      
+      // Log audit event
+      if (result.isUpdate) {
+        logUpdate('proprietes', result.id, property, result.data, `Modification de la propriété ${result.data.nom}`);
+      } else {
+        logCreate('proprietes', result.id, result.data, `Création de la propriété ${result.data.nom}`);
+      }
+      
       toast({
         title: "Succès",
         description: property ? "Propriété modifiée avec succès" : "Propriété créée avec succès",

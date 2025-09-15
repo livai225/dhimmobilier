@@ -13,6 +13,7 @@ import { format, addMonths, startOfMonth } from "date-fns";
 import { fr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { useAuditLog } from "@/hooks/useAuditLog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface PaiementLocationDialogProps {
@@ -29,6 +30,7 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
   const [selectedMonth, setSelectedMonth] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  const { logCreate } = useAuditLog();
   const queryClient = useQueryClient();
 
   const { data: paidMonths = [] } = useQuery({
@@ -118,11 +120,17 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
 
       return { paiementId };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["locations"] });
       queryClient.invalidateQueries({ queryKey: ["paid_months", location.id] });
       queryClient.invalidateQueries({ queryKey: ["cash_transactions"] });
       queryClient.invalidateQueries({ queryKey: ["cash_balance"] });
+
+      // Log audit event
+      const description = selectedMonth
+        ? `Loyer ${format(new Date(selectedMonth + "-01"), "MMMM yyyy", { locale: fr })}`
+        : "Paiement loyer";
+      logCreate('paiements_locations', result.paiementId, { montant: Number(montant), location_id: location.id }, `Paiement loyer - ${description} - Montant: ${Number(montant).toLocaleString()} FCFA`);
 
       toast({
         title: "Paiement enregistré",

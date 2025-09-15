@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
+import { useAuditLog } from "@/hooks/useAuditLog";
 
 
 interface LocationFormProps {
@@ -29,6 +30,7 @@ export function LocationForm({ onClose, onSuccess }: LocationFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedLoyer, setSelectedLoyer] = useState(0);
   const { toast } = useToast();
+  const { logCreate } = useAuditLog();
 
   // Fetch clients
   const { data: clients } = useQuery({
@@ -126,7 +128,12 @@ export function LocationForm({ onClose, onSuccess }: LocationFormProps) {
       // Le reçu de caution sera généré automatiquement par trigger sur cash_transactions
       return { location, cashTransaction };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      // Log audit event
+      const clientName = clients?.find(c => c.id === clientId)?.nom || 'Client inconnu';
+      const propertyName = proprietes?.find(p => p.id === proprieteId)?.nom || 'Propriété inconnue';
+      logCreate('locations', result.location.id, result.location, `Création d'une location - Client: ${clientName}, Propriété: ${propertyName}`);
+      
       toast({
         title: "Location créée",
         description: `Location créée avec succès.`,

@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/form";
 import { Combobox } from "@/components/ui/combobox";
 import { useToast } from "@/hooks/use-toast";
+import { useAuditLog } from "@/hooks/useAuditLog";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 
@@ -50,6 +51,7 @@ export function PaiementSouscriptionDialog({
 }: PaiementSouscriptionDialogProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { logCreate } = useAuditLog();
   
   const form = useForm<PaiementFormData>({
     resolver: zodResolver(paiementSchema),
@@ -79,11 +81,16 @@ export function PaiementSouscriptionDialog({
 
       return { paiementId };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["souscriptions"] });
       queryClient.invalidateQueries({ queryKey: ["paiements"] });
       queryClient.invalidateQueries({ queryKey: ["cash_transactions"] });
       queryClient.invalidateQueries({ queryKey: ["cash_balance"] });
+
+      // Log audit event
+      const clientName = `${souscription?.clients?.prenom || ''} ${souscription?.clients?.nom || ''}`.trim();
+      const propertyName = souscription?.proprietes?.nom || 'Propriété inconnue';
+      logCreate('paiements_souscriptions', result.paiementId, { montant: form.getValues('montant'), souscription_id: souscription.id }, `Paiement souscription - Client: ${clientName}, Propriété: ${propertyName}, Montant: ${form.getValues('montant').toLocaleString()} FCFA`);
 
       form.reset();
       toast({

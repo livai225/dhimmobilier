@@ -5,6 +5,7 @@ import * as z from "zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAuditLog } from "@/hooks/useAuditLog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -56,6 +57,7 @@ interface ClientFormProps {
 export function ClientForm({ client, onSuccess }: ClientFormProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { logCreate, logUpdate } = useAuditLog();
 
   const form = useForm<ClientFormData>({
     resolver: zodResolver(clientSchema),
@@ -95,15 +97,27 @@ export function ClientForm({ client, onSuccess }: ClientFormProps) {
           .update(cleanData)
           .eq("id", client.id);
         if (error) throw error;
+        return { isUpdate: true, data: cleanData, id: client.id };
       } else {
-        const { error } = await supabase
+        const { data: newClient, error } = await supabase
           .from("clients")
-          .insert([cleanData]);
+          .insert([cleanData])
+          .select()
+          .single();
         if (error) throw error;
+        return { isUpdate: false, data: newClient, id: newClient.id };
       }
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["clients"] });
+      
+      // Log audit event
+      if (result.isUpdate) {
+        logUpdate('clients', result.id, client, result.data, `Modification du client ${result.data.nom} ${result.data.prenom || ''}`.trim());
+      } else {
+        logCreate('clients', result.id, result.data, `Création du client ${result.data.nom} ${result.data.prenom || ''}`.trim());
+      }
+      
       toast({
         title: "Succès",
         description: client ? "Client modifié avec succès" : "Client créé avec succès",

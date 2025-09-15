@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuditLog } from '@/hooks/useAuditLog';
 import { Eye, EyeOff, LogIn, Building2 } from 'lucide-react';
 
 // Function to decode base64 password hash
@@ -26,6 +27,7 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const { logLogin } = useAuditLog();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,27 +55,16 @@ export default function Login() {
         return;
       }
 
-      // Set the current user using the useCurrentUser hook
-      const { useCurrentUser } = await import('@/hooks/useCurrentUser');
-      // Since we can't use the hook here, we'll use localStorage directly
-      localStorage.setItem('current_user_id', userData.id);
+        // Set the user data for the application to use
+        localStorage.setItem('current_user_id', userData.id);
 
-      // Log the login action
-      try {
-        await supabase.rpc('log_audit_event', {
-          p_user_id: userData.id,
-          p_action_type: 'LOGIN',
-          p_table_name: 'auth',
-          p_description: `Connexion réussie depuis ${window.location.hostname}`
+        // Log the login action using our improved audit system
+        logLogin(`Connexion réussie - ${userData.prenom} ${userData.nom} (${userData.username})`);
+
+        toast({
+          title: 'Connexion réussie',
+          description: `Bienvenue ${userData.prenom} ${userData.nom}`,
         });
-      } catch (logError) {
-        console.error('Failed to log login event:', logError);
-      }
-
-      toast({
-        title: "Connexion réussie",
-        description: `Bienvenue ${userData.prenom} ${userData.nom}`,
-      });
       
       // Import role-based redirect utility
       const { getDefaultRouteForRole } = await import('@/utils/roleBasedRedirect');
