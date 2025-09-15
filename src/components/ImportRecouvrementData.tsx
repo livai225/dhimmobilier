@@ -95,6 +95,10 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [simulationCompleted, setSimulationCompleted] = useState(false);
   const [clearExistingClients, setClearExistingClients] = useState(false);
+  
+  // États pour la pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(100);
 
   // Load agents on component mount
   useEffect(() => {
@@ -875,45 +879,131 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
                 </Alert>
               )}
 
-              {/* Data Preview Table - Afficher TOUS les clients */}
+              {/* Data Preview Table - Avec pagination */}
               <div>
-                <h4 className="font-semibold mb-2">Aperçu des données ({previewData.length} clients au total):</h4>
-                <ScrollArea className="h-96 border rounded">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Nom et Prénoms</TableHead>
-                        <TableHead>Site</TableHead>
-                        <TableHead>Loyer/Mois</TableHead>
-                        <TableHead>Téléphone</TableHead>
-                        <TableHead>Arriérés</TableHead>
-                        <TableHead>Total Payé</TableHead>
-                        <TableHead>Paiements mensuels</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {previewData.map((row, idx) => (
-                        <TableRow key={idx}>
-                          <TableCell className="font-medium">{row.nomEtPrenoms}</TableCell>
-                          <TableCell>{row.site}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(row.loyer)}</TableCell>
-                          <TableCell>{row.numeroTelephone}</TableCell>
-                          <TableCell className="text-right text-red-600">{formatCurrency(row.arrieres)}</TableCell>
-                          <TableCell className="text-right text-green-600">{formatCurrency(row.totalPaye)}</TableCell>
-                          <TableCell className="text-xs">
-                            {row.paiementsMensuels.map((montant, mIdx) => (
-                              montant > 0 ? (
-                                <Badge key={mIdx} variant="secondary" className="mr-1 mb-1 text-xs">
-                                  {['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'][mIdx]}: {formatCurrency(montant)}
-                                </Badge>
-                              ) : null
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="font-semibold">
+                    Aperçu des données ({previewData.length} clients au total)
+                  </h4>
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="items-per-page" className="text-sm">Afficher:</Label>
+                    <Select value={itemsPerPage.toString()} onValueChange={(value) => {
+                      setItemsPerPage(parseInt(value));
+                      setCurrentPage(1);
+                    }}>
+                      <SelectTrigger className="w-24">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="50">50</SelectItem>
+                        <SelectItem value="100">100</SelectItem>
+                        <SelectItem value="200">200</SelectItem>
+                        <SelectItem value={previewData.length.toString()}>Tout</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Calcul de la pagination */}
+                {(() => {
+                  const totalPages = Math.ceil(previewData.length / itemsPerPage);
+                  const startIndex = (currentPage - 1) * itemsPerPage;
+                  const endIndex = Math.min(startIndex + itemsPerPage, previewData.length);
+                  const paginatedData = previewData.slice(startIndex, endIndex);
+
+                  return (
+                    <>
+                      {/* Info pagination */}
+                      <div className="flex items-center justify-between mb-2 text-sm text-muted-foreground">
+                        <span>
+                          Affichage de {startIndex + 1} à {endIndex} sur {previewData.length} clients
+                        </span>
+                        <span>
+                          Page {currentPage} sur {totalPages}
+                        </span>
+                      </div>
+
+                      {/* Table avec hauteur augmentée */}
+                      <ScrollArea className="h-[600px] border rounded">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Nom et Prénoms</TableHead>
+                              <TableHead>Site</TableHead>
+                              <TableHead>Loyer/Mois</TableHead>
+                              <TableHead>Téléphone</TableHead>
+                              <TableHead>Arriérés</TableHead>
+                              <TableHead>Total Payé</TableHead>
+                              <TableHead>Paiements mensuels</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {paginatedData.map((row, idx) => (
+                              <TableRow key={startIndex + idx}>
+                                <TableCell className="font-medium">{row.nomEtPrenoms}</TableCell>
+                                <TableCell>{row.site}</TableCell>
+                                <TableCell className="text-right">{formatCurrency(row.loyer)}</TableCell>
+                                <TableCell>{row.numeroTelephone}</TableCell>
+                                <TableCell className="text-right text-red-600">{formatCurrency(row.arrieres)}</TableCell>
+                                <TableCell className="text-right text-green-600">{formatCurrency(row.totalPaye)}</TableCell>
+                                <TableCell className="text-xs">
+                                  {row.paiementsMensuels.map((montant, mIdx) => (
+                                    montant > 0 ? (
+                                      <Badge key={mIdx} variant="secondary" className="mr-1 mb-1 text-xs">
+                                        {['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'][mIdx]}: {formatCurrency(montant)}
+                                      </Badge>
+                                    ) : null
+                                  ))}
+                                </TableCell>
+                              </TableRow>
                             ))}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </ScrollArea>
+                          </TableBody>
+                        </Table>
+                      </ScrollArea>
+
+                      {/* Contrôles de pagination */}
+                      {totalPages > 1 && (
+                        <div className="flex items-center justify-center gap-2 mt-4">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(1)}
+                            disabled={currentPage === 1}
+                          >
+                            Première
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                            disabled={currentPage === 1}
+                          >
+                            Précédente
+                          </Button>
+                          <span className="px-3 py-1 text-sm bg-muted rounded">
+                            {currentPage} / {totalPages}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                            disabled={currentPage === totalPages}
+                          >
+                            Suivante
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(totalPages)}
+                            disabled={currentPage === totalPages}
+                          >
+                            Dernière
+                          </Button>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
 
               {/* Tableau de synthèse mensuelle */}
