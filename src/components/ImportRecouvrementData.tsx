@@ -82,6 +82,7 @@ interface ValidationResult {
 export function ImportRecouvrementData({ inline = false }: { inline?: boolean } = {}): React.ReactElement {
   const [selectedAgent, setSelectedAgent] = useState<string>('');
   const [operationType, setOperationType] = useState<'loyer' | 'droit_terre'>('loyer');
+  const [selectedMonth, setSelectedMonth] = useState<string>('all'); // Nouveau: sélection du mois
   const [agents, setAgents] = useState<any[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [isImporting, setIsImporting] = useState(false);
@@ -124,14 +125,14 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
     return isNaN(num) ? 0 : num;
   };
 
-// Calculate monthly totals for detailed analysis
+// Calculate monthly totals for detailed analysis - Amélioré
   const calculateMonthlyTotals = (data: RecouvrementRowData[]) => {
     const monthNames = ['JANVIER', 'FÉVRIER', 'MARS', 'AVRIL', 'MAI', 'JUIN', 
                       'JUILLET', 'AOÛT', 'SEPTEMBRE', 'OCTOBRE', 'NOVEMBRE', 'DÉCEMBRE'];
     
     const monthlyStats = monthNames.map((month, index) => {
       const totalPaid = data.reduce((sum, row) => sum + (row.paiementsMensuels[index] || 0), 0);
-      const totalDue = data.reduce((sum, row) => sum + row.loyer, 0);
+      const totalDue = data.reduce((sum, row) => sum + row.loyer, 0); // Total dû pour ce mois = loyer mensuel de tous les clients
       const recoveryRate = totalDue > 0 ? (totalPaid / totalDue) * 100 : 0;
       
       return {
@@ -184,7 +185,11 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
     const selectedAgentName = agents.find(a => a.id === selectedAgent)?.nom || 'Agent sélectionné';
     const totalArrears = data.reduce((sum, d) => sum + d.arrieres, 0);
     const totalPaid = data.reduce((sum, d) => sum + d.totalPaye, 0);
-    const totalDue = data.reduce((sum, d) => sum + d.arrieres + (d.loyer * 12), 0);
+    
+    // Calcul amélioré du total dû : arriérés + loyers pour la période
+    const monthlyTotals = calculateMonthlyTotals(data);
+    const totalDueForPeriod = monthlyTotals.reduce((sum, m) => sum + m.totalDue, 0);
+    const totalDue = totalArrears + totalDueForPeriod;
     
     return {
       isValid: errors.length === 0,
@@ -195,11 +200,11 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
         clientsCount: data.length,
         totalDu: totalDue,
         totalVerse: totalPaid,
-        ecart: totalArrears
+        ecart: totalArrears // Arriérés seulement
       }],
       duplicateClients,
       errors,
-      monthlyStats: calculateMonthlyTotals(data),
+      monthlyStats: monthlyTotals,
       totalArrears,
       globalRecoveryRate: totalDue > 0 ? (totalPaid / totalDue) * 100 : 0
     };
@@ -342,9 +347,17 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
     return { property: newProperty, created: true };
   };
 
-  // Generate monthly payments from Excel data
+  // Generate monthly payments from Excel data - Amélioré pour support import par mois
   const generateMonthlyPayments = async (contractId: string, contractType: 'location' | 'souscription', paiementsMensuels: number[], simulate: boolean) => {
-    if (simulate) return paiementsMensuels.filter(p => p > 0).length;
+    // En mode simulation, compter seulement les paiements qui seraient importés
+    if (simulate) {
+      if (selectedMonth === 'all') {
+        return paiementsMensuels.filter(p => p > 0).length;
+      } else {
+        const monthIndex = parseInt(selectedMonth);
+        return paiementsMensuels[monthIndex] > 0 ? 1 : 0;
+      }
+    }
 
     let paymentsCount = 0;
     const monthNames = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 
@@ -352,26 +365,62 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
     
     const currentYear = new Date().getFullYear();
     
-    for (let i = 0; i < paiementsMensuels.length; i++) {
-      const montant = paiementsMensuels[i];
-      if (montant <= 0) continue;
-
-      const paymentDate = new Date(currentYear, i, 15).toISOString().split('T')[0]; // 15th of each month
+    // Si un mois spécifique est sélectionné, importer seulement ce mois
+    if (selectedMonth !== 'all') {
+      const monthIndex = parseInt(selectedMonth);
+      const montant = paiementsMensuels[monthIndex];
       
-      try {
-        if (contractType === 'location') {
-          await supabase.rpc('pay_location_with_cash', {
-            p_location_id: contractId,
-            p_montant: montant,
-            p_date_paiement: paymentDate,
-            p_mode_paiement: 'espece',
-            p_reference: `Import ${monthNames[i]} ${currentYear}`,
-            p_description: 'Import données recouvrement'
-          });
-        } else {
-          if (operationType === 'droit_terre') {
-            await supabase.rpc('pay_droit_terre_with_cash', {
-              p_souscription_id: contractId,
+      if (montant > 0) {
+        const paymentDate = new Date(currentYear, monthIndex, 15).toISOString().split('T')[0];
+        
+        try {
+          if (contractType === 'location') {
+            await supabase.rpc('pay_location_with_cash', {
+              p_location_id: contractId,
+              p_montant: montant,
+              p_date_paiement: paymentDate,
+              p_mode_paiement: 'espece',
+              p_reference: `Import ${monthNames[monthIndex]} ${currentYear}`,
+              p_description: `Import données recouvrement - ${monthNames[monthIndex]}`
+            });
+          } else {
+            if (operationType === 'droit_terre') {
+              await supabase.rpc('pay_droit_terre_with_cash', {
+                p_souscription_id: contractId,
+                p_montant: montant,
+                p_date_paiement: paymentDate,
+                p_mode_paiement: 'espece',
+                p_reference: `Import ${monthNames[monthIndex]} ${currentYear}`,
+                p_description: `Import données recouvrement - ${monthNames[monthIndex]}`
+              });
+            } else {
+              await supabase.rpc('pay_souscription_with_cash', {
+                p_souscription_id: contractId,
+                p_montant: montant,
+                p_date_paiement: paymentDate,
+                p_mode_paiement: 'espece',
+                p_reference: `Import ${monthNames[monthIndex]} ${currentYear}`,
+                p_description: `Import données recouvrement - ${monthNames[monthIndex]}`
+              });
+            }
+          }
+          paymentsCount++;
+        } catch (error) {
+          console.error(`Erreur paiement ${monthNames[monthIndex]}:`, error);
+        }
+      }
+    } else {
+      // Import de tous les mois
+      for (let i = 0; i < paiementsMensuels.length; i++) {
+        const montant = paiementsMensuels[i];
+        if (montant <= 0) continue;
+
+        const paymentDate = new Date(currentYear, i, 15).toISOString().split('T')[0];
+        
+        try {
+          if (contractType === 'location') {
+            await supabase.rpc('pay_location_with_cash', {
+              p_location_id: contractId,
               p_montant: montant,
               p_date_paiement: paymentDate,
               p_mode_paiement: 'espece',
@@ -379,19 +428,30 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
               p_description: 'Import données recouvrement'
             });
           } else {
-            await supabase.rpc('pay_souscription_with_cash', {
-              p_souscription_id: contractId,
-              p_montant: montant,
-              p_date_paiement: paymentDate,
-              p_mode_paiement: 'espece',
-              p_reference: `Import ${monthNames[i]} ${currentYear}`,
-              p_description: 'Import données recouvrement'
-            });
+            if (operationType === 'droit_terre') {
+              await supabase.rpc('pay_droit_terre_with_cash', {
+                p_souscription_id: contractId,
+                p_montant: montant,
+                p_date_paiement: paymentDate,
+                p_mode_paiement: 'espece',
+                p_reference: `Import ${monthNames[i]} ${currentYear}`,
+                p_description: 'Import données recouvrement'
+              });
+            } else {
+              await supabase.rpc('pay_souscription_with_cash', {
+                p_souscription_id: contractId,
+                p_montant: montant,
+                p_date_paiement: paymentDate,
+                p_mode_paiement: 'espece',
+                p_reference: `Import ${monthNames[i]} ${currentYear}`,
+                p_description: 'Import données recouvrement'
+              });
+            }
           }
+          paymentsCount++;
+        } catch (error) {
+          console.error(`Erreur paiement ${monthNames[i]}:`, error);
         }
-        paymentsCount++;
-      } catch (error) {
-        console.error(`Erreur paiement ${monthNames[i]}:`, error);
       }
     }
 
@@ -429,14 +489,18 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
         errors: []
       };
 
-      // Clear existing clients if requested
+      // Clear existing clients if requested (uniquement en mode réel)
       if (clearExistingClients && !simulate) {
         await supabase.from('clients').delete().neq('id', '00000000-0000-0000-0000-000000000000');
       }
 
       // Get agent and existing data
       const agent = await getSelectedAgent();
-      const { data: existingClients } = await supabase.from('clients').select('*');
+      
+      // En mode simulation, on évite les appels DB coûteux
+      const { data: existingClients } = simulate ? 
+        { data: [] } : 
+        await supabase.from('clients').select('*');
 
       if (!existingClients) {
         throw new Error('Erreur lors de la récupération des clients existants');
@@ -456,36 +520,48 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
 
         try {
           // Find or create client
-          let client = existingClients.find(c => 
-            normalizeString(`${c.prenom || ''} ${c.nom}`) === normalizeString(row.nomEtPrenoms) ||
-            normalizeString(c.nom) === normalizeString(row.nomEtPrenoms)
-          );
-
-          if (!client && !simulate) {
-            const clientNames = row.nomEtPrenoms.split(' ');
-            const { data: newClient, error: clientError } = await supabase
-              .from('clients')
-              .insert({
-                nom: clientNames[clientNames.length - 1],
-                prenom: clientNames.slice(0, -1).join(' ') || null,
-                telephone_principal: row.numeroTelephone || null
-              })
-              .select()
-              .single();
-
-            if (clientError) throw clientError;
-            client = newClient;
+          let client = null;
+          
+          if (simulate) {
+            // En simulation, simuler la création sans faire les appels DB
             result.clientsCreated++;
-          } else if (client) {
-            result.clientsMatched++;
+            client = { id: 'simulated-client', nom: 'Client simulé' };
+          } else {
+            client = existingClients.find(c => 
+              normalizeString(`${c.prenom || ''} ${c.nom}`) === normalizeString(row.nomEtPrenoms) ||
+              normalizeString(c.nom) === normalizeString(row.nomEtPrenoms)
+            );
+
+            if (!client) {
+              const clientNames = row.nomEtPrenoms.split(' ');
+              const { data: newClient, error: clientError } = await supabase
+                .from('clients')
+                .insert({
+                  nom: clientNames[clientNames.length - 1],
+                  prenom: clientNames.slice(0, -1).join(' ') || null,
+                  telephone_principal: row.numeroTelephone || null
+                })
+                .select()
+                .single();
+
+              if (clientError) throw clientError;
+              client = newClient;
+              result.clientsCreated++;
+            } else {
+              result.clientsMatched++;
+            }
           }
 
           // Create property for site
           const { property, created: propertyCreated } = await createPropertyForSite(row.site, row.typeHabitation, agent, simulate);
-          if (propertyCreated) result.propertiesCreated++;
-          else if (property) result.propertiesMatched++;
+          if (simulate) {
+            result.propertiesCreated++;
+          } else {
+            if (propertyCreated) result.propertiesCreated++;
+            else if (property) result.propertiesMatched++;
+          }
 
-          if (!simulate && client && property) {
+          if (client && (property || simulate)) {
             if (operationType === 'loyer') {
               // Create location
               const { data: newLocation, error: locationError } = await supabase
@@ -554,14 +630,16 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
       
       if (simulate) {
         setSimulationCompleted(true);
+        const monthInfo = selectedMonth === 'all' ? 'tous les mois' : ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'][parseInt(selectedMonth)];
         toast({
           title: "Simulation terminée",
-          description: `${result.locationsCreated + result.souscriptionsCreated} contrats seraient créés`
+          description: `${result.locationsCreated + result.souscriptionsCreated} contrats seraient créés, ${result.paymentsImported} paiements pour ${monthInfo}`
         });
       } else {
+        const monthInfo = selectedMonth === 'all' ? 'tous les mois' : ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'][parseInt(selectedMonth)];
         toast({
           title: "Import terminé",
-          description: `${result.locationsCreated + result.souscriptionsCreated} contrats créés avec succès`
+          description: `${result.locationsCreated + result.souscriptionsCreated} contrats créés, ${result.paymentsImported} paiements importés pour ${monthInfo}`
         });
       }
 
@@ -633,11 +711,39 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
               </div>
             </div>
 
+            {/* Sélecteur de mois pour import granulaire */}
+            <div className="space-y-2">
+              <Label htmlFor="month-select">Mois à importer</Label>
+              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Sélectionner un mois ou tous" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous les mois (Janvier à Décembre)</SelectItem>
+                  <SelectItem value="0">Janvier</SelectItem>
+                  <SelectItem value="1">Février</SelectItem>
+                  <SelectItem value="2">Mars</SelectItem>
+                  <SelectItem value="3">Avril</SelectItem>
+                  <SelectItem value="4">Mai</SelectItem>
+                  <SelectItem value="5">Juin</SelectItem>
+                  <SelectItem value="6">Juillet</SelectItem>
+                  <SelectItem value="7">Août</SelectItem>
+                  <SelectItem value="8">Septembre</SelectItem>
+                  <SelectItem value="9">Octobre</SelectItem>
+                  <SelectItem value="10">Novembre</SelectItem>
+                  <SelectItem value="11">Décembre</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             <Alert>
               <Info className="h-4 w-4" />
               <AlertDescription>
                 L'agent sélectionné sera automatiquement assigné à toutes les propriétés importées.
                 Le type d'opération détermine si les paiements seront traités comme des loyers ou des droits de terre.
+                <br />
+                <strong>Import par mois :</strong> Sélectionnez un mois spécifique pour importer uniquement les paiements de ce mois, 
+                ou choisissez "Tous les mois" pour un import complet.
               </AlertDescription>
             </Alert>
           </CardContent>
@@ -703,7 +809,7 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
                 Étape 3: Aperçu et validation des données
               </CardTitle>
               <CardDescription>
-                Vérifiez vos données avant de procéder à l'import - Agent: {agents.find(a => a.id === selectedAgent)?.prenom} {agents.find(a => a.id === selectedAgent)?.nom} - Type: {operationType === 'loyer' ? 'Loyer' : 'Droit de terre'}
+                Vérifiez vos données avant de procéder à l'import - Agent: {agents.find(a => a.id === selectedAgent)?.prenom} {agents.find(a => a.id === selectedAgent)?.nom} - Type: {operationType === 'loyer' ? 'Loyer' : 'Droit de terre'} - Période: {selectedMonth === 'all' ? 'Tous les mois' : ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'][parseInt(selectedMonth)]}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
