@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ExportToExcelButton } from "@/components/ExportToExcelButton";
+import { ImportRecouvrementData } from "@/components/ImportRecouvrementData";
 import { Search, TrendingUp, TrendingDown, DollarSign, Users } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -173,6 +174,7 @@ export default function Recouvrement() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <ImportRecouvrementData />
           <ExportToExcelButton
             filename={`recouvrement_${monthFilter}`}
             rows={filteredAgents}
