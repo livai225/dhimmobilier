@@ -24,6 +24,7 @@ const propertySchema = z.object({
   nom: z.string().min(1, "Le nom est obligatoire"),
   adresse: z.string().optional(),
   type_id: z.string().optional(),
+  agent_id: z.string().optional(),
   surface: z.string().optional(),
   prix_achat: z.string().optional(),
   statut: z.string().min(1, "Le statut est obligatoire"),
@@ -52,6 +53,7 @@ export function PropertyForm({ property, onSuccess }: PropertyFormProps) {
       nom: property?.nom || "",
       adresse: property?.adresse || "",
       type_id: property?.type_id || "",
+      agent_id: property?.agent_id || "",
       surface: property?.surface?.toString() || "",
       prix_achat: property?.prix_achat?.toString() || "",
       statut: property?.statut || "Libre",
@@ -75,6 +77,19 @@ export function PropertyForm({ property, onSuccess }: PropertyFormProps) {
     },
   });
 
+  const { data: agents = [] } = useQuery({
+    queryKey: ['agents-recouvrement'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('agents_recouvrement')
+        .select('*')
+        .eq('statut', 'actif')
+        .order('nom');
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
   const mutation = useMutation({
     mutationFn: async (data: PropertyFormData) => {
       const processedData = {
@@ -83,6 +98,7 @@ export function PropertyForm({ property, onSuccess }: PropertyFormProps) {
         surface: data.surface ? parseFloat(data.surface) : null,
         prix_achat: data.prix_achat ? parseFloat(data.prix_achat) : null,
         type_id: data.type_id || null,
+        agent_id: data.agent_id || null,
         statut: data.statut,
         zone: data.zone || null,
         usage: data.usage,
@@ -193,7 +209,7 @@ export function PropertyForm({ property, onSuccess }: PropertyFormProps) {
           )}
         />
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <FormField
             control={form.control}
             name="type_id"
@@ -211,6 +227,31 @@ export function PropertyForm({ property, onSuccess }: PropertyFormProps) {
                     placeholder="Sélectionner un type"
                   />
                 </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="agent_id"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Agent de recouvrement</FormLabel>
+                <FormControl>
+                  <Combobox
+                    options={agents?.map(agent => ({
+                      value: agent.id,
+                      label: `${agent.prenom} ${agent.nom}`.trim()
+                    })) || []}
+                    value={field.value || ""}
+                    onChange={field.onChange}
+                    placeholder="Sélectionner un agent"
+                  />
+                </FormControl>
+                <FormDescription>
+                  Agent responsable du recouvrement des loyers et droits de terre
+                </FormDescription>
                 <FormMessage />
               </FormItem>
             )}

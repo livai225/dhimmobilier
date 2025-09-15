@@ -25,6 +25,7 @@ interface Propriete {
   nom: string;
   adresse?: string;
   type_id?: string;
+  agent_id?: string;
   surface?: number;
   prix_achat?: number;
   statut?: string;
@@ -50,10 +51,12 @@ export default function Proprietes() {
   const [usageFilter, setUsageFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [zoneFilter, setZoneFilter] = useState("");
+  const [agentFilter, setAgentFilter] = useState("");
   const [formData, setFormData] = useState({
     nom: "",
     adresse: "",
     type_id: "",
+    agent_id: "",
     surface: "",
     prix_achat: "", // Gardé pour l'édition uniquement
     statut: "Libre",
@@ -78,6 +81,12 @@ export default function Proprietes() {
             id,
             nom,
             description
+          ),
+          agents_recouvrement (
+            id,
+            nom,
+            prenom,
+            code_agent
           )
         `)
         .order('nom');
@@ -99,6 +108,19 @@ export default function Proprietes() {
     },
   });
 
+  const { data: agents = [] } = useQuery({
+    queryKey: ['agents-recouvrement'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('agents_recouvrement')
+        .select('*')
+        .eq('statut', 'actif')
+        .order('nom');
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
   const createPropriete = useMutation({
     mutationFn: async (proprieteData: typeof formData) => {
       const processedData = {
@@ -106,7 +128,7 @@ export default function Proprietes() {
         adresse: proprieteData.adresse || null,
         surface: proprieteData.surface ? parseFloat(proprieteData.surface) : null,
         // prix_achat retiré pour la création
-        type_id: proprieteData.type_id || null,
+        agent_id: proprieteData.agent_id || null,
         statut: proprieteData.statut,
         zone: proprieteData.zone || null,
         usage: proprieteData.usage,
@@ -144,6 +166,7 @@ export default function Proprietes() {
         surface: proprieteData.surface ? parseFloat(proprieteData.surface) : null,
         prix_achat: proprieteData.prix_achat ? parseFloat(proprieteData.prix_achat) : null,
         type_id: proprieteData.type_id || null,
+        agent_id: proprieteData.agent_id || null,
         statut: proprieteData.statut,
         zone: proprieteData.zone || null,
         usage: proprieteData.usage,
@@ -200,6 +223,7 @@ export default function Proprietes() {
       nom: "",
       adresse: "",
       type_id: "",
+      agent_id: "",
       surface: "",
       prix_achat: "",
       statut: "Libre",
@@ -226,6 +250,7 @@ export default function Proprietes() {
       nom: propriete.nom,
       adresse: propriete.adresse || "",
       type_id: propriete.type_id || "",
+      agent_id: propriete.agent_id || "",
       surface: propriete.surface?.toString() || "",
       prix_achat: propriete.prix_achat?.toString() || "",
       statut: propriete.statut || "Libre",
@@ -255,8 +280,9 @@ export default function Proprietes() {
     const matchesUsage = !usageFilter || usageFilter === "all" || propriete.usage === usageFilter;
     const matchesType = !typeFilter || typeFilter === "all" || propriete.type_id === typeFilter;
     const matchesZone = !zoneFilter || zoneFilter === "all" || propriete.zone === zoneFilter;
+    const matchesAgent = !agentFilter || agentFilter === "all" || propriete.agent_id === agentFilter;
     
-    return matchesSearch && matchesStatus && matchesUsage && matchesType && matchesZone;
+    return matchesSearch && matchesStatus && matchesUsage && matchesType && matchesZone && matchesAgent;
   }) || [];
 
   // Get unique zones for filter
@@ -338,7 +364,7 @@ export default function Proprietes() {
               <CardTitle className="text-lg">Filtres</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-4">
                 {/* Search */}
                 <div className="col-span-1 md:col-span-2">
                   <Label htmlFor="search">Rechercher</Label>
@@ -421,12 +447,35 @@ export default function Proprietes() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* Agent Filter */}
+                <div>
+                  <Label htmlFor="agent">Agent</Label>
+                  <Select value={agentFilter} onValueChange={setAgentFilter}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Tous les agents" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tous les agents</SelectItem>
+                      {agents.map((agent) => (
+                        <SelectItem key={agent.id} value={agent.id}>
+                          {agent.prenom} {agent.nom}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               
               {/* Results count */}
               <div className="mt-4 text-sm text-muted-foreground">
                 {filteredProprietes.length} propriété{filteredProprietes.length !== 1 ? 's' : ''} trouvée{filteredProprietes.length !== 1 ? 's' : ''}
-                {(searchTerm || (statusFilter && statusFilter !== "all") || (usageFilter && usageFilter !== "all") || (typeFilter && typeFilter !== "all") || (zoneFilter && zoneFilter !== "all")) && (
+                {(searchTerm || 
+                  (statusFilter && statusFilter !== "all") || 
+                  (usageFilter && usageFilter !== "all") || 
+                  (typeFilter && typeFilter !== "all") || 
+                  (zoneFilter && zoneFilter !== "all") || 
+                  (agentFilter && agentFilter !== "all")) && (
                   <span> sur {proprietes?.length || 0} au total</span>
                 )}
               </div>
@@ -450,13 +499,23 @@ export default function Proprietes() {
             <div className="text-center py-10">
               <Building className="mx-auto h-12 w-12 text-muted-foreground" />
               <h3 className="mt-2 text-sm font-semibold">
-                {(searchTerm || (statusFilter && statusFilter !== "all") || (usageFilter && usageFilter !== "all") || (typeFilter && typeFilter !== "all") || (zoneFilter && zoneFilter !== "all")) 
+                {(searchTerm || 
+                  (statusFilter && statusFilter !== "all") || 
+                  (usageFilter && usageFilter !== "all") || 
+                  (typeFilter && typeFilter !== "all") || 
+                  (zoneFilter && zoneFilter !== "all") ||
+                  (agentFilter && agentFilter !== "all")) 
                   ? "Aucune propriété trouvée" 
                   : "Aucune propriété"
                 }
               </h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                {(searchTerm || (statusFilter && statusFilter !== "all") || (usageFilter && usageFilter !== "all") || (typeFilter && typeFilter !== "all") || (zoneFilter && zoneFilter !== "all"))
+                {(searchTerm || 
+                  (statusFilter && statusFilter !== "all") || 
+                  (usageFilter && usageFilter !== "all") || 
+                  (typeFilter && typeFilter !== "all") || 
+                  (zoneFilter && zoneFilter !== "all") ||
+                  (agentFilter && agentFilter !== "all"))
                   ? "Essayez de modifier vos filtres de recherche."
                   : "Commencez par créer votre première propriété."
                 }
@@ -468,6 +527,7 @@ export default function Proprietes() {
                 <TableRow>
                   <TableHead>Nom</TableHead>
                   <TableHead>Type</TableHead>
+                  <TableHead>Agent</TableHead>
                   <TableHead>Statut</TableHead>
                   <TableHead>Zone</TableHead>
                   <TableHead>Usage</TableHead>
@@ -482,6 +542,12 @@ export default function Proprietes() {
                   <TableRow key={propriete.id}>
                     <TableCell className="font-medium">{propriete.nom}</TableCell>
                     <TableCell>{propriete.types_proprietes?.nom || "-"}</TableCell>
+                    <TableCell>
+                      {propriete.agents_recouvrement 
+                        ? `${propriete.agents_recouvrement.prenom} ${propriete.agents_recouvrement.nom}`.trim()
+                        : "-"
+                      }
+                    </TableCell>
                     <TableCell>
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                         propriete.statut === 'Libre' ? 'bg-green-100 text-green-800' :

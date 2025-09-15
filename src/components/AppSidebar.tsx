@@ -85,6 +85,12 @@ const menuItems = [
     permission: "canAccessAgents" as const,
   },
   {
+    title: "Recouvrement",
+    url: "/recouvrement",
+    icon: Receipt,
+    permission: "canAccessAgents" as const,
+  },
+  {
     title: "Reçus",
     url: "/recus",
     icon: Receipt,

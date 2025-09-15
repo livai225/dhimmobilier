@@ -23,7 +23,7 @@ import Caisse from "./pages/Caisse";
 import Agents from "./pages/Agents";
 import Users from "./pages/Users";
 import AuditLogs from "./pages/AuditLogs";
-
+import Recouvrement from "./pages/Recouvrement";
 import Settings from "./pages/Settings";
 
 const queryClient = new QueryClient({
@@ -63,6 +63,7 @@ const App = () => (
           
           <Route path="/caisse" element={<ProtectedRoute><Layout><Caisse /></Layout></ProtectedRoute>} />
           <Route path="/agents" element={<ProtectedRoute><Layout><Agents /></Layout></ProtectedRoute>} />
+          <Route path="/recouvrement" element={<ProtectedRoute><Layout><Recouvrement /></Layout></ProtectedRoute>} />
           <Route path="/recus" element={<ProtectedRoute><Layout><Recus /></Layout></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute><Layout><Users /></Layout></ProtectedRoute>} />
           <Route path="/audit-logs" element={<ProtectedRoute><Layout><AuditLogs /></Layout></ProtectedRoute>} />

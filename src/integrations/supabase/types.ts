@@ -698,6 +698,7 @@ export type Database = {
       proprietes: {
         Row: {
           adresse: string | null
+          agent_id: string | null
           created_at: string
           droit_terre: number | null
           id: string
@@ -714,6 +715,7 @@ export type Database = {
         }
         Insert: {
           adresse?: string | null
+          agent_id?: string | null
           created_at?: string
           droit_terre?: number | null
           id?: string
@@ -730,6 +732,7 @@ export type Database = {
         }
         Update: {
           adresse?: string | null
+          agent_id?: string | null
           created_at?: string
           droit_terre?: number | null
           id?: string
@@ -745,6 +748,13 @@ export type Database = {
           zone?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "proprietes_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents_recouvrement"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "proprietes_type_id_fkey"
             columns: ["type_id"]
