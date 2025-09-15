@@ -237,9 +237,9 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
             
             if (!nomEtPrenoms || !site) continue;
 
-            // Parse monthly payments (columns 7-18: JANVIER to DÉCEMBRE)
+            // Parse monthly payments (columns G-R: JANVIER to DÉCEMBRE, index 6-17)
             const paiementsMensuels: number[] = [];
-            for (let j = 6; j < 18; j++) {
+            for (let j = 6; j <= 17; j++) {
               paiementsMensuels.push(parseAmount(row[j]));
             }
 
@@ -318,7 +318,20 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
 
   // Create property by site
   const createPropertyForSite = async (site: string, typeHabitation: string, agent: any, simulate: boolean) => {
-    if (simulate) return { property: null, created: false };
+    if (simulate) {
+      // En simulation, retourner une propriété fictive avec un ID valide
+      return { 
+        property: { 
+          id: `simulated-property-${Date.now()}`, 
+          nom: site, 
+          zone: site, 
+          usage: typeHabitation || 'Habitation',
+          statut: 'Occupé',
+          agent_id: agent?.id 
+        }, 
+        created: true 
+      };
+    }
 
     const { data: existingProperty } = await supabase
       .from('proprietes')
@@ -498,12 +511,13 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
       const agent = await getSelectedAgent();
       
       // En mode simulation, on évite les appels DB coûteux
-      const { data: existingClients } = simulate ? 
-        { data: [] } : 
-        await supabase.from('clients').select('*');
-
-      if (!existingClients) {
-        throw new Error('Erreur lors de la récupération des clients existants');
+      let existingClients = [];
+      if (!simulate) {
+        const { data, error } = await supabase.from('clients').select('*');
+        if (error) {
+          throw new Error('Erreur lors de la récupération des clients existants');
+        }
+        existingClients = data || [];
       }
 
       if (!agent) {
@@ -561,60 +575,74 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
             else if (property) result.propertiesMatched++;
           }
 
-          if (client && (property || simulate)) {
+          if (client && property) {
             if (operationType === 'loyer') {
-              // Create location
-              const { data: newLocation, error: locationError } = await supabase
-                .from('locations')
-                .insert({
-                  client_id: client.id,
-                  propriete_id: property.id,
-                  loyer_mensuel: row.loyer,
-                  caution: row.loyer * 2,
-                  date_debut: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                  statut: 'active',
-                  type_contrat: 'historique'
-                })
-                .select()
-                .single();
+              if (simulate) {
+                // En simulation, simuler la création sans appel DB
+                result.locationsCreated++;
+                const paymentsCount = await generateMonthlyPayments('simulated-location', 'location', row.paiementsMensuels, simulate);
+                result.paymentsImported += paymentsCount;
+              } else {
+                // Create location
+                const { data: newLocation, error: locationError } = await supabase
+                  .from('locations')
+                  .insert({
+                    client_id: client.id,
+                    propriete_id: property.id,
+                    loyer_mensuel: row.loyer,
+                    caution: row.loyer * 2,
+                    date_debut: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                    statut: 'active',
+                    type_contrat: 'historique'
+                  })
+                  .select()
+                  .single();
 
-              if (locationError) throw locationError;
-              
-              result.locationsCreated++;
-              
-              // Generate monthly payments
-              const paymentsCount = await generateMonthlyPayments(newLocation.id, 'location', row.paiementsMensuels, simulate);
-              result.paymentsImported += paymentsCount;
+                if (locationError) throw locationError;
+                
+                result.locationsCreated++;
+                
+                // Generate monthly payments
+                const paymentsCount = await generateMonthlyPayments(newLocation.id, 'location', row.paiementsMensuels, simulate);
+                result.paymentsImported += paymentsCount;
+              }
             } else {
               // Create subscription for droit de terre
               const totalDu = row.arrieres + (row.loyer * 12); // Arriérés + montant annuel
               
-              const { data: newSouscription, error: souscriptionError } = await supabase
-                .from('souscriptions')
-                .insert({
-                  client_id: client.id,
-                  propriete_id: property.id,
-                  prix_total: totalDu,
-                  apport_initial: 0,
-                  montant_mensuel: row.loyer,
-                  nombre_mois: 240, // 20 ans pour droit de terre
-                  date_debut: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                  solde_restant: Math.max(0, totalDu - row.totalPaye),
-                  type_souscription: 'mise_en_garde',
-                  type_bien: 'terrain',
-                  statut: 'active',
-                  montant_droit_terre_mensuel: row.loyer
-                })
-                .select()
-                .single();
+              if (simulate) {
+                // En simulation, simuler la création sans appel DB
+                result.souscriptionsCreated++;
+                const paymentsCount = await generateMonthlyPayments('simulated-souscription', 'souscription', row.paiementsMensuels, simulate);
+                result.paymentsImported += paymentsCount;
+              } else {
+                const { data: newSouscription, error: souscriptionError } = await supabase
+                  .from('souscriptions')
+                  .insert({
+                    client_id: client.id,
+                    propriete_id: property.id,
+                    prix_total: totalDu,
+                    apport_initial: 0,
+                    montant_mensuel: row.loyer,
+                    nombre_mois: 240, // 20 ans pour droit de terre
+                    date_debut: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                    solde_restant: Math.max(0, totalDu - row.totalPaye),
+                    type_souscription: 'mise_en_garde',
+                    type_bien: 'terrain',
+                    statut: 'active',
+                    montant_droit_terre_mensuel: row.loyer
+                  })
+                  .select()
+                  .single();
 
-              if (souscriptionError) throw souscriptionError;
-              
-              result.souscriptionsCreated++;
-              
-              // Generate monthly payments
-              const paymentsCount = await generateMonthlyPayments(newSouscription.id, 'souscription', row.paiementsMensuels, simulate);
-              result.paymentsImported += paymentsCount;
+                if (souscriptionError) throw souscriptionError;
+                
+                result.souscriptionsCreated++;
+                
+                // Generate monthly payments
+                const paymentsCount = await generateMonthlyPayments(newSouscription.id, 'souscription', row.paiementsMensuels, simulate);
+                result.paymentsImported += paymentsCount;
+              }
             }
 
             result.totalAmount += row.totalPaye;
