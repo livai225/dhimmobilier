@@ -29,8 +29,10 @@ export default function Settings() {
   const queryClient = useQueryClient();
   const [confirmText, setConfirmText] = useState("");
   const [confirmClientText, setConfirmClientText] = useState("");
+  const [confirmAllText, setConfirmAllText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingClients, setIsLoadingClients] = useState(false);
+  const [isLoadingAll, setIsLoadingAll] = useState(false);
 
   const clearFinancialData = useMutation({
     mutationFn: async () => {
@@ -70,6 +72,59 @@ export default function Settings() {
       toast({
         title: "❌ Erreur",
         description: error.message || "Impossible de supprimer les données",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const clearAllData = useMutation({
+    mutationFn: async () => {
+      setIsLoadingAll(true);
+      
+      // Supprimer TOUTES les données dans l'ordre correct (dépendances)
+      await supabase.from('ventes').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('recus').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('paiements_factures').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('paiements_locations').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('paiements_souscriptions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('paiements_droit_terre').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('echeances_droit_terre').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('cash_transactions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('factures_fournisseurs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('locations').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('souscriptions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('clients').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('proprietes').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('fournisseurs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('agents_recouvrement').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('articles').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('types_proprietes').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('secteurs_activite').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('bareme_droits_terre').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('receipt_counters').delete().neq('date_key', '1900-01-01');
+
+      // Réinitialiser le solde caisse à zéro
+      const { error: balanceError } = await supabase
+        .from('caisse_balance')
+        .update({ solde_courant: 0, derniere_maj: new Date().toISOString() })
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+      
+      if (balanceError) throw balanceError;
+    },
+    onSuccess: () => {
+      setConfirmAllText("");
+      setIsLoadingAll(false);
+      queryClient.invalidateQueries();
+      toast({
+        title: "✅ Base de données vidée",
+        description: "Toutes les données ont été supprimées. Seuls les utilisateurs sont conservés.",
+      });
+    },
+    onError: (error: any) => {
+      setIsLoadingAll(false);
+      toast({
+        title: "❌ Erreur",
+        description: error.message || "Impossible de vider la base de données",
         variant: "destructive",
       });
     },
@@ -115,6 +170,7 @@ export default function Settings() {
 
   const canDelete = confirmText === "SUPPRIMER TOUT";
   const canDeleteClients = confirmClientText === "SUPPRIMER TOUS LES CLIENTS";
+  const canDeleteAll = confirmAllText === "VIDER COMPLETEMENT LA BASE";
 
   return (
     <ProtectedAction permission="isAdmin" showMessage={true}>
@@ -189,6 +245,104 @@ export default function Settings() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* Suppression complète de TOUTES les données */}
+            <div className="bg-red-200 border-2 border-red-300 rounded-lg p-4 mb-4">
+              <h3 className="font-bold text-red-900 mb-2 text-lg">🔥 SUPPRESSION TOTALE DE LA BASE DE DONNÉES</h3>
+              <p className="text-sm text-red-800 mb-3 font-medium">
+                Cette action va supprimer <strong>ABSOLUMENT TOUTES</strong> les données de l'application.
+              </p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                <div className="bg-red-100 border border-red-200 rounded p-3">
+                  <h4 className="font-semibold text-red-800 mb-2">❌ SERA SUPPRIMÉ :</h4>
+                  <ul className="text-xs text-red-700 space-y-1">
+                    <li>• Tous les clients</li>
+                    <li>• Toutes les propriétés</li>
+                    <li>• Tous les fournisseurs</li>
+                    <li>• Tous les agents</li>
+                    <li>• Toutes les transactions</li>
+                    <li>• Tous les paiements</li>
+                    <li>• Tous les contrats</li>
+                    <li>• Toutes les factures</li>
+                    <li>• Tous les reçus</li>
+                    <li>• Tous les paramètres métier</li>
+                  </ul>
+                </div>
+                <div className="bg-green-100 border border-green-200 rounded p-3">
+                  <h4 className="font-semibold text-green-800 mb-2">✅ SERA CONSERVÉ :</h4>
+                  <ul className="text-xs text-green-700 space-y-1">
+                    <li>• Comptes utilisateurs</li>
+                    <li>• Permissions utilisateurs</li>
+                    <li>• Logs d'audit système</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div className="bg-yellow-100 border-2 border-yellow-300 rounded p-3 mb-4">
+                <p className="text-sm text-yellow-800 font-bold">
+                  ⚠️ ATTENTION : Cette action remet l'application à l'état d'installation initiale !<br/>
+                  📁 EXPORTEZ VOS DONNÉES AVANT de continuer - cette action est DÉFINITIVE !
+                </p>
+              </div>
+              
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" className="w-full bg-red-700 hover:bg-red-800 text-white font-bold py-3">
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    VIDER COMPLÈTEMENT LA BASE DE DONNÉES
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent className="max-w-lg border-2 border-red-300">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle className="text-red-700 text-lg">
+                      🔥 SUPPRESSION TOTALE - CONFIRMATION REQUISE
+                    </AlertDialogTitle>
+                    <AlertDialogDescription className="space-y-4">
+                      <div className="bg-red-100 border border-red-300 rounded p-3">
+                        <p className="font-bold text-red-800 mb-2">
+                          ⚠️ VOUS ALLEZ SUPPRIMER DÉFINITIVEMENT :
+                        </p>
+                        <p className="text-sm text-red-700">
+                          • Tous les clients, propriétés, fournisseurs, agents<br/>
+                          • Toutes les transactions financières et paiements<br/>
+                          • Tous les contrats, souscriptions et factures<br/>
+                          • Tous les reçus et données métier<br/>
+                          • Tous les paramètres de configuration
+                        </p>
+                      </div>
+                      <p className="text-red-700 font-bold text-center">
+                        CETTE ACTION EST IRRÉVERSIBLE !
+                      </p>
+                      <div>
+                        <p className="text-sm mb-2 font-medium">
+                          Pour confirmer, tapez exactement :<br/>
+                          <strong>"VIDER COMPLETEMENT LA BASE"</strong>
+                        </p>
+                        <Input
+                          value={confirmAllText}
+                          onChange={(e) => setConfirmAllText(e.target.value)}
+                          placeholder="VIDER COMPLETEMENT LA BASE"
+                          className="font-mono text-sm border-red-300 focus:border-red-500"
+                        />
+                      </div>
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel onClick={() => setConfirmAllText("")}>
+                      Annuler
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => clearAllData.mutate()}
+                      disabled={!canDeleteAll || isLoadingAll}
+                      className="bg-red-700 hover:bg-red-800 font-bold"
+                    >
+                      {isLoadingAll ? "SUPPRESSION EN COURS..." : "CONFIRMER LA SUPPRESSION TOTALE"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+
             <div className="bg-red-100 border border-red-200 rounded-lg p-4 mb-4">
               <h3 className="font-medium text-red-800 mb-2">🗑️ Suppression de tous les clients</h3>
               <p className="text-sm text-red-700 mb-3">
