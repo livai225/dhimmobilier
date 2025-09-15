@@ -68,6 +68,15 @@ interface ValidationResult {
   }>;
   duplicateClients: Array<{ name: string; count: number; rows: number[] }>;
   errors: string[];
+  monthlyStats?: Array<{
+    month: string;
+    totalDue: number;
+    totalPaid: number;
+    recoveryRate: number;
+    clientsPaid: number;
+  }>;
+  totalArrears?: number;
+  globalRecoveryRate?: number;
 }
 
 export function ImportRecouvrementData({ inline = false }: { inline?: boolean } = {}): React.ReactElement {
@@ -115,6 +124,28 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
     return isNaN(num) ? 0 : num;
   };
 
+// Calculate monthly totals for detailed analysis
+  const calculateMonthlyTotals = (data: RecouvrementRowData[]) => {
+    const monthNames = ['JANVIER', 'FÉVRIER', 'MARS', 'AVRIL', 'MAI', 'JUIN', 
+                      'JUILLET', 'AOÛT', 'SEPTEMBRE', 'OCTOBRE', 'NOVEMBRE', 'DÉCEMBRE'];
+    
+    const monthlyStats = monthNames.map((month, index) => {
+      const totalPaid = data.reduce((sum, row) => sum + (row.paiementsMensuels[index] || 0), 0);
+      const totalDue = data.reduce((sum, row) => sum + row.loyer, 0);
+      const recoveryRate = totalDue > 0 ? (totalPaid / totalDue) * 100 : 0;
+      
+      return {
+        month,
+        totalDue,
+        totalPaid,
+        recoveryRate,
+        clientsPaid: data.filter(row => (row.paiementsMensuels[index] || 0) > 0).length
+      };
+    });
+
+    return monthlyStats;
+  };
+
   // Validate data integrity
   function validateData(data: RecouvrementRowData[]): ValidationResult {
     const errors: string[] = [];
@@ -151,20 +182,26 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
     });
 
     const selectedAgentName = agents.find(a => a.id === selectedAgent)?.nom || 'Agent sélectionné';
-
+    const totalArrears = data.reduce((sum, d) => sum + d.arrieres, 0);
+    const totalPaid = data.reduce((sum, d) => sum + d.totalPaye, 0);
+    const totalDue = data.reduce((sum, d) => sum + d.arrieres + (d.loyer * 12), 0);
+    
     return {
       isValid: errors.length === 0,
       totalClients: data.length,
-      totalAmount: data.reduce((sum, d) => sum + d.totalPaye, 0),
+      totalAmount: totalPaid,
       agentStats: [{
         agent: selectedAgentName,
         clientsCount: data.length,
-        totalDu: data.reduce((sum, d) => sum + d.arrieres + (d.loyer * 12), 0),
-        totalVerse: data.reduce((sum, d) => sum + d.totalPaye, 0),
-        ecart: data.reduce((sum, d) => sum + d.arrieres, 0)
+        totalDu: totalDue,
+        totalVerse: totalPaid,
+        ecart: totalArrears
       }],
       duplicateClients,
-      errors
+      errors,
+      monthlyStats: calculateMonthlyTotals(data),
+      totalArrears,
+      globalRecoveryRate: totalDue > 0 ? (totalPaid / totalDue) * 100 : 0
     };
   }
 
@@ -704,10 +741,10 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
                 </Alert>
               )}
 
-              {/* Data Preview Table */}
+              {/* Data Preview Table - Afficher TOUS les clients */}
               <div>
-                <h4 className="font-semibold mb-2">Aperçu des données (5 premières lignes):</h4>
-                <ScrollArea className="h-64 border rounded">
+                <h4 className="font-semibold mb-2">Aperçu des données ({previewData.length} clients au total):</h4>
+                <ScrollArea className="h-96 border rounded">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -717,17 +754,27 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
                         <TableHead>Téléphone</TableHead>
                         <TableHead>Arriérés</TableHead>
                         <TableHead>Total Payé</TableHead>
+                        <TableHead>Paiements mensuels</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {previewData.slice(0, 5).map((row, idx) => (
+                      {previewData.map((row, idx) => (
                         <TableRow key={idx}>
                           <TableCell className="font-medium">{row.nomEtPrenoms}</TableCell>
                           <TableCell>{row.site}</TableCell>
                           <TableCell className="text-right">{formatCurrency(row.loyer)}</TableCell>
                           <TableCell>{row.numeroTelephone}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(row.arrieres)}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(row.totalPaye)}</TableCell>
+                          <TableCell className="text-right text-red-600">{formatCurrency(row.arrieres)}</TableCell>
+                          <TableCell className="text-right text-green-600">{formatCurrency(row.totalPaye)}</TableCell>
+                          <TableCell className="text-xs">
+                            {row.paiementsMensuels.map((montant, mIdx) => (
+                              montant > 0 ? (
+                                <Badge key={mIdx} variant="secondary" className="mr-1 mb-1 text-xs">
+                                  {['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'][mIdx]}: {formatCurrency(montant)}
+                                </Badge>
+                              ) : null
+                            ))}
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -735,27 +782,93 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
                 </ScrollArea>
               </div>
 
-              {/* Summary Statistics */}
+              {/* Tableau de synthèse mensuelle */}
+              {validation.monthlyStats && (
+                <div>
+                  <h4 className="font-semibold mb-2">Synthèse mensuelle des paiements:</h4>
+                  <ScrollArea className="h-48 border rounded">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Mois</TableHead>
+                          <TableHead>Total dû</TableHead>
+                          <TableHead>Total payé</TableHead>
+                          <TableHead>Clients payeurs</TableHead>
+                          <TableHead>Taux recouvrement</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {validation.monthlyStats.map((month, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell className="font-medium">{month.month}</TableCell>
+                            <TableCell className="text-right">{formatCurrency(month.totalDue)}</TableCell>
+                            <TableCell className="text-right text-green-600">{formatCurrency(month.totalPaid)}</TableCell>
+                            <TableCell className="text-center">{month.clientsPaid}/{previewData.length}</TableCell>
+                            <TableCell className="text-center">
+                              <Badge variant={month.recoveryRate > 80 ? "default" : month.recoveryRate > 50 ? "secondary" : "destructive"}>
+                                {month.recoveryRate.toFixed(1)}%
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </ScrollArea>
+                </div>
+              )}
+
+              {/* Summary Statistics - Amélioration avec plus de détails */}
               <div>
-                <h4 className="font-semibold mb-2">Résumé pour l'agent sélectionné:</h4>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <h4 className="font-semibold mb-2">Résumé financier pour l'agent sélectionné:</h4>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                   <div className="text-center p-3 border rounded-lg">
                     <div className="text-2xl font-bold text-primary">{validation.agentStats[0]?.clientsCount || 0}</div>
                     <div className="text-sm text-muted-foreground">Clients</div>
                   </div>
                   <div className="text-center p-3 border rounded-lg">
-                    <div className="text-2xl font-bold text-primary">{formatCurrency(validation.agentStats[0]?.totalDu || 0)}</div>
+                    <div className="text-2xl font-bold text-blue-600">{formatCurrency(validation.agentStats[0]?.totalDu || 0)}</div>
                     <div className="text-sm text-muted-foreground">Total dû</div>
                   </div>
                   <div className="text-center p-3 border rounded-lg">
-                    <div className="text-2xl font-bold text-primary">{formatCurrency(validation.agentStats[0]?.totalVerse || 0)}</div>
+                    <div className="text-2xl font-bold text-green-600">{formatCurrency(validation.agentStats[0]?.totalVerse || 0)}</div>
                     <div className="text-sm text-muted-foreground">Total versé</div>
                   </div>
                   <div className="text-center p-3 border rounded-lg">
                     <div className={`text-2xl font-bold ${(validation.agentStats[0]?.ecart || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
                       {formatCurrency(Math.abs(validation.agentStats[0]?.ecart || 0))}
                     </div>
-                    <div className="text-sm text-muted-foreground">Arriérés</div>
+                    <div className="text-sm text-muted-foreground">Arriérés totaux</div>
+                  </div>
+                  <div className="text-center p-3 border rounded-lg">
+                    <div className={`text-2xl font-bold ${(validation.globalRecoveryRate || 0) > 80 ? 'text-green-600' : (validation.globalRecoveryRate || 0) > 50 ? 'text-yellow-600' : 'text-red-600'}`}>
+                      {(validation.globalRecoveryRate || 0).toFixed(1)}%
+                    </div>
+                    <div className="text-sm text-muted-foreground">Taux recouvrement</div>
+                  </div>
+                </div>
+                
+                {/* Totaux mensuels agrégés */}
+                <div className="mt-4 p-4 bg-muted rounded-lg">
+                  <h5 className="font-medium mb-2">Totaux par période (Janvier à Décembre):</h5>
+                  <div className="grid grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <span className="font-medium">Total loyers mensuels dûs:</span>
+                      <div className="text-lg font-bold text-blue-600">
+                        {formatCurrency(validation.monthlyStats?.reduce((sum, m) => sum + m.totalDue, 0) || 0)}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="font-medium">Total paiements reçus:</span>
+                      <div className="text-lg font-bold text-green-600">
+                        {formatCurrency(validation.monthlyStats?.reduce((sum, m) => sum + m.totalPaid, 0) || 0)}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="font-medium">Moyenne mensuelle:</span>
+                      <div className="text-lg font-bold">
+                        {formatCurrency((validation.monthlyStats?.reduce((sum, m) => sum + m.totalPaid, 0) || 0) / 12)}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
