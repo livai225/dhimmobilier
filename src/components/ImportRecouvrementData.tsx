@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -9,6 +9,7 @@ import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from '@/hooks/use-toast';
@@ -29,16 +30,14 @@ import {
 
 interface RecouvrementRowData {
   rowIndex: number;
-  agent: string;
-  client: string;
-  secteur: string;
-  totalDuLoyers: number;
-  totalDuDroitsTerre: number;
-  totalDu: number;
-  totalVerse: number;
-  ecart: number;
-  telephone?: string;
-  adresse?: string;
+  nomEtPrenoms: string;
+  loyer: number;
+  site: string;
+  numeroTelephone: string;
+  typeHabitation: string;
+  arrieres: number;
+  paiementsMensuels: number[];
+  totalPaye: number;
 }
 
 interface ImportResult {
@@ -72,6 +71,9 @@ interface ValidationResult {
 }
 
 export function ImportRecouvrementData({ inline = false }: { inline?: boolean } = {}): React.ReactElement {
+  const [selectedAgent, setSelectedAgent] = useState<string>('');
+  const [operationType, setOperationType] = useState<'loyer' | 'droit_terre'>('loyer');
+  const [agents, setAgents] = useState<any[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -83,6 +85,21 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [simulationCompleted, setSimulationCompleted] = useState(false);
   const [clearExistingClients, setClearExistingClients] = useState(false);
+
+  // Load agents on component mount
+  useEffect(() => {
+    const loadAgents = async () => {
+      const { data } = await supabase
+        .from('agents_recouvrement')
+        .select('*')
+        .eq('statut', 'actif')
+        .order('nom');
+      
+      setAgents(data || []);
+    };
+    
+    loadAgents();
+  }, []);
 
   // Normalize string for matching
   const normalizeString = (str: string): string => {
@@ -102,12 +119,11 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
   function validateData(data: RecouvrementRowData[]): ValidationResult {
     const errors: string[] = [];
     const duplicateClients: ValidationResult['duplicateClients'] = [];
-    const agentStats = new Map<string, { clientsCount: number; totalDu: number; totalVerse: number; ecart: number }>();
 
     // Check for duplicate clients
     const clientCounts = new Map<string, number[]>();
     data.forEach(row => {
-      const key = normalizeString(row.client);
+      const key = normalizeString(row.nomEtPrenoms);
       if (!clientCounts.has(key)) clientCounts.set(key, []);
       clientCounts.get(key)!.push(row.rowIndex);
     });
@@ -118,40 +134,35 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
       }
     });
 
-    // Calculate agent statistics
-    data.forEach(row => {
-      const agentKey = normalizeString(row.agent);
-      if (!agentStats.has(agentKey)) {
-        agentStats.set(agentKey, { clientsCount: 0, totalDu: 0, totalVerse: 0, ecart: 0 });
-      }
-      const stats = agentStats.get(agentKey)!;
-      stats.clientsCount++;
-      stats.totalDu += row.totalDu;
-      stats.totalVerse += row.totalVerse;
-      stats.ecart += row.ecart;
-    });
-
     // Validate data consistency
     data.forEach(row => {
-      const calculatedTotal = row.totalDuLoyers + row.totalDuDroitsTerre;
-      if (Math.abs(calculatedTotal - row.totalDu) > 1000) {
-        errors.push(`Ligne ${row.rowIndex}: Total dû incohérent (${calculatedTotal} vs ${row.totalDu})`);
+      if (row.loyer <= 0) {
+        errors.push(`Ligne ${row.rowIndex}: Montant loyer invalide (${row.loyer})`);
       }
       
-      const calculatedEcart = row.totalDu - row.totalVerse;
-      if (Math.abs(calculatedEcart - row.ecart) > 1000) {
-        errors.push(`Ligne ${row.rowIndex}: Écart incohérent (${calculatedEcart} vs ${row.ecart})`);
+      if (row.arrieres < 0) {
+        errors.push(`Ligne ${row.rowIndex}: Arriérés négatifs (${row.arrieres})`);
+      }
+
+      const calculatedTotal = row.paiementsMensuels.reduce((sum, p) => sum + p, 0);
+      if (Math.abs(calculatedTotal - row.totalPaye) > 1000) {
+        errors.push(`Ligne ${row.rowIndex}: Total payé incohérent (${calculatedTotal} vs ${row.totalPaye})`);
       }
     });
+
+    const selectedAgentName = agents.find(a => a.id === selectedAgent)?.nom || 'Agent sélectionné';
 
     return {
       isValid: errors.length === 0,
       totalClients: data.length,
-      totalAmount: data.reduce((sum, d) => sum + d.totalVerse, 0),
-      agentStats: Array.from(agentStats.entries()).map(([agent, stats]) => ({
-        agent,
-        ...stats
-      })),
+      totalAmount: data.reduce((sum, d) => sum + d.totalPaye, 0),
+      agentStats: [{
+        agent: selectedAgentName,
+        clientsCount: data.length,
+        totalDu: data.reduce((sum, d) => sum + d.arrieres + (d.loyer * 12), 0),
+        totalVerse: data.reduce((sum, d) => sum + d.totalPaye, 0),
+        ecart: data.reduce((sum, d) => sum + d.arrieres, 0)
+      }],
       duplicateClients,
       errors
     };
@@ -170,29 +181,38 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
 
           const parsed: RecouvrementRowData[] = [];
           
-          // Skip header rows and parse data
+          // Skip header rows and parse data starting from row 3 (index 2)
           for (let i = 2; i < jsonData.length; i++) {
             const row = jsonData[i] as any[];
-            if (row.length < 8) continue;
+            if (row.length < 6) continue;
 
-            const client = String(row[1] || '').trim();
-            const agent = String(row[0] || '').trim();
-            const secteur = String(row[2] || '').trim();
+            const nomEtPrenoms = String(row[0] || '').trim();
+            const loyer = parseAmount(row[1]);
+            const site = String(row[2] || '').trim();
+            const numeroTelephone = String(row[3] || '').trim();
+            const typeHabitation = String(row[4] || '').trim();
+            const arrieres = parseAmount(row[5]);
             
-            if (!client || !agent) continue;
+            if (!nomEtPrenoms || !site) continue;
+
+            // Parse monthly payments (columns 6-17: JANVIER to DÉCEMBRE)
+            const paiementsMensuels: number[] = [];
+            for (let j = 6; j < 18; j++) {
+              paiementsMensuels.push(parseAmount(row[j]));
+            }
+
+            const totalPaye = paiementsMensuels.reduce((sum, p) => sum + p, 0);
 
             parsed.push({
               rowIndex: i + 1,
-              agent,
-              client,
-              secteur,
-              totalDuLoyers: parseAmount(row[3]),
-              totalDuDroitsTerre: parseAmount(row[4]),
-              totalDu: parseAmount(row[5]),
-              totalVerse: parseAmount(row[6]),
-              ecart: parseAmount(row[7]),
-              telephone: String(row[8] || '').trim(),
-              adresse: String(row[9] || '').trim()
+              nomEtPrenoms,
+              loyer,
+              site,
+              numeroTelephone,
+              typeHabitation,
+              arrieres,
+              paiementsMensuels,
+              totalPaye
             });
           }
 
@@ -210,6 +230,15 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
     if (!selectedFile) return;
+
+    if (!selectedAgent) {
+      toast({
+        title: "Agent requis",
+        description: "Veuillez sélectionner un agent avant d'importer le fichier",
+        variant: "destructive"
+      });
+      return;
+    }
 
     setFile(selectedFile);
     setResults(null);
@@ -234,46 +263,27 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
     }
   };
 
-  // Create or find agent by name
-  const findOrCreateAgent = async (agentName: string, simulate: boolean) => {
-    const { data: existingAgents } = await supabase
+  // Get selected agent
+  const getSelectedAgent = async () => {
+    const { data: agent } = await supabase
       .from('agents_recouvrement')
       .select('*')
-      .ilike('nom', `%${agentName.split(' ')[0]}%`);
-
-    if (existingAgents && existingAgents.length > 0) {
-      return { agent: existingAgents[0], created: false };
-    }
-
-    if (simulate) {
-      return { agent: null, created: false };
-    }
-
-    const nameParts = agentName.split(' ');
-    const { data: newAgent, error } = await supabase
-      .from('agents_recouvrement')
-      .insert({
-        nom: nameParts[0],
-        prenom: nameParts.slice(1).join(' ') || '',
-        code_agent: agentName.replace(/\s+/g, '_').toUpperCase(),
-        statut: 'actif'
-      })
-      .select()
+      .eq('id', selectedAgent)
       .single();
-
-    if (error) throw error;
-    return { agent: newAgent, created: true };
+    
+    return agent;
   };
 
-  // Create property by sector
-  const createPropertyForSector = async (secteur: string, agent: any, simulate: boolean) => {
+  // Create property by site
+  const createPropertyForSite = async (site: string, typeHabitation: string, agent: any, simulate: boolean) => {
     if (simulate) return { property: null, created: false };
 
     const { data: existingProperty } = await supabase
       .from('proprietes')
       .select('*')
-      .eq('nom', secteur)
-      .single();
+      .eq('nom', site)
+      .eq('agent_id', agent?.id)
+      .maybeSingle();
 
     if (existingProperty) {
       return { property: existingProperty, created: false };
@@ -282,9 +292,9 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
     const { data: newProperty, error } = await supabase
       .from('proprietes')
       .insert({
-        nom: secteur,
-        zone: secteur,
-        usage: 'Mixte',
+        nom: site,
+        zone: site,
+        usage: typeHabitation || 'Habitation',
         statut: 'Occupé',
         agent_id: agent?.id
       })
@@ -295,31 +305,56 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
     return { property: newProperty, created: true };
   };
 
-  // Generate historical payments for a location
-  const generateHistoricalPayments = async (locationId: string, totalAmount: number, simulate: boolean) => {
-    if (simulate || totalAmount <= 0) return 0;
+  // Generate monthly payments from Excel data
+  const generateMonthlyPayments = async (contractId: string, contractType: 'location' | 'souscription', paiementsMensuels: number[], simulate: boolean) => {
+    if (simulate) return paiementsMensuels.filter(p => p > 0).length;
 
     let paymentsCount = 0;
-    const monthlyPayments = Math.floor(totalAmount / 6); // Split into 6 monthly payments
-    const startDate = new Date();
-    startDate.setMonth(startDate.getMonth() - 6);
+    const monthNames = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 
+                       'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+    
+    const currentYear = new Date().getFullYear();
+    
+    for (let i = 0; i < paiementsMensuels.length; i++) {
+      const montant = paiementsMensuels[i];
+      if (montant <= 0) continue;
 
-    for (let i = 0; i < 6; i++) {
-      const paymentDate = new Date(startDate);
-      paymentDate.setMonth(startDate.getMonth() + i);
+      const paymentDate = new Date(currentYear, i, 15).toISOString().split('T')[0]; // 15th of each month
       
-      const amount = i === 5 ? totalAmount - (monthlyPayments * 5) : monthlyPayments; // Adjust last payment
-      
-      if (amount > 0) {
-        await supabase.rpc('pay_location_with_cash', {
-          p_location_id: locationId,
-          p_montant: amount,
-          p_date_paiement: paymentDate.toISOString().split('T')[0],
-          p_mode_paiement: 'espece',
-          p_reference: `Import historique - Paiement ${i + 1}/6`,
-          p_description: 'Import données recouvrement'
-        });
+      try {
+        if (contractType === 'location') {
+          await supabase.rpc('pay_location_with_cash', {
+            p_location_id: contractId,
+            p_montant: montant,
+            p_date_paiement: paymentDate,
+            p_mode_paiement: 'espece',
+            p_reference: `Import ${monthNames[i]} ${currentYear}`,
+            p_description: 'Import données recouvrement'
+          });
+        } else {
+          if (operationType === 'droit_terre') {
+            await supabase.rpc('pay_droit_terre_with_cash', {
+              p_souscription_id: contractId,
+              p_montant: montant,
+              p_date_paiement: paymentDate,
+              p_mode_paiement: 'espece',
+              p_reference: `Import ${monthNames[i]} ${currentYear}`,
+              p_description: 'Import données recouvrement'
+            });
+          } else {
+            await supabase.rpc('pay_souscription_with_cash', {
+              p_souscription_id: contractId,
+              p_montant: montant,
+              p_date_paiement: paymentDate,
+              p_mode_paiement: 'espece',
+              p_reference: `Import ${monthNames[i]} ${currentYear}`,
+              p_description: 'Import données recouvrement'
+            });
+          }
+        }
         paymentsCount++;
+      } catch (error) {
+        console.error(`Erreur paiement ${monthNames[i]}:`, error);
       }
     }
 
@@ -362,12 +397,19 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
         await supabase.from('clients').delete().neq('id', '00000000-0000-0000-0000-000000000000');
       }
 
-      // Get existing data
+      // Get agent and existing data
+      const agent = await getSelectedAgent();
       const { data: existingClients } = await supabase.from('clients').select('*');
 
       if (!existingClients) {
         throw new Error('Erreur lors de la récupération des clients existants');
       }
+
+      if (!agent) {
+        throw new Error('Agent sélectionné introuvable');
+      }
+
+      result.agentsMatched = 1; // Agent déjà sélectionné
 
       const total = previewData.length;
       
@@ -376,26 +418,20 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
         setProgress((i / total) * 100);
 
         try {
-          // Find or create agent
-          const { agent, created: agentCreated } = await findOrCreateAgent(row.agent, simulate);
-          if (agentCreated) result.agentsCreated++;
-          else if (agent) result.agentsMatched++;
-
           // Find or create client
           let client = existingClients.find(c => 
-            normalizeString(`${c.prenom || ''} ${c.nom}`) === normalizeString(row.client) ||
-            normalizeString(c.nom) === normalizeString(row.client)
+            normalizeString(`${c.prenom || ''} ${c.nom}`) === normalizeString(row.nomEtPrenoms) ||
+            normalizeString(c.nom) === normalizeString(row.nomEtPrenoms)
           );
 
           if (!client && !simulate) {
-            const clientNames = row.client.split(' ');
+            const clientNames = row.nomEtPrenoms.split(' ');
             const { data: newClient, error: clientError } = await supabase
               .from('clients')
               .insert({
                 nom: clientNames[clientNames.length - 1],
                 prenom: clientNames.slice(0, -1).join(' ') || null,
-                telephone_principal: row.telephone || null,
-                adresse: row.adresse || null
+                telephone_principal: row.numeroTelephone || null
               })
               .select()
               .single();
@@ -407,24 +443,22 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
             result.clientsMatched++;
           }
 
-          // Create property for sector
-          const { property, created: propertyCreated } = await createPropertyForSector(row.secteur, agent, simulate);
+          // Create property for site
+          const { property, created: propertyCreated } = await createPropertyForSite(row.site, row.typeHabitation, agent, simulate);
           if (propertyCreated) result.propertiesCreated++;
           else if (property) result.propertiesMatched++;
 
           if (!simulate && client && property) {
-            // Create location if there are rental payments
-            if (row.totalDuLoyers > 0) {
-              const monthlyRent = Math.max(50000, row.totalDuLoyers / 12); // Estimate monthly rent
-              
+            if (operationType === 'loyer') {
+              // Create location
               const { data: newLocation, error: locationError } = await supabase
                 .from('locations')
                 .insert({
                   client_id: client.id,
                   propriete_id: property.id,
-                  loyer_mensuel: monthlyRent,
-                  caution: monthlyRent * 2,
-                  date_debut: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 1 year ago
+                  loyer_mensuel: row.loyer,
+                  caution: row.loyer * 2,
+                  date_debut: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
                   statut: 'active',
                   type_contrat: 'historique'
                 })
@@ -435,27 +469,28 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
               
               result.locationsCreated++;
               
-              // Generate historical rental payments
-              const rentalPayments = await generateHistoricalPayments(newLocation.id, row.totalVerse * 0.7, simulate); // Assume 70% is rental
-              result.paymentsImported += rentalPayments;
-            }
-
-            // Create subscription if there are land rights payments
-            if (row.totalDuDroitsTerre > 0) {
+              // Generate monthly payments
+              const paymentsCount = await generateMonthlyPayments(newLocation.id, 'location', row.paiementsMensuels, simulate);
+              result.paymentsImported += paymentsCount;
+            } else {
+              // Create subscription for droit de terre
+              const totalDu = row.arrieres + (row.loyer * 12); // Arriérés + montant annuel
+              
               const { data: newSouscription, error: souscriptionError } = await supabase
                 .from('souscriptions')
                 .insert({
                   client_id: client.id,
                   propriete_id: property.id,
-                  prix_total: row.totalDu,
+                  prix_total: totalDu,
                   apport_initial: 0,
-                  montant_mensuel: Math.max(25000, row.totalDuDroitsTerre / 24),
-                  nombre_mois: 24,
+                  montant_mensuel: row.loyer,
+                  nombre_mois: 240, // 20 ans pour droit de terre
                   date_debut: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                  solde_restant: Math.max(0, row.totalDu - row.totalVerse),
+                  solde_restant: Math.max(0, totalDu - row.totalPaye),
                   type_souscription: 'mise_en_garde',
                   type_bien: 'terrain',
-                  statut: 'active'
+                  statut: 'active',
+                  montant_droit_terre_mensuel: row.loyer
                 })
                 .select()
                 .single();
@@ -464,22 +499,12 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
               
               result.souscriptionsCreated++;
               
-              // Generate land rights payments
-              const landRightsAmount = row.totalVerse * 0.3; // Assume 30% is land rights
-              if (landRightsAmount > 0) {
-                await supabase.rpc('pay_droit_terre_with_cash', {
-                  p_souscription_id: newSouscription.id,
-                  p_montant: landRightsAmount,
-                  p_date_paiement: new Date().toISOString().split('T')[0],
-                  p_mode_paiement: 'espece',
-                  p_reference: `Import historique - ${row.client}`,
-                  p_description: 'Import données recouvrement'
-                });
-                result.paymentsImported++;
-              }
+              // Generate monthly payments
+              const paymentsCount = await generateMonthlyPayments(newSouscription.id, 'souscription', row.paiementsMensuels, simulate);
+              result.paymentsImported += paymentsCount;
             }
 
-            result.totalAmount += row.totalVerse;
+            result.totalAmount += row.totalPaye;
           }
         } catch (error) {
           console.error(`Erreur ligne ${i + 1}:`, error);
@@ -528,12 +553,65 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
   const renderContent = () => (
     <div className="flex-1 overflow-y-auto pr-4">
       <div className="space-y-6">
-        {/* Step 1: File Selection */}
+        {/* Step 1: Agent and Operation Type Selection */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Users className="w-4 h-4" />
+              Étape 1: Configuration de l'import
+            </CardTitle>
+            <CardDescription>
+              Sélectionnez l'agent responsable et le type d'opération
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="agent-select">Agent de recouvrement</Label>
+                <Select value={selectedAgent} onValueChange={setSelectedAgent}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sélectionner un agent" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {agents.map((agent) => (
+                      <SelectItem key={agent.id} value={agent.id}>
+                        {agent.prenom} {agent.nom}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="operation-type">Type d'opération</Label>
+                <Select value={operationType} onValueChange={(value: 'loyer' | 'droit_terre') => setOperationType(value)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="loyer">Loyer</SelectItem>
+                    <SelectItem value="droit_terre">Droit de terre</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertDescription>
+                L'agent sélectionné sera automatiquement assigné à toutes les propriétés importées.
+                Le type d'opération détermine si les paiements seront traités comme des loyers ou des droits de terre.
+              </AlertDescription>
+            </Alert>
+          </CardContent>
+        </Card>
+
+        {/* Step 2: File Selection */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <Upload className="w-4 h-4" />
-              Étape 1: Sélection du fichier de recouvrement
+              Étape 2: Sélection du fichier Excel
             </CardTitle>
             <CardDescription>
               Importez votre fichier Excel contenant les données de situation de recouvrement
@@ -547,7 +625,7 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
                 type="file"
                 accept=".xlsx,.xls"
                 onChange={handleFileChange}
-                disabled={isAnalyzing || isImporting}
+                disabled={isAnalyzing || isImporting || !selectedAgent}
               />
             </div>
             
@@ -561,8 +639,8 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
             <Alert>
               <Info className="h-4 w-4" />
               <AlertDescription>
-                <strong>Format attendu:</strong> AGENT, CLIENT, SECTEUR, TOTAL DU LOYERS, 
-                TOTAL DU DROITS TERRE, TOTAL DU, TOTAL VERSE, ECART
+                <strong>Format attendu:</strong> NOM ET PRENOMS, LOYER, SITES, NUMERO TELEPHONE, 
+                TYPE D'HABITATION, ARRIERES, JANVIER à DÉCEMBRE (paiements mensuels)
               </AlertDescription>
             </Alert>
 
@@ -579,16 +657,16 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
           </CardContent>
         </Card>
 
-        {/* Step 2: Data Preview & Validation */}
+        {/* Step 3: Data Preview & Validation */}
         {showPreview && validation && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <CheckCircle className="w-4 h-4" />
-                Étape 2: Aperçu et validation des données
+                Étape 3: Aperçu et validation des données
               </CardTitle>
               <CardDescription>
-                Vérifiez vos données avant de procéder à l'import
+                Vérifiez vos données avant de procéder à l'import - Agent: {agents.find(a => a.id === selectedAgent)?.prenom} {agents.find(a => a.id === selectedAgent)?.nom} - Type: {operationType === 'loyer' ? 'Loyer' : 'Droit de terre'}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -626,35 +704,60 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
                 </Alert>
               )}
 
-              {/* Agent Statistics */}
+              {/* Data Preview Table */}
               <div>
-                <h4 className="font-semibold mb-2">Répartition par agent:</h4>
-                <ScrollArea className="h-48 border rounded">
+                <h4 className="font-semibold mb-2">Aperçu des données (5 premières lignes):</h4>
+                <ScrollArea className="h-64 border rounded">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Agent</TableHead>
-                        <TableHead className="text-right">Clients</TableHead>
-                        <TableHead className="text-right">Total dû</TableHead>
-                        <TableHead className="text-right">Total versé</TableHead>
-                        <TableHead className="text-right">Écart</TableHead>
+                        <TableHead>Nom et Prénoms</TableHead>
+                        <TableHead>Site</TableHead>
+                        <TableHead>Loyer/Mois</TableHead>
+                        <TableHead>Téléphone</TableHead>
+                        <TableHead>Arriérés</TableHead>
+                        <TableHead>Total Payé</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {validation.agentStats.map((stat, idx) => (
+                      {previewData.slice(0, 5).map((row, idx) => (
                         <TableRow key={idx}>
-                          <TableCell className="font-medium">{stat.agent}</TableCell>
-                          <TableCell className="text-right">{stat.clientsCount}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(stat.totalDu)}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(stat.totalVerse)}</TableCell>
-                          <TableCell className={`text-right ${stat.ecart > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                            {formatCurrency(Math.abs(stat.ecart))}
-                          </TableCell>
+                          <TableCell className="font-medium">{row.nomEtPrenoms}</TableCell>
+                          <TableCell>{row.site}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(row.loyer)}</TableCell>
+                          <TableCell>{row.numeroTelephone}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(row.arrieres)}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(row.totalPaye)}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                   </Table>
                 </ScrollArea>
+              </div>
+
+              {/* Summary Statistics */}
+              <div>
+                <h4 className="font-semibold mb-2">Résumé pour l'agent sélectionné:</h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="text-center p-3 border rounded-lg">
+                    <div className="text-2xl font-bold text-primary">{validation.agentStats[0]?.clientsCount || 0}</div>
+                    <div className="text-sm text-muted-foreground">Clients</div>
+                  </div>
+                  <div className="text-center p-3 border rounded-lg">
+                    <div className="text-2xl font-bold text-primary">{formatCurrency(validation.agentStats[0]?.totalDu || 0)}</div>
+                    <div className="text-sm text-muted-foreground">Total dû</div>
+                  </div>
+                  <div className="text-center p-3 border rounded-lg">
+                    <div className="text-2xl font-bold text-primary">{formatCurrency(validation.agentStats[0]?.totalVerse || 0)}</div>
+                    <div className="text-sm text-muted-foreground">Total versé</div>
+                  </div>
+                  <div className="text-center p-3 border rounded-lg">
+                    <div className={`text-2xl font-bold ${(validation.agentStats[0]?.ecart || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      {formatCurrency(Math.abs(validation.agentStats[0]?.ecart || 0))}
+                    </div>
+                    <div className="text-sm text-muted-foreground">Arriérés</div>
+                  </div>
+                </div>
               </div>
 
               {/* Action Buttons */}
