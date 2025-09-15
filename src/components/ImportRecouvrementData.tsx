@@ -322,6 +322,9 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
 
   // Create property by site
   const createPropertyForSite = async (site: string, typeHabitation: string, agent: any, simulate: boolean) => {
+    // Mapper le type d'opération vers le champ usage
+    const usage = operationType === 'loyer' ? 'Location' : 'Bail';
+    
     if (simulate) {
       // En simulation, retourner une propriété fictive avec un ID valide
       return { 
@@ -329,7 +332,7 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
           id: `simulated-property-${Date.now()}`, 
           nom: site, 
           zone: site, 
-          usage: typeHabitation || 'Habitation',
+          usage: usage,
           statut: 'Occupé',
           agent_id: agent?.id 
         }, 
@@ -353,7 +356,7 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
       .insert({
         nom: site,
         zone: site,
-        usage: typeHabitation || 'Habitation',
+        usage: usage,
         statut: 'Occupé',
         agent_id: agent?.id
       })
