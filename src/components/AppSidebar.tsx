@@ -32,7 +32,7 @@ import React from "react";
 const menuItems = [
   {
     title: "Dashboard",
-    url: "/",
+    url: "/dashboard",
     icon: LayoutDashboard,
     permission: "canAccessDashboard" as const,
   },
@@ -116,7 +116,7 @@ export function AppSidebar() {
 
   // Auto-redirect users from dashboard to their appropriate page
   React.useEffect(() => {
-    if (location.pathname === '/' && !permissions.canAccessDashboard && currentUser) {
+    if (location.pathname === '/dashboard' && !permissions.canAccessDashboard && currentUser) {
       const defaultRoute = getFirstAvailableRoute(currentUser.role);
       navigate(defaultRoute, { replace: true });
     }
