@@ -7,13 +7,14 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 
-import { Download, Eye, Receipt, TrendingUp, FileText, Clock } from "lucide-react";
+import { Download, Eye, Receipt, TrendingUp, FileText, Clock, AlertTriangle } from "lucide-react";
 import { useReceipts, useReceiptStats, ReceiptWithDetails } from "@/hooks/useReceipts";
 import { ReceiptDetailsDialog } from "@/components/ReceiptDetailsDialog";
 import { downloadReceiptPDF } from "@/utils/pdfGenerator";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ExportToExcelButton } from "@/components/ExportToExcelButton";
+import { MissingReceiptsRecovery } from "@/components/MissingReceiptsRecovery";
 
 export default function Recus() {
   const [filters, setFilters] = useState({
@@ -235,6 +236,22 @@ export default function Recus() {
               Réinitialiser
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Recovery Tool */}
+      <Card className="border-warning/20 bg-warning/5">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-warning">
+            <AlertTriangle className="h-5 w-5" />
+            Outil de Récupération
+          </CardTitle>
+          <CardDescription>
+            Utilisez cet outil pour régénérer les reçus manqués lors de l'import de recouvrement
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <MissingReceiptsRecovery />
         </CardContent>
       </Card>
 
