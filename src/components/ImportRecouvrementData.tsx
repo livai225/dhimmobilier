@@ -627,6 +627,8 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
                 const paymentsCount = await generateMonthlyPayments('simulated-souscription', 'souscription', row.paiementsMensuels, simulate);
                 result.paymentsImported += paymentsCount;
               } else {
+                // Pour les droits de terre, créer directement en phase droit_terre
+                const dateDebut = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
                 const { data: newSouscription, error: souscriptionError } = await supabase
                   .from('souscriptions')
                   .insert({
@@ -636,12 +638,16 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
                     apport_initial: 0,
                     montant_mensuel: row.loyer,
                     nombre_mois: 240, // 20 ans pour droit de terre
-                    date_debut: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                    date_debut: dateDebut,
                     solde_restant: Math.max(0, totalDu - row.totalPaye),
                     type_souscription: 'mise_en_garde',
                     type_bien: 'terrain',
                     statut: 'active',
-                    montant_droit_terre_mensuel: row.loyer
+                    montant_droit_terre_mensuel: row.loyer,
+                    // Configuration directe pour phase droit de terre
+                    phase_actuelle: 'droit_terre',
+                    date_debut_droit_terre: dateDebut,
+                    date_fin_finition: new Date(new Date(dateDebut).getTime() + 9 * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] // 9 mois après début
                   })
                   .select()
                   .single();
