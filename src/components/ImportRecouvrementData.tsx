@@ -129,24 +129,28 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
     return isNaN(num) ? 0 : num;
   };
 
-// Calculate monthly totals for detailed analysis - Amélioré
+// Calculate monthly totals for detailed analysis - Filtré pour les mois avec paiements
   const calculateMonthlyTotals = (data: RecouvrementRowData[]) => {
     const monthNames = ['JANVIER', 'FÉVRIER', 'MARS', 'AVRIL', 'MAI', 'JUIN', 
                       'JUILLET', 'AOÛT', 'SEPTEMBRE', 'OCTOBRE', 'NOVEMBRE', 'DÉCEMBRE'];
     
-    const monthlyStats = monthNames.map((month, index) => {
+    const allMonthlyStats = monthNames.map((month, index) => {
       const totalPaid = data.reduce((sum, row) => sum + (row.paiementsMensuels[index] || 0), 0);
       const totalDue = data.reduce((sum, row) => sum + row.loyer, 0); // Total dû pour ce mois = loyer mensuel de tous les clients
       const recoveryRate = totalDue > 0 ? (totalPaid / totalDue) * 100 : 0;
+      const clientsPaid = data.filter(row => (row.paiementsMensuels[index] || 0) > 0).length;
       
       return {
         month,
         totalDue,
         totalPaid,
         recoveryRate,
-        clientsPaid: data.filter(row => (row.paiementsMensuels[index] || 0) > 0).length
+        clientsPaid
       };
     });
+
+    // Filtrer seulement les mois qui ont au moins un paiement
+    const monthlyStats = allMonthlyStats.filter(stat => stat.totalPaid > 0 || stat.clientsPaid > 0);
 
     return monthlyStats;
   };
