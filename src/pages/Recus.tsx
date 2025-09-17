@@ -14,7 +14,7 @@ import { downloadReceiptPDF } from "@/utils/pdfGenerator";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ExportToExcelButton } from "@/components/ExportToExcelButton";
-import { MissingReceiptsRecovery } from "@/components/MissingReceiptsRecovery";
+
 
 export default function Recus() {
   const [filters, setFilters] = useState({
@@ -239,21 +239,6 @@ export default function Recus() {
         </CardContent>
       </Card>
 
-      {/* Recovery Tool */}
-      <Card className="border-warning/20 bg-warning/5">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-warning">
-            <AlertTriangle className="h-5 w-5" />
-            Outil de Récupération
-          </CardTitle>
-          <CardDescription>
-            Utilisez cet outil pour régénérer les reçus manqués lors de l'import de recouvrement
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <MissingReceiptsRecovery />
-        </CardContent>
-      </Card>
 
       {/* Receipts Table */}
       <Card>

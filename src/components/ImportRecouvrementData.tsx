@@ -667,18 +667,49 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
       setProgress(100);
       setResults(result);
       
+      // Post-import verification (only for real imports)
+      if (!simulate) {
+        console.log('🔍 [Import] Début de la vérification post-import...');
+        
+        // Brief delay to allow database triggers to complete
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Verify receipts generation
+        const { data: receiptsCreated, error: receiptsError } = await supabase
+          .from('recus')
+          .select('id, type_operation, numero')
+          .gte('created_at', new Date(Date.now() - 5 * 60 * 1000).toISOString()); // Last 5 minutes
+        
+        if (!receiptsError && receiptsCreated) {
+          result.receiptsGenerated = receiptsCreated.length;
+          console.log(`📋 [Import] ${receiptsCreated.length} reçus générés automatiquement`);
+        }
+        
+        // Log final summary
+        console.log('📊 [Import] Résumé final:', {
+          clientsCreated: result.clientsCreated,
+          locationsCreated: result.locationsCreated,
+          souscriptionsCreated: result.souscriptionsCreated,
+          paymentsImported: result.paymentsImported,
+          receiptsGenerated: result.receiptsGenerated,
+          errors: result.errors.length
+        });
+      }
+      
       if (simulate) {
         setSimulationCompleted(true);
         const monthInfo = selectedMonth === 'all' ? 'tous les mois' : ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'][parseInt(selectedMonth)];
+        console.log(`✅ [Import] Simulation terminée: ${result.locationsCreated + result.souscriptionsCreated} contrats, ${result.paymentsImported} paiements`);
         toast({
-          title: "Simulation terminée",
+          title: "✅ Simulation terminée",
           description: `${result.locationsCreated + result.souscriptionsCreated} contrats seraient créés, ${result.paymentsImported} paiements pour ${monthInfo}`
         });
       } else {
         const monthInfo = selectedMonth === 'all' ? 'tous les mois' : ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'][parseInt(selectedMonth)];
+        console.log(`✅ [Import] Import terminé: ${result.locationsCreated + result.souscriptionsCreated} contrats créés, ${result.paymentsImported} paiements, ${result.receiptsGenerated} reçus générés`);
         toast({
-          title: "Import terminé",
-          description: `${result.locationsCreated + result.souscriptionsCreated} contrats créés, ${result.paymentsImported} paiements importés pour ${monthInfo}`
+          title: "✅ Import terminé avec succès",
+          description: `${result.locationsCreated + result.souscriptionsCreated} contrats créés, ${result.paymentsImported} paiements importés, ${result.receiptsGenerated} reçus générés pour ${monthInfo}`
         });
       }
 

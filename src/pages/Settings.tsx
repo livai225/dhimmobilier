@@ -11,6 +11,7 @@ import { ImportClientsFromExcel } from "@/components/ImportClientsFromExcel";
 import { ImportHistoricalRentals } from "@/components/ImportHistoricalRentals";
 import { ImportHistoricalSubscriptions } from "@/components/ImportHistoricalSubscriptions";
 import { DuplicateClientManager } from "@/components/DuplicateClientManager";
+import { MissingReceiptsRecovery } from "@/components/MissingReceiptsRecovery";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -235,6 +236,30 @@ export default function Settings() {
 
         {/* Gestion des doublons */}
         <DuplicateClientManager />
+
+        {/* Outils administrateur */}
+        <Card className="border-amber-200 bg-amber-50/50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-amber-700">
+              <AlertTriangle className="w-5 h-5" />
+              Outils de récupération (Administrateur)
+            </CardTitle>
+            <CardDescription>
+              Outils de diagnostic et de correction des données manquantes
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div>
+                <h4 className="text-sm font-medium mb-2">Récupération des reçus manquants</h4>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Identifiez et générez automatiquement les reçus manqués lors d'imports précédents
+                </p>
+                <MissingReceiptsRecovery />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Zone dangereuse */}
         <Card className="border-red-200 bg-red-50/50">
