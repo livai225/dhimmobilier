@@ -84,10 +84,10 @@ export function SouscriptionDetailsDialog({
 
   if (!souscription) return null;
 
-  // Calculate total paid from payments only (apport initial is already included in payments)
+  // Use the balance from database instead of recalculating to avoid inconsistencies with historical subscriptions
   const paiementsTotal = paiements?.reduce((sum, p) => sum + Number(p.montant), 0) || 0;
   const totalPaye = paiementsTotal;
-  const soldeRestant = Number(souscription.prix_total || souscription.montant_souscris || 0) - totalPaye;
+  const soldeRestant = Number(souscription.solde_restant || 0);
   
   // Calculate work progress
   const getWorkProgress = () => {
@@ -272,7 +272,8 @@ export function SouscriptionDetailsDialog({
                     {getPhaseLabel(souscription.phase_actuelle)}
                   </Badge>
                   <Badge variant="outline">
-                    {souscription.type_souscription === "mise_en_garde" ? "Mise en garde" : "Classique"}
+                    {souscription.type_souscription === "mise_en_garde" ? "Import historique" : 
+                     souscription.type_souscription === "historique" ? "Import historique" : "Classique"}
                   </Badge>
                   {soldeRestant <= 0 && (
                     <Badge variant="default" className="bg-green-500">

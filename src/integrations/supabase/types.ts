@@ -1145,6 +1145,13 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
+      generate_missing_historical_payments: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          montant_genere: number
+          souscription_id: string
+        }[]
+      }
       generate_receipt_number: {
         Args: { p_type_operation: string }
         Returns: string
