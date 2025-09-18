@@ -6,7 +6,9 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { setQueryClient } from "@/integrations/supabase/client";
 import { Layout } from "@/components/Layout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { AuthProtectedRoute } from "@/components/AuthProtectedRoute";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { AuthProvider } from "@/components/AuthProvider";
 import Index from "./pages/Index";
 import Clients from "./pages/Clients";
 import Proprietes from "./pages/Proprietes";
@@ -18,6 +20,7 @@ import Recus from "./pages/Recus";
 import ReceiptIntegrity from "./pages/ReceiptIntegrity";
 import ImportSouscriptionsHistoriques from "./pages/ImportSouscriptionsHistoriques";
 import Login from "./pages/Login";
+import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import Caisse from "./pages/Caisse";
 import Agents from "./pages/Agents";
@@ -50,31 +53,34 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/" element={<Login />} />
-          <Route path="/dashboard" element={<ProtectedRoute><Index /></ProtectedRoute>} />
-          <Route path="/clients" element={<ProtectedRoute><Layout><Clients /></Layout></ProtectedRoute>} />
-          <Route path="/proprietes" element={<ProtectedRoute><Layout><Proprietes /></Layout></ProtectedRoute>} />
-          <Route path="/fournisseurs" element={<ProtectedRoute><Layout><Fournisseurs /></Layout></ProtectedRoute>} />
-          <Route path="/factures" element={<ProtectedRoute><Layout><Factures /></Layout></ProtectedRoute>} />
-          <Route path="/souscriptions" element={<ProtectedRoute><Layout><Souscriptions /></Layout></ProtectedRoute>} />
-          <Route path="/locations" element={<ProtectedRoute><Layout><Locations /></Layout></ProtectedRoute>} />
-          
-          <Route path="/caisse" element={<ProtectedRoute><Layout><Caisse /></Layout></ProtectedRoute>} />
-          <Route path="/agents" element={<ProtectedRoute><Layout><Agents /></Layout></ProtectedRoute>} />
-          <Route path="/recouvrement" element={<ProtectedRoute><Layout><Recouvrement /></Layout></ProtectedRoute>} />
-          <Route path="/recus" element={<ProtectedRoute><Layout><Recus /></Layout></ProtectedRoute>} />
-          <Route path="/users" element={<ProtectedRoute><Layout><Users /></Layout></ProtectedRoute>} />
-          <Route path="/audit-logs" element={<ProtectedRoute><Layout><AuditLogs /></Layout></ProtectedRoute>} />
-          <Route path="/settings" element={<ProtectedRoute><Layout><Settings /></Layout></ProtectedRoute>} />
-          <Route path="/receipt-integrity" element={<ProtectedRoute><Layout><ReceiptIntegrity /></Layout></ProtectedRoute>} />
-          <Route path="/import-souscriptions-historiques" element={<ProtectedRoute><Layout><ImportSouscriptionsHistoriques /></Layout></ProtectedRoute>} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
+          <AuthProvider>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/" element={<Auth />} />
+              <Route path="/dashboard" element={<AuthProtectedRoute><Index /></AuthProtectedRoute>} />
+              <Route path="/clients" element={<AuthProtectedRoute><Layout><Clients /></Layout></AuthProtectedRoute>} />
+              <Route path="/proprietes" element={<AuthProtectedRoute><Layout><Proprietes /></Layout></AuthProtectedRoute>} />
+              <Route path="/fournisseurs" element={<AuthProtectedRoute><Layout><Fournisseurs /></Layout></AuthProtectedRoute>} />
+              <Route path="/factures" element={<AuthProtectedRoute><Layout><Factures /></Layout></AuthProtectedRoute>} />
+              <Route path="/souscriptions" element={<AuthProtectedRoute><Layout><Souscriptions /></Layout></AuthProtectedRoute>} />
+              <Route path="/locations" element={<AuthProtectedRoute><Layout><Locations /></Layout></AuthProtectedRoute>} />
+              
+              <Route path="/caisse" element={<AuthProtectedRoute><Layout><Caisse /></Layout></AuthProtectedRoute>} />
+              <Route path="/agents" element={<AuthProtectedRoute><Layout><Agents /></Layout></AuthProtectedRoute>} />
+              <Route path="/recouvrement" element={<AuthProtectedRoute><Layout><Recouvrement /></Layout></AuthProtectedRoute>} />
+              <Route path="/recus" element={<AuthProtectedRoute><Layout><Recus /></Layout></AuthProtectedRoute>} />
+              <Route path="/users" element={<AuthProtectedRoute><Layout><Users /></Layout></AuthProtectedRoute>} />
+              <Route path="/audit-logs" element={<AuthProtectedRoute><Layout><AuditLogs /></Layout></AuthProtectedRoute>} />
+              <Route path="/settings" element={<AuthProtectedRoute><Layout><Settings /></Layout></AuthProtectedRoute>} />
+              <Route path="/receipt-integrity" element={<AuthProtectedRoute><Layout><ReceiptIntegrity /></Layout></AuthProtectedRoute>} />
+              <Route path="/import-souscriptions-historiques" element={<AuthProtectedRoute><Layout><ImportSouscriptionsHistoriques /></Layout></AuthProtectedRoute>} />
+              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </AuthProvider>
+        </BrowserRouter>
+      </TooltipProvider>
     </ThemeProvider>
   </QueryClientProvider>
 );

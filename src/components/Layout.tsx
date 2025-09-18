@@ -4,13 +4,17 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import BalanceBadge from "@/components/BalanceBadge";
 import { LogoutButton } from "@/components/LogoutButton";
+import { AuthLogoutButton } from "@/components/AuthLogoutButton";
 import { UserInfo } from "@/components/UserInfo";
+import { useAuthContext } from "@/components/AuthProvider";
 
 interface LayoutProps {
   children: React.ReactNode;
 }
 
 export function Layout({ children }: LayoutProps) {
+  const { user } = useAuthContext();
+  
   return (
     <SidebarProvider>
       <AppSidebar />
@@ -25,8 +29,14 @@ export function Layout({ children }: LayoutProps) {
             </div>
             <div className="flex items-center gap-3">
               <BalanceBadge />
-              <UserInfo />
-              <LogoutButton />
+              {user && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">
+                    {user.email}
+                  </span>
+                </div>
+              )}
+              <AuthLogoutButton />
               <ThemeToggle />
             </div>
           </div>
