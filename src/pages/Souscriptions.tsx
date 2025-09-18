@@ -40,7 +40,7 @@ export default function Souscriptions() {
         .select(`
           *,
           clients(nom, prenom),
-          proprietes(nom, adresse, agent_id, agents_recouvrement(nom, prenom))
+          proprietes!inner(nom, adresse, agent_id, agents_recouvrement(nom, prenom))
         `)
         .order("created_at", { ascending: false });
 
@@ -262,8 +262,14 @@ export default function Souscriptions() {
                       {getPhaseLabel(souscription.phase_actuelle)}
                     </Badge>
                     <Badge variant="outline">
-                      {souscription.type_souscription === "mise_en_garde" ? "Mise en garde" : "Classique"}
+                      {souscription.type_souscription === "mise_en_garde" ? "Import historique" : 
+                       souscription.type_souscription === "historique" ? "Import historique" : "Classique"}
                     </Badge>
+                    {souscription.solde_restant === 0 && (
+                      <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200">
+                        ✓ Souscription payée
+                      </Badge>
+                    )}
                   </div>
                   
                   <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">

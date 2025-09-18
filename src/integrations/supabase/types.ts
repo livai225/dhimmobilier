@@ -1109,6 +1109,14 @@ export type Database = {
         Args: { amount: number }
         Returns: boolean
       }
+      fix_historical_subscription_balances: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          ancien_solde: number
+          nouveau_solde: number
+          souscription_id: string
+        }[]
+      }
       fix_negative_balances: {
         Args: Record<PropertyKey, never>
         Returns: {
