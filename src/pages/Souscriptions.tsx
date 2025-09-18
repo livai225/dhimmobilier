@@ -24,6 +24,7 @@ export default function Souscriptions() {
   const { canAccessDashboard } = useUserPermissions();
   const [searchTerm, setSearchTerm] = useState("");
   const [phaseFilter, setPhaseFilter] = useState<string>("all");
+  const [agentFilter, setAgentFilter] = useState<string>("all");
   const [selectedSouscription, setSelectedSouscription] = useState<any>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
@@ -39,9 +40,23 @@ export default function Souscriptions() {
         .select(`
           *,
           clients(nom, prenom),
-          proprietes(nom, adresse)
+          proprietes(nom, adresse, agents_recouvrement(nom, prenom))
         `)
         .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: agents } = useQuery({
+    queryKey: ["agents"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("agents_recouvrement")
+        .select("id, nom, prenom")
+        .eq("statut", "actif")
+        .order("nom");
 
       if (error) throw error;
       return data;
@@ -129,7 +144,10 @@ export default function Souscriptions() {
     
     const matchesPhase = phaseFilter === "all" || sub.phase_actuelle === phaseFilter;
     
-    return matchesSearch && matchesPhase;
+    const matchesAgent = agentFilter === "all" || 
+      (sub.proprietes?.agent_id && sub.proprietes.agent_id === agentFilter);
+    
+    return matchesSearch && matchesPhase && matchesAgent;
   });
 
   if (isLoading) {
@@ -213,6 +231,19 @@ export default function Souscriptions() {
           placeholder="Filtrer par phase"
           buttonClassName="w-48 justify-start"
         />
+        <Combobox
+          options={[
+            { value: "all", label: "Tous les agents" },
+            ...(agents?.map(agent => ({
+              value: agent.id,
+              label: `${agent.prenom} ${agent.nom}`
+            })) || [])
+          ]}
+          value={agentFilter}
+          onChange={setAgentFilter}
+          placeholder="Filtrer par agent"
+          buttonClassName="w-48 justify-start"
+        />
       </div>
 
 
@@ -239,6 +270,11 @@ export default function Souscriptions() {
                     <div>
                       <p className="text-muted-foreground">Propriété</p>
                       <p className="font-medium">{souscription.proprietes?.nom}</p>
+                      {souscription.proprietes?.agents_recouvrement && (
+                        <p className="text-xs text-blue-600 font-medium">
+                          Agent: {souscription.proprietes.agents_recouvrement.prenom} {souscription.proprietes.agents_recouvrement.nom}
+                        </p>
+                      )}
                     </div>
                     <div>
                       <p className="text-muted-foreground">Prix total</p>

@@ -22,6 +22,7 @@ export default function Locations() {
   const { canAccessDashboard } = useUserPermissions();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [agentFilter, setAgentFilter] = useState<string>("all");
   const [showLocationForm, setShowLocationForm] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState<any>(null);
   const [showDetailsDialog, setShowDetailsDialog] = useState(false);
@@ -37,10 +38,24 @@ export default function Locations() {
         .select(`
           *,
           clients(nom, prenom, telephone_principal),
-          proprietes(nom, adresse, loyer_mensuel),
+          proprietes(nom, adresse, loyer_mensuel, agents_recouvrement(nom, prenom)),
           paiements_locations(montant)
         `)
         .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: agents } = useQuery({
+    queryKey: ["agents"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("agents_recouvrement")
+        .select("id, nom, prenom")
+        .eq("statut", "actif")
+        .order("nom");
 
       if (error) throw error;
       return data;
@@ -80,8 +95,11 @@ export default function Locations() {
       location.proprietes?.adresse?.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesStatus = statusFilter === "all" || location.statut === statusFilter;
+    
+    const matchesAgent = agentFilter === "all" || 
+      (location.proprietes?.agent_id && location.proprietes.agent_id === agentFilter);
 
-    return matchesSearch && matchesStatus;
+    return matchesSearch && matchesStatus && matchesAgent;
   });
 
   const getStatusBadge = (statut: string) => {
@@ -180,6 +198,19 @@ export default function Locations() {
               placeholder="Filtrer par statut"
               buttonClassName="w-48 justify-start"
             />
+            <Combobox
+              options={[
+                { value: "all", label: "Tous les agents" },
+                ...(agents?.map(agent => ({
+                  value: agent.id,
+                  label: `${agent.prenom} ${agent.nom}`
+                })) || [])
+              ]}
+              value={agentFilter}
+              onChange={setAgentFilter}
+              placeholder="Filtrer par agent"
+              buttonClassName="w-48 justify-start"
+            />
           </div>
 
           {/* Locations List */}
@@ -211,6 +242,11 @@ export default function Locations() {
                   <p className="text-xs text-muted-foreground">
                     {location.clients?.telephone_principal}
                   </p>
+                  {location.proprietes?.agents_recouvrement && (
+                    <p className="text-xs text-blue-600 font-medium">
+                      Agent: {location.proprietes.agents_recouvrement.prenom} {location.proprietes.agents_recouvrement.nom}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <p className="text-sm font-medium">Loyer Mensuel</p>
