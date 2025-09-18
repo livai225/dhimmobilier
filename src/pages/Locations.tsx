@@ -38,7 +38,7 @@ export default function Locations() {
         .select(`
           *,
           clients(nom, prenom, telephone_principal),
-          proprietes(nom, adresse, loyer_mensuel, agents_recouvrement(nom, prenom)),
+          proprietes(nom, adresse, loyer_mensuel, agent_id, agents_recouvrement(nom, prenom)),
           paiements_locations(montant)
         `)
         .order("created_at", { ascending: false });

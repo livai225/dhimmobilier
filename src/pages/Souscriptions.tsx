@@ -40,7 +40,7 @@ export default function Souscriptions() {
         .select(`
           *,
           clients(nom, prenom),
-          proprietes(nom, adresse, agents_recouvrement(nom, prenom))
+          proprietes(nom, adresse, agent_id, agents_recouvrement(nom, prenom))
         `)
         .order("created_at", { ascending: false });
 
