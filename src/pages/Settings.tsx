@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, Trash2, Download, Settings as SettingsIcon, Database, Upload } from "lucide-react";
+import { AlertTriangle, Trash2, Download, Settings as SettingsIcon, Database, Upload, Calculator, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ImportClientsFromExcel } from "@/components/ImportClientsFromExcel";
 import { DuplicateClientManager } from "@/components/DuplicateClientManager";
@@ -32,6 +32,12 @@ export default function Settings() {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingClients, setIsLoadingClients] = useState(false);
   const [isLoadingAll, setIsLoadingAll] = useState(false);
+  const [historicalStats, setHistoricalStats] = useState<{
+    count: number;
+    totalAmount: number;
+  } | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isSettling, setIsSettling] = useState(false);
 
   const clearFinancialData = useMutation({
     mutationFn: async () => {
@@ -167,6 +173,77 @@ export default function Settings() {
     },
   });
 
+  const analyzeHistoricalSubscriptions = useMutation({
+    mutationFn: async () => {
+      setIsAnalyzing(true);
+      const { data, error } = await supabase
+        .from('souscriptions')
+        .select('id, prix_total, solde_restant, type_souscription')
+        .in('type_souscription', ['historique', 'mise_en_garde'])
+        .gt('solde_restant', 0);
+      
+      if (error) throw error;
+      
+      const count = data?.length || 0;
+      const totalAmount = data?.reduce((sum, sub) => sum + (sub.solde_restant || 0), 0) || 0;
+      
+      return { count, totalAmount };
+    },
+    onSuccess: (stats) => {
+      setHistoricalStats(stats);
+      setIsAnalyzing(false);
+      toast({
+        title: "📊 Analyse terminée",
+        description: `${stats.count} souscriptions historiques trouvées avec un solde de ${stats.totalAmount.toLocaleString()} FCFA`,
+      });
+    },
+    onError: (error: any) => {
+      setIsAnalyzing(false);
+      toast({
+        title: "❌ Erreur d'analyse",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const settleHistoricalSubscriptions = useMutation({
+    mutationFn: async () => {
+      setIsSettling(true);
+      
+      // Générer les paiements manquants
+      const { data: paymentsData, error: paymentsError } = await supabase
+        .rpc('generate_missing_historical_payments');
+      
+      if (paymentsError) throw paymentsError;
+      
+      // Corriger les soldes
+      const { data: balancesData, error: balancesError } = await supabase
+        .rpc('fix_historical_subscription_balances');
+      
+      if (balancesError) throw balancesError;
+      
+      return { paymentsData, balancesData };
+    },
+    onSuccess: () => {
+      setIsSettling(false);
+      setHistoricalStats(null);
+      queryClient.invalidateQueries({ queryKey: ['souscriptions'] });
+      toast({
+        title: "✅ Souscriptions soldées",
+        description: "Toutes les souscriptions historiques ont été soldées avec succès",
+      });
+    },
+    onError: (error: any) => {
+      setIsSettling(false);
+      toast({
+        title: "❌ Erreur de solde",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const canDelete = confirmText === "SUPPRIMER TOUT";
   const canDeleteClients = confirmClientText === "SUPPRIMER TOUS LES CLIENTS";
   const canDeleteAll = confirmAllText === "VIDER COMPLETEMENT LA BASE";
@@ -246,6 +323,62 @@ export default function Settings() {
                   Identifiez et générez automatiquement les reçus manqués lors d'imports précédents
                 </p>
                 <MissingReceiptsRecovery />
+              </div>
+              
+              <div className="border-t pt-4">
+                <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                  <Calculator className="w-4 h-4" />
+                  Solder les souscriptions historiques
+                </h4>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Génère automatiquement les paiements manqués pour marquer les souscriptions historiques comme entièrement payées
+                </p>
+                
+                <div className="space-y-3">
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => analyzeHistoricalSubscriptions.mutate()}
+                      disabled={isAnalyzing}
+                      className="flex-1"
+                    >
+                      <Calculator className="w-4 h-4 mr-2" />
+                      {isAnalyzing ? "Analyse..." : "Analyser"}
+                    </Button>
+                    
+                    {historicalStats && (
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() => settleHistoricalSubscriptions.mutate()}
+                        disabled={isSettling || historicalStats.count === 0}
+                        className="flex-1 bg-green-600 hover:bg-green-700"
+                      >
+                        <CheckCircle2 className="w-4 h-4 mr-2" />
+                        {isSettling ? "Solde en cours..." : "Solder toutes"}
+                      </Button>
+                    )}
+                  </div>
+                  
+                  {historicalStats && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="font-medium">Souscriptions à solder :</span>
+                        <Badge variant="secondary">{historicalStats.count}</Badge>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="font-medium">Montant total :</span>
+                        <span className="font-mono">{historicalStats.totalAmount.toLocaleString()} FCFA</span>
+                      </div>
+                      {historicalStats.count === 0 && (
+                        <p className="text-sm text-green-600 font-medium">
+                          ✅ Toutes les souscriptions historiques sont déjà soldées
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </CardContent>
