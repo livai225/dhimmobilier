@@ -237,7 +237,9 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
             if (row.length < 6) continue;
 
             const nomEtPrenoms = String(row[0] || '').trim();
-            const loyer = parseAmount(row[1]);
+            // Pour les droits de terre, la colonne B contient le montant mensuel des droits de terre
+            // Pour les loyers, la colonne B contient le loyer mensuel
+            const loyer = parseAmount(row[1]); // Renommé pour compatibilité, mais contient le montant selon le type
             const site = String(row[2] || '').trim();
             const numeroTelephone = String(row[3] || '').trim();
             const typeHabitation = String(row[4] || '').trim();
@@ -615,18 +617,23 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
 
       return location;
     } else {
-      // Créer souscription
+      // Créer souscription pour droits de terre
+      const currentDate = new Date().toISOString().split('T')[0];
       const { data: souscription } = await supabase
         .from('souscriptions')
         .insert({
           client_id: client.id,
           propriete_id: property.id,
-          prix_total: row.loyer * 120, // 10 ans de loyer comme prix total
-          montant_mensuel: row.loyer,
-          nombre_mois: 120,
-          date_debut: new Date().toISOString().split('T')[0],
-          solde_restant: row.loyer * 120,
-          type_souscription: 'historique'
+          prix_total: row.loyer * 240, // 20 ans de droits de terre
+          montant_mensuel: 0, // Pas de paiement mensuel pour les droits de terre
+          nombre_mois: 0,
+          date_debut: currentDate,
+          solde_restant: 0, // Pas de solde restant pour les droits de terre
+          type_souscription: 'historique',
+          phase_actuelle: 'droit_terre',
+          montant_droit_terre_mensuel: row.loyer, // Montant mensuel des droits de terre
+          date_debut_droit_terre: currentDate, // Date de début des droits de terre
+          type_bien: row.typeHabitation || 'terrain'
         })
         .select()
         .single();
