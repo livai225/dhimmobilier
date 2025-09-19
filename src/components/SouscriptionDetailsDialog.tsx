@@ -389,7 +389,10 @@ export function SouscriptionDetailsDialog({
                     Le client devra commencer à payer le droit de terre :
                   </p>
                   <p className="font-medium mb-3">
-                    À partir du {souscription.date_debut ? format(new Date(souscription.date_debut), "dd MMMM yyyy", { locale: fr }) : "-"}
+                    À partir du {souscription.date_debut_droit_terre 
+                      ? format(new Date(souscription.date_debut_droit_terre), "dd MMMM yyyy", { locale: fr })
+                      : "Non configuré"
+                    }
                   </p>
                   <p className="text-sm text-muted-foreground">
                     Période de paiement : <span className="font-medium">20 ans (240 mois)</span>

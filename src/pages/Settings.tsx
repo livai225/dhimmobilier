@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ImportClientsFromExcel } from "@/components/ImportClientsFromExcel";
 import { DuplicateClientManager } from "@/components/DuplicateClientManager";
 import { MissingReceiptsRecovery } from "@/components/MissingReceiptsRecovery";
+import { LandRightsReconstruction } from "@/components/LandRightsReconstruction";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -323,6 +324,14 @@ export default function Settings() {
                   Identifiez et générez automatiquement les reçus manqués lors d'imports précédents
                 </p>
                 <MissingReceiptsRecovery />
+              </div>
+              
+              <div className="border-t pt-4">
+                <h4 className="text-sm font-medium mb-2">Configuration des droits de terre</h4>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Reconstituer la configuration des droits de terre à partir des données d'import Excel
+                </p>
+                <LandRightsReconstruction />
               </div>
               
               <div className="border-t pt-4">

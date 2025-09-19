@@ -1109,6 +1109,15 @@ export type Database = {
         Args: { amount: number }
         Returns: boolean
       }
+      create_missing_august_payments: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          client_nom: string
+          date_paiement: string
+          montant_cree: number
+          souscription_id: string
+        }[]
+      }
       fix_historical_subscription_balances: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -1247,6 +1256,16 @@ export type Database = {
       recalculate_cash_balances: {
         Args: Record<PropertyKey, never>
         Returns: undefined
+      }
+      reconstruct_land_rights_config: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          ancien_montant: number
+          date_debut_droit_terre: string
+          nouveau_montant: number
+          phase_mise_a_jour: string
+          souscription_id: string
+        }[]
       }
       record_cash_transaction: {
         Args: {
