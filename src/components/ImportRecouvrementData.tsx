@@ -371,8 +371,8 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
     return { property: newProperty, created: true };
   };
 
-  // Generate monthly payments from Excel data - Amélioré pour support import par mois
-  const generateMonthlyPayments = async (contractId: string, contractType: 'location' | 'souscription', paiementsMensuels: number[], simulate: boolean) => {
+  // Generate monthly payments from Excel data with improved error handling
+  const generateMonthlyPayments = async (contractId: string, contractType: 'location' | 'souscription', paiementsMensuels: number[], simulate: boolean, clientName: string = '') => {
     // En mode simulation, compter seulement les paiements qui seraient importés
     if (simulate) {
       if (selectedMonth === 'all') {
@@ -383,7 +383,50 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
       }
     }
 
+    // Validation des paramètres
+    if (!contractId || contractId.startsWith('simulated')) {
+      throw new Error(`ID de contrat invalide: ${contractId}`);
+    }
+
+    if (!Array.isArray(paiementsMensuels) || paiementsMensuels.length !== 12) {
+      throw new Error('Données de paiements mensuels invalides');
+    }
+
+    // Vérifier l'existence du contrat
+    let contractExists = false;
+    try {
+      if (contractType === 'location') {
+        const { data, error } = await supabase
+          .from('locations')
+          .select('id, client_id, loyer_mensuel')
+          .eq('id', contractId)
+          .single();
+        
+        if (error) throw new Error(`Contrat location introuvable: ${error.message}`);
+        contractExists = !!data;
+        console.log(`✅ [Payment] Contrat location trouvé: ${contractId} (${clientName})`);
+      } else {
+        const { data, error } = await supabase
+          .from('souscriptions')
+          .select('id, client_id, montant_mensuel')
+          .eq('id', contractId)
+          .single();
+        
+        if (error) throw new Error(`Contrat souscription introuvable: ${error.message}`);
+        contractExists = !!data;
+        console.log(`✅ [Payment] Contrat souscription trouvé: ${contractId} (${clientName})`);
+      }
+    } catch (error) {
+      console.error(`❌ [Payment] Erreur vérification contrat ${contractId}:`, error);
+      throw error;
+    }
+
+    if (!contractExists) {
+      throw new Error(`Contrat ${contractType} ${contractId} introuvable en base`);
+    }
+
     let paymentsCount = 0;
+    const paymentErrors: string[] = [];
     const monthNames = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 
                        'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
     
@@ -395,42 +438,57 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
       const montant = paiementsMensuels[monthIndex];
       
       if (montant > 0) {
+        console.log(`💰 [Payment] Tentative paiement ${monthNames[monthIndex]} pour ${clientName}: ${montant} FCFA`);
         const paymentDate = new Date(currentYear, monthIndex, 15).toISOString().split('T')[0];
         
         try {
+          let rpcResult;
           if (contractType === 'location') {
-            await supabase.rpc('pay_location_with_cash', {
+            const { data, error } = await supabase.rpc('pay_location_with_cash', {
               p_location_id: contractId,
               p_montant: montant,
               p_date_paiement: paymentDate,
-              p_mode_paiement: 'espece',
+              p_mode_paiement: 'especes',
               p_reference: `Import ${monthNames[monthIndex]} ${currentYear}`,
               p_description: `Import données recouvrement - ${monthNames[monthIndex]}`
             });
+            
+            if (error) throw error;
+            rpcResult = data;
           } else {
             if (operationType === 'droit_terre') {
-              await supabase.rpc('pay_droit_terre_with_cash', {
+              const { data, error } = await supabase.rpc('pay_droit_terre_with_cash', {
                 p_souscription_id: contractId,
                 p_montant: montant,
                 p_date_paiement: paymentDate,
-                p_mode_paiement: 'espece',
+                p_mode_paiement: 'especes',
                 p_reference: `Import ${monthNames[monthIndex]} ${currentYear}`,
                 p_description: `Import données recouvrement - ${monthNames[monthIndex]}`
               });
+              
+              if (error) throw error;
+              rpcResult = data;
             } else {
-              await supabase.rpc('pay_souscription_with_cash', {
+              const { data, error } = await supabase.rpc('pay_souscription_with_cash', {
                 p_souscription_id: contractId,
                 p_montant: montant,
                 p_date_paiement: paymentDate,
-                p_mode_paiement: 'espece',
+                p_mode_paiement: 'especes',
                 p_reference: `Import ${monthNames[monthIndex]} ${currentYear}`,
                 p_description: `Import données recouvrement - ${monthNames[monthIndex]}`
               });
+              
+              if (error) throw error;
+              rpcResult = data;
             }
           }
+          
+          console.log(`✅ [Payment] Paiement ${monthNames[monthIndex]} réussi pour ${clientName}:`, rpcResult);
           paymentsCount++;
         } catch (error) {
-          console.error(`Erreur paiement ${monthNames[monthIndex]}:`, error);
+          const errorMsg = `Erreur paiement ${monthNames[monthIndex]} (${montant} FCFA): ${error instanceof Error ? error.message : 'Erreur inconnue'}`;
+          console.error(`❌ [Payment] ${errorMsg}`, error);
+          paymentErrors.push(errorMsg);
         }
       }
     } else {
@@ -439,46 +497,67 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
         const montant = paiementsMensuels[i];
         if (montant <= 0) continue;
 
+        console.log(`💰 [Payment] Tentative paiement ${monthNames[i]} pour ${clientName}: ${montant} FCFA`);
         const paymentDate = new Date(currentYear, i, 15).toISOString().split('T')[0];
         
         try {
+          let rpcResult;
           if (contractType === 'location') {
-            await supabase.rpc('pay_location_with_cash', {
+            const { data, error } = await supabase.rpc('pay_location_with_cash', {
               p_location_id: contractId,
               p_montant: montant,
               p_date_paiement: paymentDate,
-              p_mode_paiement: 'espece',
+              p_mode_paiement: 'especes',
               p_reference: `Import ${monthNames[i]} ${currentYear}`,
               p_description: 'Import données recouvrement'
             });
+            
+            if (error) throw error;
+            rpcResult = data;
           } else {
             if (operationType === 'droit_terre') {
-              await supabase.rpc('pay_droit_terre_with_cash', {
+              const { data, error } = await supabase.rpc('pay_droit_terre_with_cash', {
                 p_souscription_id: contractId,
                 p_montant: montant,
                 p_date_paiement: paymentDate,
-                p_mode_paiement: 'espece',
+                p_mode_paiement: 'especes',
                 p_reference: `Import ${monthNames[i]} ${currentYear}`,
                 p_description: 'Import données recouvrement'
               });
+              
+              if (error) throw error;
+              rpcResult = data;
             } else {
-              await supabase.rpc('pay_souscription_with_cash', {
+              const { data, error } = await supabase.rpc('pay_souscription_with_cash', {
                 p_souscription_id: contractId,
                 p_montant: montant,
                 p_date_paiement: paymentDate,
-                p_mode_paiement: 'espece',
+                p_mode_paiement: 'especes',
                 p_reference: `Import ${monthNames[i]} ${currentYear}`,
                 p_description: 'Import données recouvrement'
               });
+              
+              if (error) throw error;
+              rpcResult = data;
             }
           }
+          
+          console.log(`✅ [Payment] Paiement ${monthNames[i]} réussi pour ${clientName}:`, rpcResult);
           paymentsCount++;
         } catch (error) {
-          console.error(`Erreur paiement ${monthNames[i]}:`, error);
+          const errorMsg = `Erreur paiement ${monthNames[i]} (${montant} FCFA): ${error instanceof Error ? error.message : 'Erreur inconnue'}`;
+          console.error(`❌ [Payment] ${errorMsg}`, error);
+          paymentErrors.push(errorMsg);
         }
       }
     }
 
+    // Si des erreurs sont survenues, les remonter
+    if (paymentErrors.length > 0) {
+      throw new Error(`Erreurs de paiement pour ${clientName}: ${paymentErrors.join(', ')}`);
+    }
+
+    console.log(`📊 [Payment] Total paiements créés pour ${clientName}: ${paymentsCount}`);
     return paymentsCount;
   };
 
@@ -587,86 +666,109 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
           }
 
           if (client && property) {
-            if (operationType === 'loyer') {
-              if (simulate) {
-                // En simulation, simuler la création sans appel DB
-                result.locationsCreated++;
-                const paymentsCount = await generateMonthlyPayments('simulated-location', 'location', row.paiementsMensuels, simulate);
-                result.paymentsImported += paymentsCount;
-              } else {
-                // Create location
-                const { data: newLocation, error: locationError } = await supabase
-                  .from('locations')
-                  .insert({
-                    client_id: client.id,
-                    propriete_id: property.id,
-                    loyer_mensuel: row.loyer,
-                    caution: row.loyer * 2,
-                    date_debut: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                    statut: 'active',
-                    type_contrat: 'historique'
-                  })
-                  .select()
-                  .single();
+              if (operationType === 'loyer') {
+                if (simulate) {
+                  // En simulation, simuler la création sans appel DB
+                  result.locationsCreated++;
+                  const paymentsCount = await generateMonthlyPayments('simulated-location', 'location', row.paiementsMensuels, simulate, row.nomEtPrenoms);
+                  result.paymentsImported += paymentsCount;
+                } else {
+                  console.log(`🏠 [Import] Création location pour ${row.nomEtPrenoms} sur ${row.site}`);
+                  
+                  // Create location
+                  const { data: newLocation, error: locationError } = await supabase
+                    .from('locations')
+                    .insert({
+                      client_id: client.id,
+                      propriete_id: property.id,
+                      loyer_mensuel: row.loyer,
+                      caution: row.loyer * 2,
+                      date_debut: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                      statut: 'active',
+                      type_contrat: 'historique'
+                    })
+                    .select()
+                    .single();
 
-                if (locationError) throw locationError;
-                
-                result.locationsCreated++;
-                
-                // Generate monthly payments
-                const paymentsCount = await generateMonthlyPayments(newLocation.id, 'location', row.paiementsMensuels, simulate);
-                result.paymentsImported += paymentsCount;
-              }
-            } else {
-              // Create subscription for droit de terre
-              const totalDu = row.arrieres + (row.loyer * 12); // Arriérés + montant annuel
-              
-              if (simulate) {
-                // En simulation, simuler la création sans appel DB
-                result.souscriptionsCreated++;
-                const paymentsCount = await generateMonthlyPayments('simulated-souscription', 'souscription', row.paiementsMensuels, simulate);
-                result.paymentsImported += paymentsCount;
+                  if (locationError) {
+                    console.error(`❌ [Import] Erreur création location:`, locationError);
+                    throw locationError;
+                  }
+                  
+                  console.log(`✅ [Import] Location créée: ${newLocation.id}`);
+                  result.locationsCreated++;
+                  
+                  // Generate monthly payments avec gestion d'erreur améliorée
+                  try {
+                    const paymentsCount = await generateMonthlyPayments(newLocation.id, 'location', row.paiementsMensuels, simulate, row.nomEtPrenoms);
+                    result.paymentsImported += paymentsCount;
+                  } catch (paymentError) {
+                    console.error(`❌ [Import] Erreur paiements pour ${row.nomEtPrenoms}:`, paymentError);
+                    result.errors.push(`${row.nomEtPrenoms}: Erreur génération paiements - ${paymentError instanceof Error ? paymentError.message : 'Erreur inconnue'}`);
+                  }
+                }
               } else {
-                // Pour les droits de terre, créer directement en phase droit_terre
-                const dateDebut = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-                const { data: newSouscription, error: souscriptionError } = await supabase
-                  .from('souscriptions')
-                  .insert({
-                    client_id: client.id,
-                    propriete_id: property.id,
-                    prix_total: totalDu,
-                    apport_initial: 0,
-                    montant_mensuel: row.loyer,
-                    nombre_mois: 240, // 20 ans pour droit de terre
-                    date_debut: dateDebut,
-                    solde_restant: Math.max(0, totalDu - row.totalPaye),
-                    type_souscription: 'mise_en_garde',
-                    type_bien: 'terrain',
-                    statut: 'active',
-                    montant_droit_terre_mensuel: row.loyer,
-                    // Configuration directe pour phase droit de terre
-                    phase_actuelle: 'droit_terre',
-                    date_debut_droit_terre: dateDebut,
-                    date_fin_finition: new Date(new Date(dateDebut).getTime() + 9 * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] // 9 mois après début
-                  })
-                  .select()
-                  .single();
+                // Create subscription for droit de terre
+                const totalDu = row.arrieres + (row.loyer * 12); // Arriérés + montant annuel
+                
+                if (simulate) {
+                  // En simulation, simuler la création sans appel DB
+                  result.souscriptionsCreated++;
+                  const paymentsCount = await generateMonthlyPayments('simulated-souscription', 'souscription', row.paiementsMensuels, simulate, row.nomEtPrenoms);
+                  result.paymentsImported += paymentsCount;
+                } else {
+                  console.log(`📋 [Import] Création souscription droit de terre pour ${row.nomEtPrenoms} sur ${row.site}`);
+                  
+                  // Pour les droits de terre, créer directement en phase droit_terre
+                  const dateDebut = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+                  const { data: newSouscription, error: souscriptionError } = await supabase
+                    .from('souscriptions')
+                    .insert({
+                      client_id: client.id,
+                      propriete_id: property.id,
+                      prix_total: totalDu,
+                      apport_initial: 0,
+                      montant_mensuel: row.loyer,
+                      nombre_mois: 240, // 20 ans pour droit de terre
+                      date_debut: dateDebut,
+                      solde_restant: Math.max(0, totalDu - row.totalPaye),
+                      type_souscription: 'mise_en_garde',
+                      type_bien: 'terrain',
+                      statut: 'active',
+                      montant_droit_terre_mensuel: row.loyer,
+                      // Configuration directe pour phase droit de terre
+                      phase_actuelle: 'droit_terre',
+                      date_debut_droit_terre: dateDebut,
+                      date_fin_finition: new Date(new Date(dateDebut).getTime() + 9 * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] // 9 mois après début
+                    })
+                    .select()
+                    .single();
 
-                if (souscriptionError) throw souscriptionError;
-                
-                result.souscriptionsCreated++;
-                
-                // Generate monthly payments
-                const paymentsCount = await generateMonthlyPayments(newSouscription.id, 'souscription', row.paiementsMensuels, simulate);
-                result.paymentsImported += paymentsCount;
+                  if (souscriptionError) {
+                    console.error(`❌ [Import] Erreur création souscription:`, souscriptionError);
+                    throw souscriptionError;
+                  }
+                  
+                  console.log(`✅ [Import] Souscription créée: ${newSouscription.id}`);
+                  result.souscriptionsCreated++;
+                  
+                  // Generate monthly payments avec gestion d'erreur améliorée
+                  try {
+                    const paymentsCount = await generateMonthlyPayments(newSouscription.id, 'souscription', row.paiementsMensuels, simulate, row.nomEtPrenoms);
+                    result.paymentsImported += paymentsCount;
+                  } catch (paymentError) {
+                    console.error(`❌ [Import] Erreur paiements pour ${row.nomEtPrenoms}:`, paymentError);
+                    result.errors.push(`${row.nomEtPrenoms}: Erreur génération paiements - ${paymentError instanceof Error ? paymentError.message : 'Erreur inconnue'}`);
+                  }
+                }
               }
-            }
 
             result.totalAmount += row.totalPaye;
           }
         } catch (error) {
-          console.error(`Erreur ligne ${i + 1}:`, error);
-          result.errors.push(`Ligne ${row.rowIndex}: ${error instanceof Error ? error.message : 'Erreur inconnue'}`);
+          const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+          console.error(`❌ [Import] Erreur ligne ${i + 1} (${row.nomEtPrenoms}):`, error);
+          result.errors.push(`Ligne ${row.rowIndex} (${row.nomEtPrenoms}): ${errorMessage}`);
         }
       }
 
@@ -678,17 +780,71 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
         console.log('🔍 [Import] Début de la vérification post-import...');
         
         // Brief delay to allow database triggers to complete
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        // Vérifier les paiements créés
+        let recentPayments = [];
+        try {
+          if (operationType === 'loyer') {
+            const { data: payments, error } = await supabase
+              .from('paiements_locations')
+              .select('id, location_id, montant, date_paiement')
+              .gte('created_at', new Date(Date.now() - 10 * 60 * 1000).toISOString()); // Last 10 minutes
+            
+            if (!error && payments) {
+              recentPayments = payments;
+              console.log(`💰 [Import] ${payments.length} paiements locations créés récemment`);
+            }
+          } else {
+            if (operationType === 'droit_terre') {
+              const { data: payments, error } = await supabase
+                .from('paiements_droit_terre')
+                .select('id, souscription_id, montant, date_paiement')
+                .gte('created_at', new Date(Date.now() - 10 * 60 * 1000).toISOString());
+              
+              if (!error && payments) {
+                recentPayments = payments;
+                console.log(`💰 [Import] ${payments.length} paiements droit de terre créés récemment`);
+              }
+            } else {
+              const { data: payments, error } = await supabase
+                .from('paiements_souscriptions')
+                .select('id, souscription_id, montant, date_paiement')
+                .gte('created_at', new Date(Date.now() - 10 * 60 * 1000).toISOString());
+              
+              if (!error && payments) {
+                recentPayments = payments;
+                console.log(`💰 [Import] ${payments.length} paiements souscriptions créés récemment`);
+              }
+            }
+          }
+        } catch (error) {
+          console.error('❌ [Import] Erreur vérification paiements:', error);
+        }
         
         // Verify receipts generation
         const { data: receiptsCreated, error: receiptsError } = await supabase
           .from('recus')
-          .select('id, type_operation, numero')
-          .gte('created_at', new Date(Date.now() - 5 * 60 * 1000).toISOString()); // Last 5 minutes
+          .select('id, type_operation, numero, montant_total, meta')
+          .gte('created_at', new Date(Date.now() - 10 * 60 * 1000).toISOString()); // Last 10 minutes
         
         if (!receiptsError && receiptsCreated) {
           result.receiptsGenerated = receiptsCreated.length;
-          console.log(`📋 [Import] ${receiptsCreated.length} reçus générés automatiquement`);
+          console.log(`📋 [Import] ${receiptsCreated.length} reçus générés automatiquement:`, 
+            receiptsCreated.map(r => `${r.numero} (${r.montant_total} FCFA)`));
+        } else if (receiptsError) {
+          console.error('❌ [Import] Erreur vérification reçus:', receiptsError);
+        }
+        
+        // Rapport détaillé des problèmes potentiels
+        if (result.paymentsImported === 0 && recentPayments.length === 0) {
+          console.warn('⚠️ [Import] ALERTE: Aucun paiement créé lors de l\'import !');
+          result.errors.push('ALERTE: Aucun paiement n\'a été créé lors de l\'import. Vérifiez les logs pour les détails.');
+        }
+        
+        if (result.receiptsGenerated === 0 && result.paymentsImported > 0) {
+          console.warn('⚠️ [Import] ALERTE: Paiements créés mais aucun reçu généré !');
+          result.errors.push('ALERTE: Des paiements ont été créés mais aucun reçu n\'a été généré automatiquement.');
         }
         
         // Log final summary
@@ -697,6 +853,7 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
           locationsCreated: result.locationsCreated,
           souscriptionsCreated: result.souscriptionsCreated,
           paymentsImported: result.paymentsImported,
+          paymentsFound: recentPayments.length,
           receiptsGenerated: result.receiptsGenerated,
           errors: result.errors.length
         });
