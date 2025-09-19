@@ -500,34 +500,56 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
     results: ImportResult, 
     simulate: boolean
   ) => {
-    // ÉTAPE 1: Créer/récupérer le client
-    const client = await createOrFindClient(row, simulate);
-    if (client.created) results.clientsCreated++;
-    else results.clientsMatched++;
+    try {
+      // ÉTAPE 1: Créer/récupérer le client
+      const client = await createOrFindClient(row, simulate);
+      if (client.created) results.clientsCreated++;
+      else results.clientsMatched++;
 
-    // ÉTAPE 2: Créer/récupérer la propriété
-    const { property } = await createPropertyForSite(row.site, row.typeHabitation, agent, simulate);
-    if (property) {
-      results.propertiesCreated++;
-    }
-
-    // ÉTAPE 3: Créer le contrat avec le montant du fichier Excel
-    const contract = await createContract(client, property, row, operationType, simulate);
-    if (contract) {
-      if (operationType === 'loyer') {
-        results.locationsCreated++;
-      } else {
-        results.souscriptionsCreated++;
+      // ÉTAPE 2: Créer/récupérer la propriété
+      const { property } = await createPropertyForSite(row.site, row.typeHabitation, agent, simulate);
+      if (property) {
+        results.propertiesCreated++;
       }
-    }
 
-    // ÉTAPE 4: Créer les paiements avec montants du fichier Excel (les reçus seront générés automatiquement)
-    if (contract && !simulate) {
-      const paymentsCreated = await createPaymentsFromExcel(contract, operationType, row.paiementsMensuels);
-      results.paymentsImported += paymentsCreated;
-    }
+      // ÉTAPE 3: Créer le contrat avec le montant du fichier Excel
+      const contract = await createContract(client, property, row, operationType, simulate);
+      if (contract) {
+        if (operationType === 'loyer') {
+          results.locationsCreated++;
+        } else {
+          results.souscriptionsCreated++;
+        }
+      }
 
-    results.totalAmount += row.totalPaye;
+      // ÉTAPE 4: Simuler ou créer les paiements avec montants du fichier Excel
+      if (contract) {
+        if (simulate) {
+          // En simulation, compter les paiements qui seraient créés
+          const paymentsCount = simulatePaymentsCount(row.paiementsMensuels);
+          results.paymentsImported += paymentsCount;
+        } else {
+          // En mode réel, créer les paiements (les reçus seront générés automatiquement)
+          const paymentsCreated = await createPaymentsFromExcel(contract, operationType, row.paiementsMensuels);
+          results.paymentsImported += paymentsCreated;
+        }
+      }
+
+      results.totalAmount += row.totalPaye;
+    } catch (error) {
+      console.error('Erreur lors du traitement de la ligne:', row.rowIndex, error);
+      results.errors.push(`Ligne ${row.rowIndex}: ${error instanceof Error ? error.message : 'Erreur inconnue'}`);
+    }
+  };
+
+  // Simulate payments count
+  const simulatePaymentsCount = (paiementsMensuels: number[]) => {
+    if (selectedMonth === 'all') {
+      return paiementsMensuels.filter(p => p > 0).length;
+    } else {
+      const monthIndex = parseInt(selectedMonth);
+      return paiementsMensuels[monthIndex] > 0 ? 1 : 0;
+    }
   };
 
   // Create or find client
@@ -536,33 +558,39 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
       return { id: `sim-client-${Date.now()}`, created: true };
     }
 
-    // Chercher client existant
-    const { data: existingClient } = await supabase
-      .from('clients')
-      .select('*')
-      .ilike('nom', `%${row.nomEtPrenoms}%`)
-      .maybeSingle();
+    try {
+      // Chercher client existant
+      const { data: existingClient } = await supabase
+        .from('clients')
+        .select('*')
+        .ilike('nom', `%${row.nomEtPrenoms}%`)
+        .maybeSingle();
 
-    if (existingClient) {
-      return { ...existingClient, created: false };
+      if (existingClient) {
+        return { ...existingClient, created: false };
+      }
+
+      // Créer nouveau client
+      const nameParts = row.nomEtPrenoms.trim().split(' ');
+      const nom = nameParts[nameParts.length - 1];
+      const prenom = nameParts.slice(0, -1).join(' ');
+
+      const { data: newClient, error } = await supabase
+        .from('clients')
+        .insert({
+          nom,
+          prenom,
+          telephone_principal: row.numeroTelephone
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return { ...newClient, created: true };
+    } catch (error) {
+      console.error('Erreur création client:', error);
+      throw new Error(`Impossible de créer le client ${row.nomEtPrenoms}`);
     }
-
-    // Créer nouveau client
-    const nameParts = row.nomEtPrenoms.trim().split(' ');
-    const nom = nameParts[nameParts.length - 1];
-    const prenom = nameParts.slice(0, -1).join(' ');
-
-    const { data: newClient } = await supabase
-      .from('clients')
-      .insert({
-        nom,
-        prenom,
-        telephone_principal: row.numeroTelephone
-      })
-      .select()
-      .single();
-
-    return { ...newClient, created: true };
   };
 
   // Create contract (location or souscription)
@@ -702,12 +730,8 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
         const row = previewData[i];
         setProgress(((i + 1) / previewData.length) * 100);
 
-        try {
-          await processRowSequentially(row, agent, operationType, results, simulate);
-        } catch (error) {
-          console.log("Erreur sur une ligne, on continue:", error);
-          // On continue même en cas d'erreur
-        }
+        // Traitement robuste avec gestion d'erreur par ligne
+        await processRowSequentially(row, agent, operationType, results, simulate);
       }
 
       // En mode réel, attendre que les triggers de reçus s'exécutent
@@ -732,29 +756,33 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
       if (simulate) {
         setSimulationCompleted(true);
         toast({
-          title: "Simulation terminée",
-          description: `${results.clientsCreated + results.clientsMatched} clients traités, ${results.paymentsImported} paiements simulés`,
-          variant: "default"
+          title: "Simulation terminée avec succès",
+          description: `${results.clientsCreated + results.clientsMatched} clients, ${results.paymentsImported} paiements simulés`,
         });
       } else {
         toast({
           title: "Import terminé avec succès !",
           description: `${results.locationsCreated + results.souscriptionsCreated} contrats créés avec leurs paiements et reçus`,
-          variant: "default"
         });
       }
 
-      console.log("Import terminé avec succès");
+      console.log("Import terminé avec succès", results);
       
     } catch (error) {
       console.error("Erreur d'import:", error);
+      const errorMessage = error instanceof Error ? error.message : "Une erreur critique est survenue lors de l'import";
+      
       toast({
         title: "Erreur d'import",
-        description: error instanceof Error ? error.message : "Une erreur est survenue",
+        description: errorMessage,
         variant: "destructive"
       });
+
+      // S'assurer que les résultats sont disponibles même en cas d'erreur
+      setResults(results);
     } finally {
       setIsImporting(false);
+      setProgress(100);
     }
   };
 
