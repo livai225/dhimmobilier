@@ -4,9 +4,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { AlertTriangle, CheckCircle, Loader2, Home, FileText } from "lucide-react";
+import { AlertTriangle, CheckCircle, Loader2, Home, FileText, Calendar } from "lucide-react";
 
 interface MissingPayment {
   locationId: string;
@@ -23,6 +24,16 @@ interface MissingDroitTerre {
   moisManquants: number;
   montantTotal: number;
   dateDebutDroitTerre: string;
+}
+
+interface MissingDroitTerreForMonth {
+  souscriptionId: string;
+  clientName: string;
+  propertyName: string;
+  montantMensuel: number;
+  moisCible: string;
+  dateDebutDroitTerre: string;
+  estDansLaPeriode: boolean;
 }
 
 interface RecoveryResult {
@@ -44,6 +55,11 @@ export const MissingReceiptsRecovery = () => {
   const [missingDroitTerre, setMissingDroitTerre] = useState<MissingDroitTerre[]>([]);
   const [droitTerreRecoveryResult, setDroitTerreRecoveryResult] = useState<RecoveryResult | null>(null);
   const [droitTerreProgress, setDroitTerreProgress] = useState(0);
+  
+  // États pour l'analyse par mois
+  const [selectedMonth, setSelectedMonth] = useState<string>('');
+  const [missingDroitTerreForMonth, setMissingDroitTerreForMonth] = useState<MissingDroitTerreForMonth[]>([]);
+  const [monthRecoveryResult, setMonthRecoveryResult] = useState<RecoveryResult | null>(null);
   
   const { toast } = useToast();
 
@@ -365,6 +381,207 @@ export const MissingReceiptsRecovery = () => {
     }
   };
 
+  // Analyser les droits de terre pour un mois spécifique
+  const analyzeMissingDroitTerreForMonth = async () => {
+    if (!selectedMonth) {
+      toast({
+        title: "Mois non sélectionné",
+        description: "Veuillez sélectionner un mois avant d'analyser",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsAnalyzing(true);
+    try {
+      console.log(`Analyse des droits de terre manquants pour ${selectedMonth}...`);
+      
+      // Récupérer toutes les souscriptions en phase droit_terre
+      const { data: souscriptionsData, error: souscriptionsError } = await supabase
+        .from('souscriptions')
+        .select(`
+          id,
+          montant_droit_terre_mensuel,
+          date_debut_droit_terre,
+          clients!inner(nom, prenom),
+          proprietes!inner(nom)
+        `)
+        .eq('phase_actuelle', 'droit_terre')
+        .eq('type_souscription', 'mise_en_garde')
+        .not('date_debut_droit_terre', 'is', null)
+        .not('montant_droit_terre_mensuel', 'is', null)
+        .gt('montant_droit_terre_mensuel', 0);
+
+      if (souscriptionsError) throw souscriptionsError;
+
+      if (!souscriptionsData?.length) {
+        toast({
+          title: "Aucune souscription en droit de terre",
+          description: "Aucune souscription en phase droit de terre trouvée",
+        });
+        setMissingDroitTerreForMonth([]);
+        return;
+      }
+
+      // Analyser chaque souscription pour le mois sélectionné
+      const missing: MissingDroitTerreForMonth[] = [];
+      const [year, month] = selectedMonth.split('-');
+      const targetDate = new Date(parseInt(year), parseInt(month) - 1, 1);
+      
+      for (const souscription of souscriptionsData) {
+        const dateDebut = new Date(souscription.date_debut_droit_terre);
+        
+        // Vérifier si le mois sélectionné est dans la période active
+        const estDansLaPeriode = targetDate >= dateDebut;
+        
+        if (!estDansLaPeriode) continue;
+
+        // Vérifier s'il existe déjà un paiement pour ce mois
+        const startOfMonth = new Date(parseInt(year), parseInt(month) - 1, 1);
+        const endOfMonth = new Date(parseInt(year), parseInt(month), 0);
+        
+        const { data: paiements, error: paiementsError } = await supabase
+          .from('paiements_droit_terre')
+          .select('id')
+          .eq('souscription_id', souscription.id)
+          .gte('date_paiement', startOfMonth.toISOString().split('T')[0])
+          .lte('date_paiement', endOfMonth.toISOString().split('T')[0]);
+
+        if (paiementsError) {
+          console.error(`Erreur paiements pour ${souscription.id}:`, paiementsError);
+          continue;
+        }
+
+        // Si aucun paiement trouvé pour ce mois, l'ajouter aux manquants
+        if (!paiements?.length) {
+          missing.push({
+            souscriptionId: souscription.id,
+            clientName: `${souscription.clients.prenom || ''} ${souscription.clients.nom}`.trim(),
+            propertyName: souscription.proprietes.nom,
+            montantMensuel: souscription.montant_droit_terre_mensuel,
+            moisCible: selectedMonth,
+            dateDebutDroitTerre: souscription.date_debut_droit_terre,
+            estDansLaPeriode: true
+          });
+        }
+      }
+
+      setMissingDroitTerreForMonth(missing);
+
+      toast({
+        title: "Analyse terminée",
+        description: `${missing.length} souscriptions sans paiement pour ${getMonthName(selectedMonth)}`,
+      });
+
+    } catch (error) {
+      console.error('Erreur lors de l\'analyse par mois:', error);
+      toast({
+        title: "Erreur d'analyse",
+        description: "Impossible d'analyser les droits de terre pour ce mois",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  // Générer les paiements pour le mois sélectionné
+  const generateMissingPaymentsForMonth = async () => {
+    if (!missingDroitTerreForMonth.length) return;
+
+    setIsRecovering(true);
+    setDroitTerreProgress(0);
+    
+    const result: RecoveryResult = { success: 0, errors: [] };
+    
+    try {
+      console.log(`Génération de paiements pour ${missingDroitTerreForMonth.length} souscriptions pour ${selectedMonth}...`);
+
+      const [year, month] = selectedMonth.split('-');
+      const paymentDate = new Date(parseInt(year), parseInt(month) - 1, 1);
+
+      for (let i = 0; i < missingDroitTerreForMonth.length; i++) {
+        const droitTerre = missingDroitTerreForMonth[i];
+        setDroitTerreProgress(((i + 1) / missingDroitTerreForMonth.length) * 100);
+
+        try {
+          console.log(`Génération paiement pour ${droitTerre.clientName} - ${selectedMonth}`);
+          
+          const { data, error } = await supabase.rpc('pay_droit_terre_with_cash', {
+            p_souscription_id: droitTerre.souscriptionId,
+            p_montant: droitTerre.montantMensuel,
+            p_date_paiement: paymentDate.toISOString().split('T')[0],
+            p_mode_paiement: 'Espèces',
+            p_reference: `DT-${selectedMonth}-${Date.now()}`,
+            p_description: `Paiement droit de terre ${getMonthName(selectedMonth)}`
+          });
+
+          if (error) {
+            console.error(`Erreur RPC pour ${droitTerre.souscriptionId}:`, error);
+            result.errors.push({
+              id: droitTerre.souscriptionId,
+              error: error.message,
+              clientName: droitTerre.clientName
+            });
+          } else {
+            result.success++;
+          }
+
+        } catch (error: any) {
+          console.error(`Erreur génération pour ${droitTerre.souscriptionId}:`, error);
+          result.errors.push({
+            id: droitTerre.souscriptionId,
+            error: error.message || 'Erreur inconnue',
+            clientName: droitTerre.clientName
+          });
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+
+      setDroitTerreProgress(100);
+      setMonthRecoveryResult(result);
+
+      toast({
+        title: "Génération terminée",
+        description: `${result.success} paiements générés pour ${getMonthName(selectedMonth)}, ${result.errors.length} erreurs`,
+        variant: result.errors.length > 0 ? "destructive" : "default",
+      });
+
+    } catch (error) {
+      console.error('Erreur globale de génération:', error);
+      toast({
+        title: "Erreur de génération",
+        description: "Erreur lors de la génération des paiements",
+        variant: "destructive",
+      });
+    } finally {
+      setIsRecovering(false);
+    }
+  };
+
+  // Utilitaire pour obtenir le nom du mois
+  const getMonthName = (monthYear: string) => {
+    const [year, month] = monthYear.split('-');
+    const date = new Date(parseInt(year), parseInt(month) - 1);
+    return date.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+  };
+
+  // Générer les options de mois (12 derniers mois)
+  const generateMonthOptions = () => {
+    const options = [];
+    const now = new Date();
+    
+    for (let i = 0; i < 12; i++) {
+      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const label = date.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+      options.push({ value, label });
+    }
+    
+    return options;
+  };
+
   return (
     <Card className="w-full max-w-4xl mx-auto">
       <CardHeader>
@@ -502,13 +719,172 @@ export const MissingReceiptsRecovery = () => {
           </TabsContent>
 
           <TabsContent value="droitTerre" className="space-y-6 mt-6">
-            {/* Analyse Droits de Terre */}
+            {/* Analyse par mois spécifique */}
             <div className="space-y-4">
-              <h3 className="text-lg font-medium">Étape 1: Analyser les droits de terre manquants</h3>
+              <h3 className="text-lg font-medium flex items-center gap-2">
+                <Calendar className="h-5 w-5" />
+                Analyser les droits de terre par mois
+              </h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Sélectionner le mois :</label>
+                  <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choisir un mois..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {generateMonthOptions().map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="flex items-end">
+                  <Button 
+                    onClick={analyzeMissingDroitTerreForMonth} 
+                    disabled={isAnalyzing || !selectedMonth}
+                    className="w-full"
+                  >
+                    {isAnalyzing ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Analyse en cours...
+                      </>
+                    ) : (
+                      "Analyser ce mois"
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {/* Résultats analyse par mois */}
+            {selectedMonth && missingDroitTerreForMonth.length > 0 && (
+              <>
+                <Alert>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    <strong>{missingDroitTerreForMonth.length} souscriptions</strong> sans paiement pour {getMonthName(selectedMonth)}.
+                    Montant total: <strong>{missingDroitTerreForMonth.reduce((sum, p) => sum + p.montantMensuel, 0).toLocaleString()} FCFA</strong>
+                  </AlertDescription>
+                </Alert>
+
+                <div className="max-h-60 overflow-y-auto border rounded-lg p-4">
+                  <h4 className="font-medium mb-2">Paiements à générer pour {getMonthName(selectedMonth)} :</h4>
+                  <div className="space-y-2">
+                    {missingDroitTerreForMonth.slice(0, 10).map((droitTerre, index) => (
+                      <div key={droitTerre.souscriptionId} className="flex justify-between text-sm">
+                        <div>
+                          <span className="font-medium">{droitTerre.clientName}</span>
+                          <div className="text-muted-foreground text-xs">{droitTerre.propertyName}</div>
+                        </div>
+                        <span className="font-medium">{droitTerre.montantMensuel.toLocaleString()} FCFA</span>
+                      </div>
+                    ))}
+                    {missingDroitTerreForMonth.length > 10 && (
+                      <div className="text-sm text-muted-foreground">
+                        ... et {missingDroitTerreForMonth.length - 10} autres
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h3 className="text-lg font-medium">Confirmer et générer les paiements</h3>
+                  <Alert className="border-orange-200 bg-orange-50">
+                    <AlertTriangle className="h-4 w-4 text-orange-600" />
+                    <AlertDescription className="text-orange-800">
+                      Vous allez générer <strong>{missingDroitTerreForMonth.length} paiements</strong> pour le mois de <strong>{getMonthName(selectedMonth)}</strong>.
+                      Montant total: <strong>{missingDroitTerreForMonth.reduce((sum, p) => sum + p.montantMensuel, 0).toLocaleString()} FCFA</strong>
+                    </AlertDescription>
+                  </Alert>
+                  
+                  {isRecovering && (
+                    <div className="space-y-2">
+                      <Progress value={droitTerreProgress} className="w-full" />
+                      <p className="text-sm text-center text-muted-foreground">
+                        Génération en cours... {Math.round(droitTerreProgress)}%
+                      </p>
+                    </div>
+                  )}
+
+                  <Button 
+                    onClick={generateMissingPaymentsForMonth}
+                    disabled={isRecovering}
+                    variant="destructive"
+                    className="w-full"
+                  >
+                    {isRecovering ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Génération en cours...
+                      </>
+                    ) : (
+                      `Oui, générer les ${missingDroitTerreForMonth.length} paiements`
+                    )}
+                  </Button>
+                </div>
+              </>
+            )}
+
+            {/* Message si aucun paiement manquant */}
+            {selectedMonth && missingDroitTerreForMonth.length === 0 && !isAnalyzing && (
+              <Alert className="border-green-200 bg-green-50">
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <AlertDescription className="text-green-800">
+                  Aucun paiement manquant pour {getMonthName(selectedMonth)}. Tous les droits de terre sont à jour !
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {/* Résultats génération par mois */}
+            {monthRecoveryResult && (
+              <>
+                <Alert className={monthRecoveryResult.errors.length > 0 ? "border-destructive" : "border-green-500 bg-green-50"}>
+                  <CheckCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    <div className="space-y-2">
+                      <p><strong>Génération terminée pour {getMonthName(selectedMonth)} !</strong></p>
+                      <p>✅ {monthRecoveryResult.success} paiements générés avec succès</p>
+                      {monthRecoveryResult.errors.length > 0 && (
+                        <p>❌ {monthRecoveryResult.errors.length} erreurs</p>
+                      )}
+                    </div>
+                  </AlertDescription>
+                </Alert>
+
+                {monthRecoveryResult.errors.length > 0 && (
+                  <div className="max-h-40 overflow-y-auto border rounded-lg p-4 bg-destructive/5">
+                    <h4 className="font-medium mb-2 text-destructive">Erreurs détectées:</h4>
+                    <div className="space-y-1">
+                      {monthRecoveryResult.errors.map((error, index) => (
+                        <div key={index} className="text-sm text-destructive">
+                          {error.clientName} ({error.id.slice(0, 8)}...): {error.error}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Séparateur */}
+            <div className="border-t pt-6">
+              <h3 className="text-lg font-medium text-muted-foreground">Analyse globale (ancienne méthode)</h3>
+            </div>
+
+            {/* Analyse Droits de Terre globale */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Analyser tous les droits de terre manquants</h3>
               <Button 
                 onClick={analyzeMissingDroitTerre} 
                 disabled={isAnalyzing}
                 className="w-full"
+                variant="outline"
               >
                 {isAnalyzing ? (
                   <>
@@ -516,7 +892,7 @@ export const MissingReceiptsRecovery = () => {
                     Analyse en cours...
                   </>
                 ) : (
-                  "Analyser les droits de terre sans paiements"
+                  "Analyser tous les droits de terre sans paiements"
                 )}
               </Button>
             </div>
