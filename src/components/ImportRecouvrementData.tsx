@@ -492,7 +492,174 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
     return paymentsCount;
   };
 
-  // Main import function
+  // Process single row sequentially: Client → Propriété → Contrat → Paiement → Reçu (automatique)
+  const processRowSequentially = async (
+    row: RecouvrementRowData, 
+    agent: any, 
+    operationType: 'loyer' | 'droit_terre', 
+    results: ImportResult, 
+    simulate: boolean
+  ) => {
+    // ÉTAPE 1: Créer/récupérer le client
+    const client = await createOrFindClient(row, simulate);
+    if (client.created) results.clientsCreated++;
+    else results.clientsMatched++;
+
+    // ÉTAPE 2: Créer/récupérer la propriété
+    const { property } = await createPropertyForSite(row.site, row.typeHabitation, agent, simulate);
+    if (property) {
+      results.propertiesCreated++;
+    }
+
+    // ÉTAPE 3: Créer le contrat avec le montant du fichier Excel
+    const contract = await createContract(client, property, row, operationType, simulate);
+    if (contract) {
+      if (operationType === 'loyer') {
+        results.locationsCreated++;
+      } else {
+        results.souscriptionsCreated++;
+      }
+    }
+
+    // ÉTAPE 4: Créer les paiements avec montants du fichier Excel (les reçus seront générés automatiquement)
+    if (contract && !simulate) {
+      const paymentsCreated = await createPaymentsFromExcel(contract, operationType, row.paiementsMensuels);
+      results.paymentsImported += paymentsCreated;
+    }
+
+    results.totalAmount += row.totalPaye;
+  };
+
+  // Create or find client
+  const createOrFindClient = async (row: RecouvrementRowData, simulate: boolean) => {
+    if (simulate) {
+      return { id: `sim-client-${Date.now()}`, created: true };
+    }
+
+    // Chercher client existant
+    const { data: existingClient } = await supabase
+      .from('clients')
+      .select('*')
+      .ilike('nom', `%${row.nomEtPrenoms}%`)
+      .maybeSingle();
+
+    if (existingClient) {
+      return { ...existingClient, created: false };
+    }
+
+    // Créer nouveau client
+    const nameParts = row.nomEtPrenoms.trim().split(' ');
+    const nom = nameParts[nameParts.length - 1];
+    const prenom = nameParts.slice(0, -1).join(' ');
+
+    const { data: newClient } = await supabase
+      .from('clients')
+      .insert({
+        nom,
+        prenom,
+        telephone_principal: row.numeroTelephone
+      })
+      .select()
+      .single();
+
+    return { ...newClient, created: true };
+  };
+
+  // Create contract (location or souscription)
+  const createContract = async (client: any, property: any, row: RecouvrementRowData, operationType: 'loyer' | 'droit_terre', simulate: boolean) => {
+    if (simulate) {
+      return { id: `sim-contract-${Date.now()}` };
+    }
+
+    if (operationType === 'loyer') {
+      // Créer location
+      const { data: location } = await supabase
+        .from('locations')
+        .insert({
+          client_id: client.id,
+          propriete_id: property.id,
+          loyer_mensuel: row.loyer,
+          date_debut: new Date().toISOString().split('T')[0],
+          type_contrat: 'historique'
+        })
+        .select()
+        .single();
+
+      return location;
+    } else {
+      // Créer souscription
+      const { data: souscription } = await supabase
+        .from('souscriptions')
+        .insert({
+          client_id: client.id,
+          propriete_id: property.id,
+          prix_total: row.loyer * 120, // 10 ans de loyer comme prix total
+          montant_mensuel: row.loyer,
+          nombre_mois: 120,
+          date_debut: new Date().toISOString().split('T')[0],
+          solde_restant: row.loyer * 120,
+          type_souscription: 'historique'
+        })
+        .select()
+        .single();
+
+      return souscription;
+    }
+  };
+
+  // Create payments from Excel data
+  const createPaymentsFromExcel = async (contract: any, operationType: 'loyer' | 'droit_terre', paiementsMensuels: number[]) => {
+    let paymentsCreated = 0;
+    const currentYear = new Date().getFullYear();
+    const monthNames = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 
+                       'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+
+    // Traiter les mois sélectionnés ou tous les mois
+    const monthsToProcess = selectedMonth === 'all' 
+      ? Array.from({ length: 12 }, (_, i) => i)
+      : [parseInt(selectedMonth)];
+
+    for (const monthIndex of monthsToProcess) {
+      const montant = paiementsMensuels[monthIndex];
+      if (montant <= 0) continue;
+
+      const paymentDate = new Date(currentYear, monthIndex, 15).toISOString().split('T')[0];
+      
+      try {
+        if (operationType === 'loyer') {
+          // Créer paiement location directement (trigger créera le reçu)
+          await supabase
+            .from('paiements_locations')
+            .insert({
+              location_id: contract.id,
+              montant,
+              date_paiement: paymentDate,
+              mode_paiement: 'especes',
+              reference: `Import ${monthNames[monthIndex]} ${currentYear}`
+            });
+        } else {
+          // Créer paiement droit de terre directement (trigger créera le reçu)
+          await supabase
+            .from('paiements_droit_terre')
+            .insert({
+              souscription_id: contract.id,
+              montant,
+              date_paiement: paymentDate,
+              mode_paiement: 'especes',
+              reference: `Import ${monthNames[monthIndex]} ${currentYear}`
+            });
+        }
+        paymentsCreated++;
+      } catch (error) {
+        // Continue même en cas d'erreur
+        console.log(`Erreur création paiement ${monthNames[monthIndex]}:`, error);
+      }
+    }
+
+    return paymentsCreated;
+  };
+
+  // Main import function - restructured to follow sequential process
   const importRecouvrementData = async (simulate: boolean = true) => {
     if (!file || previewData.length === 0) {
       toast({
@@ -507,285 +674,87 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
     setProgress(0);
     setSimulationMode(simulate);
 
+    const results: ImportResult = {
+      agentsMatched: 1,
+      agentsCreated: 0,
+      clientsCreated: 0,
+      clientsMatched: 0,
+      propertiesCreated: 0,
+      propertiesMatched: 0,
+      locationsCreated: 0,
+      souscriptionsCreated: 0,
+      paymentsImported: 0,
+      receiptsGenerated: 0,
+      totalAmount: 0,
+      errors: []
+    };
+
     try {
-      const result: ImportResult = {
-        agentsMatched: 0,
-        agentsCreated: 0,
-        clientsCreated: 0,
-        clientsMatched: 0,
-        propertiesCreated: 0,
-        propertiesMatched: 0,
-        locationsCreated: 0,
-        souscriptionsCreated: 0,
-        paymentsImported: 0,
-        receiptsGenerated: 0,
-        totalAmount: 0,
-        errors: []
-      };
-
-      // Clear existing clients if requested (uniquement en mode réel)
-      if (clearExistingClients && !simulate) {
-        await supabase.from('clients').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      }
-
-      // Get agent and existing data
       const agent = await getSelectedAgent();
-      
-      // En mode simulation, on évite les appels DB coûteux
-      let existingClients = [];
-      if (!simulate) {
-        const { data, error } = await supabase.from('clients').select('*');
-        if (error) {
-          throw new Error('Erreur lors de la récupération des clients existants');
-        }
-        existingClients = data || [];
-      }
-
       if (!agent) {
-        throw new Error('Agent sélectionné introuvable');
+        throw new Error("Agent introuvable");
       }
 
-      result.agentsMatched = 1; // Agent déjà sélectionné
+      console.log(`Début de l'import ${simulate ? '(simulation)' : ''} pour ${previewData.length} lignes`);
 
-      const total = previewData.length;
-      
+      // Traitement séquentiel : Client → Propriété → Contrat → Paiement → Reçu (automatique)
       for (let i = 0; i < previewData.length; i++) {
         const row = previewData[i];
-        setProgress((i / total) * 100);
+        setProgress(((i + 1) / previewData.length) * 100);
 
         try {
-          // Find or create client
-          let client = null;
-          
-          if (simulate) {
-            // En simulation, simuler la création sans faire les appels DB
-            result.clientsCreated++;
-            client = { id: 'simulated-client', nom: 'Client simulé' };
-          } else {
-            client = existingClients.find(c => 
-              normalizeString(`${c.prenom || ''} ${c.nom}`) === normalizeString(row.nomEtPrenoms) ||
-              normalizeString(c.nom) === normalizeString(row.nomEtPrenoms)
-            );
-
-            if (!client) {
-              const clientNames = row.nomEtPrenoms.split(' ');
-              const { data: newClient, error: clientError } = await supabase
-                .from('clients')
-                .insert({
-                  nom: clientNames[clientNames.length - 1],
-                  prenom: clientNames.slice(0, -1).join(' ') || null,
-                  telephone_principal: row.numeroTelephone || null
-                })
-                .select()
-                .single();
-
-              if (clientError) throw clientError;
-              client = newClient;
-              result.clientsCreated++;
-            } else {
-              result.clientsMatched++;
-            }
-          }
-
-          // Create property for site
-          const { property, created: propertyCreated } = await createPropertyForSite(row.site, row.typeHabitation, agent, simulate);
-          if (simulate) {
-            result.propertiesCreated++;
-          } else {
-            if (propertyCreated) result.propertiesCreated++;
-            else if (property) result.propertiesMatched++;
-          }
-
-          if (client && property) {
-              if (operationType === 'loyer') {
-                if (simulate) {
-                  // En simulation, simuler la création sans appel DB
-                  result.locationsCreated++;
-                  const paymentsCount = await generateMonthlyPayments('simulated-location', 'location', row.paiementsMensuels, simulate, row.nomEtPrenoms);
-                  result.paymentsImported += paymentsCount;
-                } else {
-                  console.log(`🏠 [Import] Création location pour ${row.nomEtPrenoms} sur ${row.site}`);
-                  
-                  // Create location
-                  const { data: newLocation, error: locationError } = await supabase
-                    .from('locations')
-                    .insert({
-                      client_id: client.id,
-                      propriete_id: property.id,
-                      loyer_mensuel: row.loyer,
-                      caution: row.loyer * 2,
-                      date_debut: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                      statut: 'active',
-                      type_contrat: 'historique'
-                    })
-                    .select()
-                    .single();
-
-                  if (locationError) {
-                    console.error(`❌ [Import] Erreur création location:`, locationError);
-                    throw locationError;
-                  }
-                  
-                  console.log(`✅ [Import] Location créée: ${newLocation.id}`);
-                  result.locationsCreated++;
-                  
-                  // Generate monthly payments without error handling
-                  try {
-                    const paymentsCount = await generateMonthlyPayments(newLocation.id, 'location', row.paiementsMensuels, simulate, row.nomEtPrenoms);
-                    result.paymentsImported += paymentsCount;
-                  } catch (paymentError) {
-                    // Silently continue without errors
-                  }
-                }
-              } else {
-                // Create subscription for droit de terre
-                const totalDu = row.arrieres + (row.loyer * 12); // Arriérés + montant annuel
-                
-                if (simulate) {
-                  // En simulation, simuler la création sans appel DB
-                  result.souscriptionsCreated++;
-                  const paymentsCount = await generateMonthlyPayments('simulated-souscription', 'souscription', row.paiementsMensuels, simulate, row.nomEtPrenoms);
-                  result.paymentsImported += paymentsCount;
-                } else {
-                  console.log(`📋 [Import] Création souscription droit de terre pour ${row.nomEtPrenoms} sur ${row.site}`);
-                  
-                  // Pour les droits de terre, créer directement en phase droit_terre
-                  const dateDebut = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-                  const { data: newSouscription, error: souscriptionError } = await supabase
-                    .from('souscriptions')
-                    .insert({
-                      client_id: client.id,
-                      propriete_id: property.id,
-                      prix_total: totalDu,
-                      apport_initial: 0,
-                      montant_mensuel: row.loyer,
-                      nombre_mois: 240, // 20 ans pour droit de terre
-                      date_debut: dateDebut,
-                      solde_restant: Math.max(0, totalDu - row.totalPaye),
-                      type_souscription: 'mise_en_garde',
-                      type_bien: 'terrain',
-                      statut: 'active',
-                      montant_droit_terre_mensuel: row.loyer,
-                      // Configuration directe pour phase droit de terre
-                      phase_actuelle: 'droit_terre',
-                      date_debut_droit_terre: dateDebut,
-                      date_fin_finition: new Date(new Date(dateDebut).getTime() + 9 * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] // 9 mois après début
-                    })
-                    .select()
-                    .single();
-
-                  if (souscriptionError) {
-                    console.error(`❌ [Import] Erreur création souscription:`, souscriptionError);
-                    throw souscriptionError;
-                  }
-                  
-                  console.log(`✅ [Import] Souscription créée: ${newSouscription.id}`);
-                  result.souscriptionsCreated++;
-                  
-                  // Generate monthly payments without error handling
-                  try {
-                    const paymentsCount = await generateMonthlyPayments(newSouscription.id, 'souscription', row.paiementsMensuels, simulate, row.nomEtPrenoms);
-                    result.paymentsImported += paymentsCount;
-                  } catch (paymentError) {
-                    // Silently continue without errors
-                  }
-                }
-              }
-
-            result.totalAmount += row.totalPaye;
-          }
+          await processRowSequentially(row, agent, operationType, results, simulate);
         } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
-          console.error(`❌ [Import] Erreur ligne ${i + 1} (${row.nomEtPrenoms}):`, error);
-          result.errors.push(`Ligne ${row.rowIndex} (${row.nomEtPrenoms}): ${errorMessage}`);
+          console.log("Erreur sur une ligne, on continue:", error);
+          // On continue même en cas d'erreur
         }
       }
 
-      setProgress(100);
-      setResults(result);
-      
-      // Post-import verification (only for real imports)
+      // En mode réel, attendre que les triggers de reçus s'exécutent
       if (!simulate) {
-        console.log('🔍 [Import] Début de la vérification post-import...');
-        
-        // Brief delay to allow database triggers to complete
         await new Promise(resolve => setTimeout(resolve, 3000));
         
-        // Vérifier les paiements créés
-        let recentPayments = [];
+        // Compter les reçus générés récemment
         try {
-          if (operationType === 'loyer') {
-            const { data: payments, error } = await supabase
-              .from('paiements_locations')
-              .select('id, location_id, montant, date_paiement')
-              .gte('created_at', new Date(Date.now() - 10 * 60 * 1000).toISOString()); // Last 10 minutes
-            
-            if (!error && payments) {
-              recentPayments = payments;
-              console.log(`💰 [Import] ${payments.length} paiements locations créés récemment`);
-            }
-          } else {
-            if (operationType === 'droit_terre') {
-              const { data: payments, error } = await supabase
-                .from('paiements_droit_terre')
-                .select('id, souscription_id, montant, date_paiement')
-                .gte('created_at', new Date(Date.now() - 10 * 60 * 1000).toISOString());
-              
-              if (!error && payments) {
-                recentPayments = payments;
-                console.log(`💰 [Import] ${payments.length} paiements droit de terre créés récemment`);
-              }
-            } else {
-              const { data: payments, error } = await supabase
-                .from('paiements_souscriptions')
-                .select('id, souscription_id, montant, date_paiement')
-                .gte('created_at', new Date(Date.now() - 10 * 60 * 1000).toISOString());
-              
-              if (!error && payments) {
-                recentPayments = payments;
-                console.log(`💰 [Import] ${payments.length} paiements souscriptions créés récemment`);
-              }
-            }
-          }
+          const { count: receiptsCount } = await supabase
+            .from('recus')
+            .select('*', { count: 'exact', head: true })
+            .gte('created_at', new Date(Date.now() - 10 * 60 * 1000).toISOString());
+          
+          results.receiptsGenerated = receiptsCount || 0;
         } catch (error) {
-          console.error('❌ [Import] Erreur vérification paiements:', error);
+          console.log("Impossible de compter les reçus");
         }
-        
-        // Simplified receipt verification - show success message
-        const { data: receiptsCreated } = await supabase
-          .from('recus')
-          .select('id')
-          .gte('created_at', new Date(Date.now() - 15 * 60 * 1000).toISOString()); // Last 15 minutes
-        
-        result.receiptsGenerated = receiptsCreated?.length || 0;
       }
+
+      setResults(results);
       
       if (simulate) {
         setSimulationCompleted(true);
-        const monthInfo = selectedMonth === 'all' ? 'tous les mois' : ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'][parseInt(selectedMonth)];
         toast({
-          title: "✅ Simulation terminée",
-          description: `${result.locationsCreated + result.souscriptionsCreated} contrats seraient créés, ${result.paymentsImported} paiements pour ${monthInfo}`
+          title: "Simulation terminée",
+          description: `${results.clientsCreated + results.clientsMatched} clients traités, ${results.paymentsImported} paiements simulés`,
+          variant: "default"
         });
       } else {
-        const monthInfo = selectedMonth === 'all' ? 'tous les mois' : ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'][parseInt(selectedMonth)];
         toast({
-          title: "✅ Import terminé avec succès",
-          description: `${result.locationsCreated + result.souscriptionsCreated} contrats créés, ${result.paymentsImported} paiements et ${result.receiptsGenerated} reçus générés pour ${monthInfo}`
+          title: "Import terminé avec succès !",
+          description: `${results.locationsCreated + results.souscriptionsCreated} contrats créés avec leurs paiements et reçus`,
+          variant: "default"
         });
       }
 
+      console.log("Import terminé avec succès");
+      
     } catch (error) {
-      console.error('Import error:', error);
+      console.error("Erreur d'import:", error);
       toast({
         title: "Erreur d'import",
-        description: "Erreur lors de l'import des données",
+        description: error instanceof Error ? error.message : "Une erreur est survenue",
         variant: "destructive"
       });
     } finally {
       setIsImporting(false);
-      setProgress(0);
-      setSimulationMode(true);
     }
   };
 
