@@ -149,7 +149,6 @@ export const MissingReceiptsRecovery = () => {
           proprietes!inner(nom)
         `)
         .eq('phase_actuelle', 'droit_terre')
-        .eq('type_souscription', 'mise_en_garde')
         .not('date_debut_droit_terre', 'is', null)
         .not('montant_droit_terre_mensuel', 'is', null)
         .gt('montant_droit_terre_mensuel', 0);
@@ -407,7 +406,6 @@ export const MissingReceiptsRecovery = () => {
           proprietes!inner(nom)
         `)
         .eq('phase_actuelle', 'droit_terre')
-        .eq('type_souscription', 'mise_en_garde')
         .not('date_debut_droit_terre', 'is', null)
         .not('montant_droit_terre_mensuel', 'is', null)
         .gt('montant_droit_terre_mensuel', 0);
