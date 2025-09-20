@@ -81,7 +81,7 @@ interface ValidationResult {
 
 export function ImportRecouvrementData({ inline = false }: { inline?: boolean } = {}): React.ReactElement {
   const [selectedAgent, setSelectedAgent] = useState<string>('');
-  const [operationType, setOperationType] = useState<'loyer' | 'droit_terre'>('loyer');
+  const [operationType, setOperationType] = useState<'loyer' | 'droit_terre' | 'souscription'>('loyer');
   const [selectedMonth, setSelectedMonth] = useState<string>('all'); // Nouveau: sélection du mois
   const [agents, setAgents] = useState<any[]>([]);
   const [file, setFile] = useState<File | null>(null);
@@ -498,7 +498,7 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
   const processRowSequentially = async (
     row: RecouvrementRowData, 
     agent: any, 
-    operationType: 'loyer' | 'droit_terre', 
+    operationType: 'loyer' | 'droit_terre' | 'souscription', 
     results: ImportResult, 
     simulate: boolean
   ) => {
@@ -596,7 +596,7 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
   };
 
   // Create contract (location or souscription)
-  const createContract = async (client: any, property: any, row: RecouvrementRowData, operationType: 'loyer' | 'droit_terre', simulate: boolean) => {
+  const createContract = async (client: any, property: any, row: RecouvrementRowData, operationType: 'loyer' | 'droit_terre' | 'souscription', simulate: boolean) => {
     if (simulate) {
       return { id: `sim-contract-${Date.now()}` };
     }
@@ -616,7 +616,7 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
         .single();
 
       return location;
-    } else {
+    } else if (operationType === 'droit_terre') {
       // Créer souscription pour droits de terre
       const currentDate = new Date().toISOString().split('T')[0];
       const { data: souscription } = await supabase
@@ -639,11 +639,35 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
         .single();
 
       return souscription;
+    } else {
+      // Créer souscription classique avec droit de terre configuré
+      const currentDate = new Date().toISOString().split('T')[0];
+      const prixTotal = row.loyer * 100; // Prix total fictif basé sur le montant
+      const { data: souscription } = await supabase
+        .from('souscriptions')
+        .insert({
+          client_id: client.id,
+          propriete_id: property.id,
+          prix_total: prixTotal,
+          montant_mensuel: row.loyer / 10, // Montant mensuel de souscription
+          nombre_mois: 24, // 2 ans de souscription
+          date_debut: currentDate,
+          solde_restant: 0, // Payé complètement à l'importation
+          type_souscription: 'mise_en_garde',
+          phase_actuelle: 'souscription',
+          montant_droit_terre_mensuel: row.loyer, // Le montant Excel devient le droit de terre mensuel
+          periode_finition_mois: 9,
+          type_bien: row.typeHabitation || 'terrain'
+        })
+        .select()
+        .single();
+
+      return souscription;
     }
   };
 
   // Create payments from Excel data
-  const createPaymentsFromExcel = async (contract: any, operationType: 'loyer' | 'droit_terre', paiementsMensuels: number[]) => {
+  const createPaymentsFromExcel = async (contract: any, operationType: 'loyer' | 'droit_terre' | 'souscription', paiementsMensuels: number[]) => {
     let paymentsCreated = 0;
     const currentYear = new Date().getFullYear();
     const monthNames = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 
@@ -672,10 +696,21 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
               mode_paiement: 'especes',
               reference: `Import ${monthNames[monthIndex]} ${currentYear}`
             });
-        } else {
+        } else if (operationType === 'droit_terre') {
           // Créer paiement droit de terre directement (trigger créera le reçu)
           await supabase
             .from('paiements_droit_terre')
+            .insert({
+              souscription_id: contract.id,
+              montant,
+              date_paiement: paymentDate,
+              mode_paiement: 'especes',
+              reference: `Import ${monthNames[monthIndex]} ${currentYear}`
+            });
+        } else {
+          // Créer paiement souscription directement (trigger créera le reçu)
+          await supabase
+            .from('paiements_souscriptions')
             .insert({
               souscription_id: contract.id,
               montant,
@@ -835,13 +870,14 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
 
               <div className="space-y-2">
                 <Label htmlFor="operation-type">Type d'opération</Label>
-                <Select value={operationType} onValueChange={(value: 'loyer' | 'droit_terre') => setOperationType(value)}>
+                <Select value={operationType} onValueChange={(value: 'loyer' | 'droit_terre' | 'souscription') => setOperationType(value)}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="loyer">Loyer</SelectItem>
                     <SelectItem value="droit_terre">Droit de terre</SelectItem>
+                    <SelectItem value="souscription">Souscription</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
