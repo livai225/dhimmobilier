@@ -625,8 +625,8 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
           client_id: client.id,
           propriete_id: property.id,
           prix_total: row.loyer * 240, // 20 ans de droits de terre
-          montant_mensuel: 0, // Pas de paiement mensuel pour les droits de terre
-          nombre_mois: 0,
+          montant_mensuel: row.loyer, // Utiliser le montant comme mensuel pour compatibilité
+          nombre_mois: 240, // 20 ans
           date_debut: currentDate,
           solde_restant: 0, // Pas de solde restant pour les droits de terre
           type_souscription: 'historique',
