@@ -438,7 +438,9 @@ export const MissingReceiptsRecovery = () => {
 
         // Vérifier s'il existe déjà un paiement pour ce mois
         const startOfMonth = new Date(parseInt(year), parseInt(month) - 1, 1);
-        const endOfMonth = new Date(parseInt(year), parseInt(month), 0);
+        const endOfMonth = new Date(parseInt(year), parseInt(month), 0); // Dernier jour du mois
+        
+        console.log(`Période recherchée: ${startOfMonth.toISOString()} à ${endOfMonth.toISOString()}`);
         
         const { data: paiements, error: paiementsError } = await supabase
           .from('paiements_droit_terre')
@@ -573,9 +575,11 @@ export const MissingReceiptsRecovery = () => {
     const now = new Date();
     
     for (let i = 0; i < 12; i++) {
+      // Créer la date au premier jour du mois pour éviter les erreurs de date
       const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
       const label = date.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+      console.log(`Option générée: ${value} - ${label}`);
       options.push({ value, label });
     }
     
