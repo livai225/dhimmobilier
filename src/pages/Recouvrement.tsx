@@ -315,8 +315,10 @@ export default function Recouvrement() {
 
             <div>
               <Label htmlFor="agent-select">Agent spécifique</Label>
-              <Select value={selectedAgentId || ""} onValueChange={(value) => {
-                if (value) {
+              <Select value={selectedAgentId || "global"} onValueChange={(value) => {
+                if (value === "global") {
+                  handleBackToGlobal();
+                } else {
                   handleAgentSelect(value);
                 }
               }}>
@@ -324,7 +326,7 @@ export default function Recouvrement() {
                   <SelectValue placeholder="Sélectionner un agent" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Vue globale</SelectItem>
+                  <SelectItem value="global">Vue globale</SelectItem>
                   {allAgents.map((agent) => (
                     <SelectItem key={agent.id} value={agent.id}>
                       {agent.prenom} {agent.nom} ({agent.code_agent})
