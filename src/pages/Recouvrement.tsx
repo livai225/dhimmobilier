@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ExportToExcelButton } from "@/components/ExportToExcelButton";
 import { ImportRecouvrementData } from "@/components/ImportRecouvrementData";
-import { Search, TrendingUp, TrendingDown, DollarSign, Users } from "lucide-react";
+import { AgentRecoveryDashboard } from "@/components/AgentRecoveryDashboard";
+import { Search, TrendingUp, TrendingDown, DollarSign, Users, User, Eye } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 
@@ -35,6 +36,23 @@ export default function Recouvrement() {
   const [searchTerm, setSearchTerm] = useState("");
   const [monthFilter, setMonthFilter] = useState(format(new Date(), 'yyyy-MM'));
   const [statusFilter, setStatusFilter] = useState("all");
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'global' | 'agent'>('global');
+
+  // Fetch all agents for selection
+  const { data: allAgents = [] } = useQuery({
+    queryKey: ['all-agents'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('agents_recouvrement')
+        .select('id, nom, prenom, code_agent')
+        .eq('statut', 'actif')
+        .order('nom');
+      
+      if (error) throw error;
+      return data;
+    },
+  });
 
   // Fetch agents with their recovery data
   const { data: agentsRecovery = [], isLoading } = useQuery({
@@ -164,13 +182,34 @@ export default function Recouvrement() {
     total_ecart: 0,
   });
 
+  // Handle agent selection
+  const handleAgentSelect = (agentId: string) => {
+    setSelectedAgentId(agentId);
+    setViewMode('agent');
+  };
+
+  const handleBackToGlobal = () => {
+    setSelectedAgentId(null);
+    setViewMode('global');
+  };
+
+  // If individual agent view is selected, show the agent dashboard
+  if (viewMode === 'agent' && selectedAgentId) {
+    return (
+      <AgentRecoveryDashboard 
+        agentId={selectedAgentId} 
+        onBack={handleBackToGlobal}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col space-y-4 lg:flex-row lg:items-center lg:justify-between lg:space-y-0">
         <div>
           <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Situation de Recouvrement</h2>
           <p className="text-muted-foreground">
-            Suivi des recouvrements par agent de terrain
+            Suivi des recouvrements par agent de terrain - Vue globale
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -255,13 +294,16 @@ export default function Recouvrement() {
         </Card>
       </div>
 
-      {/* Filters */}
+      {/* Filters and Agent Selection */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Filtres</CardTitle>
+          <CardTitle className="text-lg flex items-center gap-2">
+            Filtres et Sélection d'Agent
+            <Badge variant="outline">{viewMode === 'global' ? 'Vue Globale' : 'Vue Agent'}</Badge>
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             <div>
               <Label htmlFor="month">Mois</Label>
               <Input
@@ -269,6 +311,27 @@ export default function Recouvrement() {
                 value={monthFilter}
                 onChange={(e) => setMonthFilter(e.target.value)}
               />
+            </div>
+
+            <div>
+              <Label htmlFor="agent-select">Agent spécifique</Label>
+              <Select value={selectedAgentId || ""} onValueChange={(value) => {
+                if (value) {
+                  handleAgentSelect(value);
+                }
+              }}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Sélectionner un agent" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Vue globale</SelectItem>
+                  {allAgents.map((agent) => (
+                    <SelectItem key={agent.id} value={agent.id}>
+                      {agent.prenom} {agent.nom} ({agent.code_agent})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div>
@@ -298,6 +361,17 @@ export default function Recouvrement() {
                   <SelectItem value="en_avance">En avance</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="flex items-end">
+              <Button 
+                variant="outline" 
+                className="w-full"
+                onClick={() => setViewMode(viewMode === 'global' ? 'agent' : 'global')}
+              >
+                <Eye className="h-4 w-4 mr-2" />
+                {viewMode === 'global' ? 'Vue Agent' : 'Vue Globale'}
+              </Button>
             </div>
           </div>
         </CardContent>
@@ -339,6 +413,7 @@ export default function Recouvrement() {
                     <TableHead className="text-right">Versé</TableHead>
                     <TableHead className="text-right">Écart</TableHead>
                     <TableHead>Statut</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -385,6 +460,17 @@ export default function Recouvrement() {
                            agent.ecart > 0 ? 'En avance' : 
                            'À jour'}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleAgentSelect(agent.agent_id)}
+                          className="flex items-center gap-1"
+                        >
+                          <User className="h-3 w-3" />
+                          Détails
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
