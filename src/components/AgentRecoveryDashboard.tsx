@@ -351,10 +351,44 @@ export function AgentRecoveryDashboard({ agentId, onBack }: Props) {
         </TabsContent>
 
         <TabsContent value="properties" className="space-y-4">
+          {/* Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg text-blue-600">Locations</CardTitle>
+                <CardDescription>Montant à collecter en loyers</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-blue-600">
+                  {properties.reduce((sum, p) => sum + p.monthly_rent_due, 0).toLocaleString()} FCFA
+                </div>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {properties.reduce((sum, p) => sum + p.locations_count, 0)} contrats de location
+                </p>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg text-orange-600">Souscriptions</CardTitle>
+                <CardDescription>Montant à collecter en droits de terre</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-orange-600">
+                  {properties.reduce((sum, p) => sum + p.monthly_droit_terre_due, 0).toLocaleString()} FCFA
+                </div>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {properties.reduce((sum, p) => sum + p.souscriptions_count, 0)} contrats droits de terre
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Locations Section */}
           <Card>
             <CardHeader>
-              <CardTitle>Propriétés Assignées ({properties.length})</CardTitle>
-              <CardDescription>Détail du portefeuille de l'agent</CardDescription>
+              <CardTitle className="text-blue-600">Portfolio Locations</CardTitle>
+              <CardDescription>Propriétés en location à gérer</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
@@ -363,59 +397,113 @@ export function AgentRecoveryDashboard({ agentId, onBack }: Props) {
                     <TableRow>
                       <TableHead>Propriété</TableHead>
                       <TableHead>Zone</TableHead>
-                      <TableHead>Contrats</TableHead>
-                      <TableHead className="text-right">Loyers/mois</TableHead>
-                      <TableHead className="text-right">Droits Terre/mois</TableHead>
-                      <TableHead className="text-right">Total/mois</TableHead>
+                      <TableHead className="text-center">Nb Locations</TableHead>
+                      <TableHead className="text-right">Loyers Mensuels</TableHead>
                       <TableHead>Statut</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {properties.map((property) => (
-                      <TableRow key={property.id}>
-                        <TableCell className="font-medium">
-                          <div>
-                            <div>{property.nom}</div>
-                            {property.adresse && (
-                              <div className="text-xs text-muted-foreground">{property.adresse}</div>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{property.zone || 'N/A'}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-sm">
-                            <div>{property.locations_count} locations</div>
-                            <div className="text-muted-foreground">
-                              {property.souscriptions_count} droits terre
+                    {properties
+                      .filter(property => property.locations_count > 0)
+                      .map((property) => (
+                        <TableRow key={`location-${property.id}`}>
+                          <TableCell className="font-medium">
+                            <div>
+                              <div>{property.nom}</div>
+                              {property.adresse && (
+                                <div className="text-xs text-muted-foreground">{property.adresse}</div>
+                              )}
                             </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {property.monthly_rent_due.toLocaleString()} FCFA
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {property.monthly_droit_terre_due.toLocaleString()} FCFA
-                        </TableCell>
-                        <TableCell className="text-right font-medium">
-                          {(property.monthly_rent_due + property.monthly_droit_terre_due).toLocaleString()} FCFA
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={
-                            property.status === 'active' ? 'default' :
-                            property.status === 'warning' ? 'secondary' :
-                            'destructive'
-                          }>
-                            {property.status === 'active' ? 'Actif' :
-                             property.status === 'warning' ? 'Attention' :
-                             'Inactif'}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{property.zone || 'N/A'}</Badge>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant="secondary">{property.locations_count}</Badge>
+                          </TableCell>
+                          <TableCell className="text-right font-medium text-blue-600">
+                            {property.monthly_rent_due.toLocaleString()} FCFA
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={
+                              property.status === 'active' ? 'default' :
+                              property.status === 'warning' ? 'secondary' :
+                              'destructive'
+                            }>
+                              {property.status === 'active' ? 'Actif' :
+                               property.status === 'warning' ? 'Attention' :
+                               'Inactif'}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
                   </TableBody>
                 </Table>
+                {properties.filter(p => p.locations_count > 0).length === 0 && (
+                  <p className="text-center text-muted-foreground py-8">Aucune propriété en location assignée</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Souscriptions Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-orange-600">Portfolio Souscriptions</CardTitle>
+              <CardDescription>Propriétés avec droits de terre à collecter</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Propriété</TableHead>
+                      <TableHead>Zone</TableHead>
+                      <TableHead className="text-center">Nb Souscriptions</TableHead>
+                      <TableHead className="text-right">Droits de Terre/mois</TableHead>
+                      <TableHead>Statut</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {properties
+                      .filter(property => property.souscriptions_count > 0)
+                      .map((property) => (
+                        <TableRow key={`souscription-${property.id}`}>
+                          <TableCell className="font-medium">
+                            <div>
+                              <div>{property.nom}</div>
+                              {property.adresse && (
+                                <div className="text-xs text-muted-foreground">{property.adresse}</div>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{property.zone || 'N/A'}</Badge>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant="secondary">{property.souscriptions_count}</Badge>
+                          </TableCell>
+                          <TableCell className="text-right font-medium text-orange-600">
+                            {property.monthly_droit_terre_due.toLocaleString()} FCFA
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={
+                              property.status === 'active' ? 'default' :
+                              property.status === 'warning' ? 'secondary' :
+                              'destructive'
+                            }>
+                              {property.status === 'active' ? 'Actif' :
+                               property.status === 'warning' ? 'Attention' :
+                               'Inactif'}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
+                {properties.filter(p => p.souscriptions_count > 0).length === 0 && (
+                  <p className="text-center text-muted-foreground py-8">Aucune propriété avec droits de terre assignée</p>
+                )}
               </div>
             </CardContent>
           </Card>
