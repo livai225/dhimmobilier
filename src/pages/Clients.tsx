@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Plus, Edit, Trash2, Users, Phone, Mail, MapPin, AlertTriangle, Search, TrendingUp, Activity, Eye, Loader2, ArrowUpDown } from "lucide-react";
@@ -47,6 +48,7 @@ export default function Clients() {
   // Filtres rapides
   const [filterMissingPhone, setFilterMissingPhone] = useState(false);
   const [filterMissingUrgence, setFilterMissingUrgence] = useState(false);
+  const [selectedAgentId, setSelectedAgentId] = useState<string>("");
   // Tri
   const [sortBy, setSortBy] = useState<"nom" | "email" | "telephone" | "created_at">("nom");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
@@ -129,10 +131,24 @@ export default function Clients() {
     return matrix[a.length][b.length];
   };
 
+  // Fetch agents for filtering
+  const { data: agents } = useQuery({
+    queryKey: ['agents'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('agents_recouvrement')
+        .select('id, nom, prenom, code_agent')
+        .eq('statut', 'actif')
+        .order('nom');
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
   // Pagination côté serveur avec tri et filtres
   const itemsPerPage = 50;
   const { data: clients, isLoading, isFetching } = useQuery({
-    queryKey: ['clients', debouncedSearchTerm, filterMissingPhone, filterMissingUrgence, currentPage, itemsPerPage, sortBy, sortDir],
+    queryKey: ['clients', debouncedSearchTerm, filterMissingPhone, filterMissingUrgence, selectedAgentId, currentPage, itemsPerPage, sortBy, sortDir],
     queryFn: async () => {
       const term = debouncedSearchTerm;
       const offset = (currentPage - 1) * itemsPerPage;
@@ -141,6 +157,32 @@ export default function Clients() {
       let query = supabase
         .from('clients')
         .select('*');
+
+      // Filter by agent if selected
+      if (selectedAgentId) {
+        const { data: clientIds } = await supabase
+          .from('locations')
+          .select('client_id, proprietes!inner(agent_id)')
+          .eq('proprietes.agent_id', selectedAgentId);
+        
+        const { data: clientIdsFromSouscriptions } = await supabase
+          .from('souscriptions')
+          .select('client_id, proprietes!inner(agent_id)')
+          .eq('proprietes.agent_id', selectedAgentId);
+
+        const allClientIds = [
+          ...(clientIds || []).map(item => item.client_id),
+          ...(clientIdsFromSouscriptions || []).map(item => item.client_id)
+        ];
+        
+        const uniqueClientIds = [...new Set(allClientIds)];
+        
+        if (uniqueClientIds.length === 0) {
+          return [];
+        }
+        
+        query = query.in('id', uniqueClientIds);
+      }
 
       // Recherche multi-champs
       if (term.trim().length > 0) {
@@ -181,10 +223,36 @@ export default function Clients() {
 
   // Compte total pour pagination
   const { data: totalCount = 0 } = useQuery({
-    queryKey: ['clients-count', debouncedSearchTerm, filterMissingPhone, filterMissingUrgence],
+    queryKey: ['clients-count', debouncedSearchTerm, filterMissingPhone, filterMissingUrgence, selectedAgentId],
     queryFn: async () => {
       const term = debouncedSearchTerm;
       let query = supabase.from('clients').select('*', { count: 'exact', head: true });
+
+      // Filter by agent if selected
+      if (selectedAgentId) {
+        const { data: clientIds } = await supabase
+          .from('locations')
+          .select('client_id, proprietes!inner(agent_id)')
+          .eq('proprietes.agent_id', selectedAgentId);
+        
+        const { data: clientIdsFromSouscriptions } = await supabase
+          .from('souscriptions')
+          .select('client_id, proprietes!inner(agent_id)')
+          .eq('proprietes.agent_id', selectedAgentId);
+
+        const allClientIds = [
+          ...(clientIds || []).map(item => item.client_id),
+          ...(clientIdsFromSouscriptions || []).map(item => item.client_id)
+        ];
+        
+        const uniqueClientIds = [...new Set(allClientIds)];
+        
+        if (uniqueClientIds.length === 0) {
+          return 0;
+        }
+        
+        query = query.in('id', uniqueClientIds);
+      }
 
       if (term.trim().length > 0) {
         const normalizedSearch = normalizeString(term);
@@ -401,9 +469,12 @@ export default function Clients() {
         <div>
           <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Clients</h2>
           <p className="text-muted-foreground">
-            {searchTerm.trim() || filterMissingPhone || filterMissingUrgence
+            {searchTerm.trim() || filterMissingPhone || filterMissingUrgence || selectedAgentId
               ? `${totalCount as number} résultats`
               : `${stats?.totalClients || 0} clients au total`}
+            {selectedAgentId && agents && (
+              <span className="text-sm"> • Filtrés par agent {agents.find(a => a.id === selectedAgentId)?.code_agent}</span>
+            )}
           </p>
         </div>
         <div className="flex flex-col space-y-2 sm:flex-row sm:space-x-2 sm:space-y-0">
@@ -524,7 +595,20 @@ export default function Clients() {
             <Loader2 className="absolute right-2 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Select value={selectedAgentId} onValueChange={(value) => { setSelectedAgentId(value); setCurrentPage(1); }}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Tous les agents" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">Tous les agents</SelectItem>
+              {agents?.map((agent) => (
+                <SelectItem key={agent.id} value={agent.id}>
+                  {agent.code_agent} ({agent.prenom} {agent.nom})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button
             type="button"
             variant={filterMissingPhone ? 'default' : 'outline'}
@@ -600,7 +684,7 @@ export default function Clients() {
               <div className="text-center py-10">
                 <Users className="mx-auto h-12 w-12 text-muted-foreground" />
                 <h3 className="mt-2 text-sm font-semibold">
-                  {searchTerm || filterMissingPhone || filterMissingUrgence ? "Aucun client trouvé" : "Aucun client"}
+                  {searchTerm || filterMissingPhone || filterMissingUrgence || selectedAgentId ? "Aucun client trouvé" : "Aucun client"}
                 </h3>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {searchTerm 
