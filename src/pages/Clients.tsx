@@ -48,7 +48,7 @@ export default function Clients() {
   // Filtres rapides
   const [filterMissingPhone, setFilterMissingPhone] = useState(false);
   const [filterMissingUrgence, setFilterMissingUrgence] = useState(false);
-  const [selectedAgentId, setSelectedAgentId] = useState<string>("");
+  const [selectedAgentId, setSelectedAgentId] = useState<string>("all");
   // Tri
   const [sortBy, setSortBy] = useState<"nom" | "email" | "telephone" | "created_at">("nom");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
@@ -159,7 +159,7 @@ export default function Clients() {
         .select('*');
 
       // Filter by agent if selected
-      if (selectedAgentId) {
+      if (selectedAgentId && selectedAgentId !== "all") {
         const { data: clientIds } = await supabase
           .from('locations')
           .select('client_id, proprietes!inner(agent_id)')
@@ -229,7 +229,7 @@ export default function Clients() {
       let query = supabase.from('clients').select('*', { count: 'exact', head: true });
 
       // Filter by agent if selected
-      if (selectedAgentId) {
+      if (selectedAgentId && selectedAgentId !== "all") {
         const { data: clientIds } = await supabase
           .from('locations')
           .select('client_id, proprietes!inner(agent_id)')
@@ -469,10 +469,10 @@ export default function Clients() {
         <div>
           <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Clients</h2>
           <p className="text-muted-foreground">
-            {searchTerm.trim() || filterMissingPhone || filterMissingUrgence || selectedAgentId
+            {searchTerm.trim() || filterMissingPhone || filterMissingUrgence || (selectedAgentId && selectedAgentId !== "all")
               ? `${totalCount as number} résultats`
               : `${stats?.totalClients || 0} clients au total`}
-            {selectedAgentId && agents && (
+            {selectedAgentId && selectedAgentId !== "all" && agents && (
               <span className="text-sm"> • Filtrés par agent {agents.find(a => a.id === selectedAgentId)?.code_agent}</span>
             )}
           </p>
@@ -601,7 +601,7 @@ export default function Clients() {
               <SelectValue placeholder="Tous les agents" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Tous les agents</SelectItem>
+              <SelectItem value="all">Tous les agents</SelectItem>
               {agents?.map((agent) => (
                 <SelectItem key={agent.id} value={agent.id}>
                   {agent.code_agent} ({agent.prenom} {agent.nom})
