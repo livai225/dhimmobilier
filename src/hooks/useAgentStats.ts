@@ -8,6 +8,9 @@ interface AgentStats {
   activeSubscriptions: number;
   monthlyLandRightsTotal: number;
   totalMonthlyIncome: number;
+  totalClients: number;
+  clientsFromLocations: number;
+  clientsFromSubscriptions: number;
 }
 
 export function useAgentStats(agentId: string | null, mode: 'locations' | 'souscriptions' | 'all' = 'all') {
@@ -22,6 +25,9 @@ export function useAgentStats(agentId: string | null, mode: 'locations' | 'sousc
           activeSubscriptions: 0,
           monthlyLandRightsTotal: 0,
           totalMonthlyIncome: 0,
+          totalClients: 0,
+          clientsFromLocations: 0,
+          clientsFromSubscriptions: 0,
         };
       }
 
@@ -35,23 +41,56 @@ export function useAgentStats(agentId: string | null, mode: 'locations' | 'sousc
 
       const propertyIds = properties?.map(p => p.id) || [];
 
-      // Get active locations for this agent's properties
-      const { data: locations, error: locationsError } = await supabase
-        .from("locations")
-        .select("id, loyer_mensuel")
-        .in("propriete_id", propertyIds)
-        .eq("statut", "active");
+      let locations = [];
+      let souscriptions = [];
+      let clientsFromLocations = 0;
+      let clientsFromSubscriptions = 0;
+      let totalClients = 0;
 
-      if (locationsError) throw locationsError;
+      // Get active locations for this agent's properties (if needed)
+      if (mode === 'locations' || mode === 'all') {
+        const { data: locationsData, error: locationsError } = await supabase
+          .from("locations")
+          .select("id, loyer_mensuel, client_id")
+          .in("propriete_id", propertyIds)
+          .eq("statut", "active");
 
-      // Get active subscriptions for this agent's properties
-      const { data: souscriptions, error: souscriptionsError } = await supabase
-        .from("souscriptions")
-        .select("id, montant_droit_terre_mensuel, phase_actuelle")
-        .in("propriete_id", propertyIds)
-        .eq("statut", "active");
+        if (locationsError) throw locationsError;
+        locations = locationsData || [];
 
-      if (souscriptionsError) throw souscriptionsError;
+        // Count distinct clients from locations
+        const uniqueLocationClients = new Set(locations.map(l => l.client_id));
+        clientsFromLocations = uniqueLocationClients.size;
+      }
+
+      // Get active subscriptions for this agent's properties (if needed)
+      if (mode === 'souscriptions' || mode === 'all') {
+        const { data: souscriptionsData, error: souscriptionsError } = await supabase
+          .from("souscriptions")
+          .select("id, montant_droit_terre_mensuel, phase_actuelle, client_id")
+          .in("propriete_id", propertyIds)
+          .eq("statut", "active");
+
+        if (souscriptionsError) throw souscriptionsError;
+        souscriptions = souscriptionsData || [];
+
+        // Count distinct clients from subscriptions
+        const uniqueSubscriptionClients = new Set(souscriptions.map(s => s.client_id));
+        clientsFromSubscriptions = uniqueSubscriptionClients.size;
+      }
+
+      // Calculate total unique clients (avoiding duplicates)
+      if (mode === 'all') {
+        const allClientIds = new Set([
+          ...locations.map(l => l.client_id),
+          ...souscriptions.map(s => s.client_id)
+        ]);
+        totalClients = allClientIds.size;
+      } else if (mode === 'locations') {
+        totalClients = clientsFromLocations;
+      } else if (mode === 'souscriptions') {
+        totalClients = clientsFromSubscriptions;
+      }
 
       // Calculate totals
       const monthlyRentTotal = locations?.reduce((sum, loc) => sum + (loc.loyer_mensuel || 0), 0) || 0;
@@ -71,6 +110,9 @@ export function useAgentStats(agentId: string | null, mode: 'locations' | 'sousc
         activeSubscriptions: souscriptions?.length || 0,
         monthlyLandRightsTotal,
         totalMonthlyIncome: monthlyRentTotal + monthlyLandRightsTotal,
+        totalClients,
+        clientsFromLocations,
+        clientsFromSubscriptions,
       };
     },
     enabled: !!agentId && agentId !== "all",

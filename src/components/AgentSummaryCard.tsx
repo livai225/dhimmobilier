@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Home, Building, DollarSign, Calendar, TrendingUp } from "lucide-react";
+import { Home, Building, DollarSign, Calendar, TrendingUp, Users } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 
 interface AgentSummaryCardProps {
@@ -8,12 +8,15 @@ interface AgentSummaryCardProps {
   agentName: string;
   mode: 'locations' | 'souscriptions' | 'all';
   stats: {
-    totalProperties: number;
-    activeLocations: number;
-    monthlyRentTotal: number;
-    activeSubscriptions: number;
-    monthlyLandRightsTotal: number;
-    totalMonthlyIncome: number;
+  totalProperties: number;
+  activeLocations: number;
+  monthlyRentTotal: number;
+  activeSubscriptions: number;
+  monthlyLandRightsTotal: number;
+  totalMonthlyIncome: number;
+  totalClients: number;
+  clientsFromLocations: number;
+  clientsFromSubscriptions: number;
   };
 }
 
@@ -42,6 +45,12 @@ export function AgentSummaryCard({ agentName, mode, stats }: AgentSummaryCardPro
                 <span className="text-xs text-muted-foreground text-center">Locations actives</span>
               </div>
               
+              <div className="flex flex-col items-center p-3 bg-background/80 rounded-lg border">
+                <Users className="h-5 w-5 text-purple-600 mb-1" />
+                <span className="text-2xl font-bold text-purple-600">{stats.clientsFromLocations}</span>
+                <span className="text-xs text-muted-foreground text-center">Clients locations</span>
+              </div>
+              
               <div className="flex flex-col items-center p-3 bg-primary/10 rounded-lg border border-primary/30">
                 <TrendingUp className="h-5 w-5 text-primary mb-1" />
                 <span className="text-sm font-bold text-primary">
@@ -60,6 +69,12 @@ export function AgentSummaryCard({ agentName, mode, stats }: AgentSummaryCardPro
                 <span className="text-xs text-muted-foreground text-center">Souscriptions actives</span>
               </div>
               
+              <div className="flex flex-col items-center p-3 bg-background/80 rounded-lg border">
+                <Users className="h-5 w-5 text-purple-600 mb-1" />
+                <span className="text-2xl font-bold text-purple-600">{stats.clientsFromSubscriptions}</span>
+                <span className="text-xs text-muted-foreground text-center">Clients souscriptions</span>
+              </div>
+              
               <div className="flex flex-col items-center p-3 bg-primary/10 rounded-lg border border-primary/30">
                 <TrendingUp className="h-5 w-5 text-primary mb-1" />
                 <span className="text-sm font-bold text-primary">
@@ -75,29 +90,19 @@ export function AgentSummaryCard({ agentName, mode, stats }: AgentSummaryCardPro
               <div className="flex flex-col items-center p-3 bg-background/80 rounded-lg border">
                 <Building className="h-5 w-5 text-green-600 mb-1" />
                 <span className="text-2xl font-bold text-green-600">{stats.activeLocations}</span>
-                <span className="text-xs text-muted-foreground text-center">Locations actives</span>
-              </div>
-              
-              <div className="flex flex-col items-center p-3 bg-background/80 rounded-lg border">
-                <DollarSign className="h-5 w-5 text-emerald-600 mb-1" />
-                <span className="text-sm font-bold text-emerald-600">
-                  {formatCurrency(stats.monthlyRentTotal)}
-                </span>
-                <span className="text-xs text-muted-foreground text-center">Loyers mensuels</span>
+                <span className="text-xs text-muted-foreground text-center">Locations</span>
               </div>
               
               <div className="flex flex-col items-center p-3 bg-background/80 rounded-lg border">
                 <Calendar className="h-5 w-5 text-purple-600 mb-1" />
                 <span className="text-2xl font-bold text-purple-600">{stats.activeSubscriptions}</span>
-                <span className="text-xs text-muted-foreground text-center">Souscriptions actives</span>
+                <span className="text-xs text-muted-foreground text-center">Souscriptions</span>
               </div>
               
               <div className="flex flex-col items-center p-3 bg-background/80 rounded-lg border">
-                <DollarSign className="h-5 w-5 text-orange-600 mb-1" />
-                <span className="text-sm font-bold text-orange-600">
-                  {formatCurrency(stats.monthlyLandRightsTotal)}
-                </span>
-                <span className="text-xs text-muted-foreground text-center">Droits de terre</span>
+                <Users className="h-5 w-5 text-purple-600 mb-1" />
+                <span className="text-2xl font-bold text-purple-600">{stats.totalClients}</span>
+                <span className="text-xs text-muted-foreground text-center">Total clients</span>
               </div>
               
               <div className="flex flex-col items-center p-3 bg-primary/10 rounded-lg border border-primary/30">
