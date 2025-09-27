@@ -129,17 +129,49 @@ export function useAgentStats(agentId: string | null, mode: 'locations' | 'sousc
 
       // Calculate payment metrics
       if (mode === 'locations' || mode === 'all') {
-        // Calculate total due for locations based on time elapsed
-        for (const location of locations) {
-          const monthsElapsed = Math.floor(
-            (new Date().getTime() - new Date(location.date_debut).getTime()) / (1000 * 60 * 60 * 24 * 30)
-          );
-          const dueAmount = location.type_contrat === 'historique' 
-            ? monthsElapsed * location.loyer_mensuel
-            : monthsElapsed === 0 
-              ? location.loyer_mensuel * 10 
-              : (location.loyer_mensuel * 10) + ((monthsElapsed - 1) * location.loyer_mensuel);
-          totalDue += dueAmount;
+        if (selectedMonth && selectedMonth !== 'all') {
+          // For a specific month, calculate what should be due for that month only
+          for (const location of locations) {
+            const locationStartDate = new Date(location.date_debut);
+            const [year, month] = selectedMonth.split('-');
+            const targetDate = new Date(parseInt(year), parseInt(month) - 1, 1);
+            
+            // Check if the contract was active during the target month
+            if (locationStartDate <= targetDate) {
+              const monthsElapsed = Math.floor(
+                (targetDate.getTime() - locationStartDate.getTime()) / (1000 * 60 * 60 * 24 * 30)
+              );
+              
+              if (location.type_contrat === 'historique') {
+                // Historical contracts: monthly rent due each month
+                totalDue += location.loyer_mensuel;
+              } else {
+                // New contracts: first 10 months are prepaid, then monthly
+                if (monthsElapsed >= 10) {
+                  totalDue += location.loyer_mensuel;
+                }
+                // For months 0-9, no additional payment due (prepaid)
+              }
+            }
+          }
+        } else {
+          // For "all months", calculate cumulative total due since contract start
+          for (const location of locations) {
+            const monthsElapsed = Math.floor(
+              (new Date().getTime() - new Date(location.date_debut).getTime()) / (1000 * 60 * 60 * 24 * 30)
+            );
+            
+            if (location.type_contrat === 'historique') {
+              totalDue += monthsElapsed * location.loyer_mensuel;
+            } else {
+              // New contracts: 10 months prepaid + additional months if any
+              if (monthsElapsed > 10) {
+                totalDue += (location.loyer_mensuel * 10) + ((monthsElapsed - 10) * location.loyer_mensuel);
+              } else {
+                totalDue += location.loyer_mensuel * 10; // Initial 10 months
+              }
+            }
+          }
         }
 
         // Get actual payments for locations
@@ -159,13 +191,29 @@ export function useAgentStats(agentId: string | null, mode: 'locations' | 'sousc
       }
 
       if (mode === 'souscriptions' || mode === 'all') {
-        // Calculate due for land rights based on months elapsed since start
-        for (const souscription of souscriptions) {
-          if (souscription.phase_actuelle === "droit_terre" && souscription.date_debut_droit_terre) {
-            const monthsElapsed = Math.floor(
-              (new Date().getTime() - new Date(souscription.date_debut_droit_terre).getTime()) / (1000 * 60 * 60 * 24 * 30)
-            );
-            totalDue += monthsElapsed * (souscription.montant_droit_terre_mensuel || 0);
+        if (selectedMonth && selectedMonth !== 'all') {
+          // For a specific month, calculate what should be due for that month only
+          for (const souscription of souscriptions) {
+            if (souscription.phase_actuelle === "droit_terre" && souscription.date_debut_droit_terre) {
+              const droitTerreStartDate = new Date(souscription.date_debut_droit_terre);
+              const [year, month] = selectedMonth.split('-');
+              const targetDate = new Date(parseInt(year), parseInt(month) - 1, 1);
+              
+              // Check if land rights were active during the target month
+              if (droitTerreStartDate <= targetDate) {
+                totalDue += souscription.montant_droit_terre_mensuel || 0;
+              }
+            }
+          }
+        } else {
+          // For "all months", calculate cumulative total due since land rights start
+          for (const souscription of souscriptions) {
+            if (souscription.phase_actuelle === "droit_terre" && souscription.date_debut_droit_terre) {
+              const monthsElapsed = Math.floor(
+                (new Date().getTime() - new Date(souscription.date_debut_droit_terre).getTime()) / (1000 * 60 * 60 * 24 * 30)
+              );
+              totalDue += monthsElapsed * (souscription.montant_droit_terre_mensuel || 0);
+            }
           }
         }
 
