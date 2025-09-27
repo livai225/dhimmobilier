@@ -7,6 +7,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { Home, TrendingUp, AlertTriangle, DollarSign, Users, Calendar, AlertCircle } from "lucide-react";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { LocationPaymentSummary } from "./LocationPaymentSummary";
 
 export function LocationsDashboard() {
   const { canAccessDashboard } = useUserPermissions();
@@ -221,6 +222,9 @@ export function LocationsDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Payment Summary */}
+      <LocationPaymentSummary locations={locations} />
 
       {/* Graphiques */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
