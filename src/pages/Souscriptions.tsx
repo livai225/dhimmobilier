@@ -257,6 +257,7 @@ export default function Souscriptions() {
         <AgentSummaryCard
           agentId={agentFilter}
           agentName={`${selectedAgent.prenom} ${selectedAgent.nom}`}
+          mode="souscriptions"
           stats={agentStats}
         />
       )}

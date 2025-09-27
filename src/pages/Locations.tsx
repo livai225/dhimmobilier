@@ -225,6 +225,7 @@ export default function Locations() {
             <AgentSummaryCard
               agentId={agentFilter}
               agentName={`${selectedAgent.prenom} ${selectedAgent.nom}`}
+              mode="locations"
               stats={agentStats}
             />
           )}

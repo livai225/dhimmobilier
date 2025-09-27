@@ -10,9 +10,9 @@ interface AgentStats {
   totalMonthlyIncome: number;
 }
 
-export function useAgentStats(agentId: string | null) {
+export function useAgentStats(agentId: string | null, mode: 'locations' | 'souscriptions' | 'all' = 'all') {
   return useQuery({
-    queryKey: ["agent-stats", agentId],
+    queryKey: ["agent-stats", agentId, mode],
     queryFn: async (): Promise<AgentStats> => {
       if (!agentId || agentId === "all") {
         return {
