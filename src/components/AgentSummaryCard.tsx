@@ -4,7 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Progress } from "@/components/ui/progress";
 import { Home, Building, DollarSign, Calendar, TrendingUp, Users, Target, Percent } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 
 interface AgentSummaryCardProps {
   agentId: string;
@@ -31,21 +31,33 @@ interface AgentSummaryCardProps {
 export function AgentSummaryCard({ agentName, mode, stats, onMonthChange }: AgentSummaryCardProps) {
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
 
-  const months = [
-    { value: "all", label: "Tous les mois" },
-    { value: `${new Date().getFullYear()}-1`, label: "Janvier 2024" },
-    { value: `${new Date().getFullYear()}-2`, label: "Février 2024" },
-    { value: `${new Date().getFullYear()}-3`, label: "Mars 2024" },
-    { value: `${new Date().getFullYear()}-4`, label: "Avril 2024" },
-    { value: `${new Date().getFullYear()}-5`, label: "Mai 2024" },
-    { value: `${new Date().getFullYear()}-6`, label: "Juin 2024" },
-    { value: `${new Date().getFullYear()}-7`, label: "Juillet 2024" },
-    { value: `${new Date().getFullYear()}-8`, label: "Août 2024" },
-    { value: `${new Date().getFullYear()}-9`, label: "Septembre 2024" },
-    { value: `${new Date().getFullYear()}-10`, label: "Octobre 2024" },
-    { value: `${new Date().getFullYear()}-11`, label: "Novembre 2024" },
-    { value: `${new Date().getFullYear()}-12`, label: "Décembre 2024" },
-  ];
+  // Generate month options (current year + previous year)
+  const monthOptions = useMemo(() => {
+    const options = [{ value: "all", label: "Tous les mois" }];
+    const currentYear = new Date().getFullYear();
+    const months = [
+      "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+      "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
+    ];
+
+    // Add current year months
+    for (let i = 0; i < 12; i++) {
+      options.push({
+        value: `${currentYear}-${i + 1}`,
+        label: `${months[i]} ${currentYear}`
+      });
+    }
+
+    // Add previous year months
+    for (let i = 0; i < 12; i++) {
+      options.push({
+        value: `${currentYear - 1}-${i + 1}`,
+        label: `${months[i]} ${currentYear - 1}`
+      });
+    }
+
+    return options;
+  }, []);
 
   const handleMonthChange = (month: string) => {
     setSelectedMonth(month);
@@ -64,7 +76,7 @@ export function AgentSummaryCard({ agentName, mode, stats, onMonthChange }: Agen
               <SelectValue placeholder="Sélectionner un mois" />
             </SelectTrigger>
             <SelectContent>
-              {months.map((month) => (
+              {monthOptions.map((month) => (
                 <SelectItem key={month.value} value={month.value}>
                   {month.label}
                 </SelectItem>
