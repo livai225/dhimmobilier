@@ -17,6 +17,8 @@ import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { ProtectedAction } from "@/components/ProtectedAction";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { calculateLocationDebt, calculateLocationProgress } from "@/utils/locationUtils";
+import { AgentSummaryCard } from "@/components/AgentSummaryCard";
+import { useAgentStats } from "@/hooks/useAgentStats";
 
 export default function Locations() {
   const { canAccessDashboard } = useUserPermissions();
@@ -61,6 +63,11 @@ export default function Locations() {
       return data;
     },
   });
+
+  const { data: agentStats } = useAgentStats(agentFilter !== "all" ? agentFilter : null);
+  
+  const selectedAgent = agents?.find(agent => agent.id === agentFilter);
+  const shouldShowAgentSummary = agentFilter !== "all" && selectedAgent && agentStats;
 
   const deleteLocationMutation = useMutation({
     mutationFn: async (locationId: string) => {
@@ -212,6 +219,15 @@ export default function Locations() {
               buttonClassName="w-48 justify-start"
             />
           </div>
+
+          {/* Agent Summary */}
+          {shouldShowAgentSummary && (
+            <AgentSummaryCard
+              agentId={agentFilter}
+              agentName={`${selectedAgent.prenom} ${selectedAgent.nom}`}
+              stats={agentStats}
+            />
+          )}
 
           {/* Locations List */}
           <div className="grid gap-4">

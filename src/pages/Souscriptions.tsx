@@ -19,6 +19,8 @@ import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { ExportToExcelButton } from "@/components/ExportToExcelButton";
 import { ProtectedAction } from "@/components/ProtectedAction";
+import { AgentSummaryCard } from "@/components/AgentSummaryCard";
+import { useAgentStats } from "@/hooks/useAgentStats";
 
 export default function Souscriptions() {
   const { canAccessDashboard } = useUserPermissions();
@@ -76,6 +78,10 @@ export default function Souscriptions() {
     },
   });
 
+  const { data: agentStats } = useAgentStats(agentFilter !== "all" ? agentFilter : null);
+  
+  const selectedAgent = agents?.find(agent => agent.id === agentFilter);
+  const shouldShowAgentSummary = agentFilter !== "all" && selectedAgent && agentStats;
 
   const deleteSouscription = async (souscriptionId: string) => {
     if (!confirm("Êtes-vous sûr de vouloir supprimer cette souscription ?")) {
@@ -246,6 +252,14 @@ export default function Souscriptions() {
         />
       </div>
 
+      {/* Agent Summary */}
+      {shouldShowAgentSummary && (
+        <AgentSummaryCard
+          agentId={agentFilter}
+          agentName={`${selectedAgent.prenom} ${selectedAgent.nom}`}
+          stats={agentStats}
+        />
+      )}
 
       {/* Souscriptions List */}
       <div className="grid gap-4">
