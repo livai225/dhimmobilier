@@ -25,6 +25,7 @@ export default function Locations() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [agentFilter, setAgentFilter] = useState<string>("all");
+  const [selectedMonth, setSelectedMonth] = useState<string>("");
   const [showLocationForm, setShowLocationForm] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState<any>(null);
   const [showDetailsDialog, setShowDetailsDialog] = useState(false);
@@ -64,7 +65,11 @@ export default function Locations() {
     },
   });
 
-  const { data: agentStats } = useAgentStats(agentFilter !== "all" ? agentFilter : null);
+  const { data: agentStats } = useAgentStats(
+    agentFilter !== "all" ? agentFilter : null, 
+    'locations', 
+    selectedMonth || undefined
+  );
   
   const selectedAgent = agents?.find(agent => agent.id === agentFilter);
   const shouldShowAgentSummary = agentFilter !== "all" && selectedAgent && agentStats;
@@ -227,6 +232,8 @@ export default function Locations() {
               agentName={`${selectedAgent.prenom} ${selectedAgent.nom}`}
               mode="locations"
               stats={agentStats}
+              selectedMonth={selectedMonth}
+              onMonthChange={setSelectedMonth}
             />
           )}
 

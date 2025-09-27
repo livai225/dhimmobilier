@@ -25,11 +25,11 @@ interface AgentSummaryCardProps {
     recoveryRate: number;
     outstanding: number;
   };
+  selectedMonth?: string;
   onMonthChange?: (month: string) => void;
 }
 
-export function AgentSummaryCard({ agentName, mode, stats, onMonthChange }: AgentSummaryCardProps) {
-  const [selectedMonth, setSelectedMonth] = useState<string>("all");
+export function AgentSummaryCard({ agentName, mode, stats, selectedMonth = "", onMonthChange }: AgentSummaryCardProps) {
 
   // Generate month options (current year + previous year)
   const monthOptions = useMemo(() => {
@@ -60,7 +60,6 @@ export function AgentSummaryCard({ agentName, mode, stats, onMonthChange }: Agen
   }, []);
 
   const handleMonthChange = (month: string) => {
-    setSelectedMonth(month);
     onMonthChange?.(month);
   };
   return (
