@@ -27,6 +27,7 @@ export default function Souscriptions() {
   const [searchTerm, setSearchTerm] = useState("");
   const [phaseFilter, setPhaseFilter] = useState<string>("all");
   const [agentFilter, setAgentFilter] = useState<string>("all");
+  const [selectedMonth, setSelectedMonth] = useState<string>("all");
   const [selectedSouscription, setSelectedSouscription] = useState<any>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
@@ -78,7 +79,7 @@ export default function Souscriptions() {
     },
   });
 
-  const { data: agentStats } = useAgentStats(agentFilter !== "all" ? agentFilter : null);
+  const { data: agentStats } = useAgentStats(agentFilter !== "all" ? agentFilter : null, "souscriptions", selectedMonth);
   
   const selectedAgent = agents?.find(agent => agent.id === agentFilter);
   const shouldShowAgentSummary = agentFilter !== "all" && selectedAgent && agentStats;
@@ -259,6 +260,7 @@ export default function Souscriptions() {
           agentName={`${selectedAgent.prenom} ${selectedAgent.nom}`}
           mode="souscriptions"
           stats={agentStats}
+          onMonthChange={setSelectedMonth}
         />
       )}
 
