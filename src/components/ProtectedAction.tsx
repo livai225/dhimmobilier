@@ -33,13 +33,16 @@ export function ProtectedAction({
     return fallback;
   }
 
-  if (!permissions[permission]) {
+  const hasPermission = permissions[permission];
+  console.log('[ProtectedAction] Permission check:', permission, '=', hasPermission, 'for user:', currentUser?.nom);
+  
+  if (!hasPermission) {
     if (showMessage) {
       return (
         <Alert>
           <Lock className="h-4 w-4" />
           <AlertDescription>
-            Vous n'avez pas les permissions nécessaires pour cette action.
+            Vous n'avez pas les permissions nécessaires pour cette action. Permission requise: {permission}
           </AlertDescription>
         </Alert>
       );

@@ -12,17 +12,18 @@ export const useUserPermissions = () => {
   const [customPermissions, setCustomPermissions] = useState<UserPermission[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Charger les permissions personnalisées
+  // Charger les permissions personnalisées seulement pour les non-admins
   useEffect(() => {
-    if (currentUser?.id) {
+    if (currentUser?.id && currentUser.role !== 'admin') {
       loadCustomPermissions();
     } else {
       setCustomPermissions([]);
+      setLoading(false);
     }
-  }, [currentUser?.id]);
+  }, [currentUser?.id, currentUser?.role]);
 
   const loadCustomPermissions = async () => {
-    if (!currentUser?.id) return;
+    if (!currentUser?.id || currentUser.role === 'admin') return;
     
     setLoading(true);
     try {
@@ -50,6 +51,7 @@ export const useUserPermissions = () => {
   };
 
   if (!currentUser) {
+    console.log('[useUserPermissions] No current user');
     return {
       // Permissions existantes
       canAccessAll: false,
@@ -89,6 +91,8 @@ export const useUserPermissions = () => {
   const isAdmin = currentUser.role === 'admin';
   const isComptable = currentUser.role === 'comptable';
   const isSecretaire = currentUser.role === 'secretaire';
+  
+  console.log('[useUserPermissions] User role:', currentUser.role, 'isAdmin:', isAdmin);
 
   // Permissions de création (basées uniquement sur les rôles - pas de personnalisation pour éviter l'escalade de privilèges)
   const creationPermissions = {
@@ -99,7 +103,7 @@ export const useUserPermissions = () => {
     canCreateAgents: isAdmin, // Seuls les admins peuvent créer des agents
   };
 
-  return {
+  const permissions = {
     // Admin permissions - accès complet
     canAccessAll: isAdmin,
     canManageUsers: isAdmin,
@@ -138,4 +142,13 @@ export const useUserPermissions = () => {
     loading,
     refreshPermissions: loadCustomPermissions
   };
+  
+  console.log('[useUserPermissions] Permissions calculated:', {
+    canAccessClients: permissions.canAccessClients,
+    canAccessProperties: permissions.canAccessProperties,
+    canAccessAgents: permissions.canAccessAgents,
+    isAdmin: permissions.isAdmin
+  });
+  
+  return permissions;
 };
