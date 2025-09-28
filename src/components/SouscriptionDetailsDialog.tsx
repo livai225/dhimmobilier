@@ -199,26 +199,22 @@ export function SouscriptionDetailsDialog({
               <CardContent className="space-y-3">
                 <div>
                   <p className="text-sm text-muted-foreground">Nom complet</p>
-                  <p className="font-medium">{client?.prenom} {client?.nom}</p>
+                  <p className="font-medium">
+                    {client?.prenom ? `${client.prenom} ${client.nom}` : client?.nom || "Non disponible"}
+                  </p>
                 </div>
-                {client?.telephone_principal && (
-                  <div>
-                    <p className="text-sm text-muted-foreground">Téléphone</p>
-                    <p className="font-medium">{client.telephone_principal}</p>
-                  </div>
-                )}
-                {client?.email && (
-                  <div>
-                    <p className="text-sm text-muted-foreground">Email</p>
-                    <p className="font-medium">{client.email}</p>
-                  </div>
-                )}
-                {client?.adresse && (
-                  <div>
-                    <p className="text-sm text-muted-foreground">Adresse</p>
-                    <p className="font-medium">{client.adresse}</p>
-                  </div>
-                )}
+                <div>
+                  <p className="text-sm text-muted-foreground">Téléphone</p>
+                  <p className="font-medium">{client?.telephone_principal || "Non renseigné"}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Email</p>
+                  <p className="font-medium">{client?.email || "Non renseigné"}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Adresse</p>
+                  <p className="font-medium">{client?.adresse || "Non renseignée"}</p>
+                </div>
               </CardContent>
             </Card>
 
@@ -233,26 +229,20 @@ export function SouscriptionDetailsDialog({
               <CardContent className="space-y-3">
                 <div>
                   <p className="text-sm text-muted-foreground">Nom</p>
-                  <p className="font-medium">{propriete?.nom}</p>
+                  <p className="font-medium">{propriete?.nom || "Non disponible"}</p>
                 </div>
-                {propriete?.adresse && (
-                  <div>
-                    <p className="text-sm text-muted-foreground">Adresse</p>
-                    <p className="font-medium">{propriete.adresse}</p>
-                  </div>
-                )}
-                {propriete?.surface && (
-                  <div>
-                    <p className="text-sm text-muted-foreground">Surface</p>
-                    <p className="font-medium">{propriete.surface} m²</p>
-                  </div>
-                )}
-                {propriete?.zone && (
-                  <div>
-                    <p className="text-sm text-muted-foreground">Zone</p>
-                    <p className="font-medium">{propriete.zone}</p>
-                  </div>
-                )}
+                <div>
+                  <p className="text-sm text-muted-foreground">Adresse</p>
+                  <p className="font-medium">{propriete?.adresse || "Non renseignée"}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Surface</p>
+                  <p className="font-medium">{propriete?.surface ? `${propriete.surface} m²` : "Non renseignée"}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Zone</p>
+                  <p className="font-medium">{propriete?.zone || "Non renseignée"}</p>
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -275,6 +265,9 @@ export function SouscriptionDetailsDialog({
                     {souscription.type_souscription === "mise_en_garde" ? "Import historique" : 
                      souscription.type_souscription === "historique" ? "Import historique" : "Classique"}
                   </Badge>
+                  {(!souscription.montant_droit_terre_mensuel && souscription.type_souscription === "mise_en_garde") && (
+                    <Badge variant="destructive">Configuration incomplète</Badge>
+                  )}
                   {soldeRestant <= 0 && (
                     <Badge variant="default" className="bg-green-500">
                       Souscription soldée
@@ -306,7 +299,11 @@ export function SouscriptionDetailsDialog({
                     <div className="space-y-2">
                       <div>
                         <p className="text-sm text-muted-foreground">Droit de terre mensuel</p>
-                        <p className="font-medium">{(souscription.montant_droit_terre_mensuel || 0).toLocaleString()} FCFA</p>
+                        <p className="font-medium">
+                          {souscription.montant_droit_terre_mensuel 
+                            ? `${souscription.montant_droit_terre_mensuel.toLocaleString()} FCFA`
+                            : "Non configuré"}
+                        </p>
                       </div>
                       {souscription.type_bien && (
                         <div>
@@ -375,6 +372,29 @@ export function SouscriptionDetailsDialog({
               </Card>
             )}
 
+            {/* Configuration Status for Historical Imports */}
+            {(souscription.type_souscription === "mise_en_garde" || souscription.type_souscription === "historique") && 
+             !souscription.montant_droit_terre_mensuel && (
+              <Card className="border-orange-200 bg-orange-50">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-lg text-orange-700">
+                    <FileText className="h-5 w-5" />
+                    Configuration requise
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <p className="text-sm text-orange-600">
+                    Cette souscription importée nécessite une configuration pour les droits de terre.
+                  </p>
+                  <div className="text-xs text-muted-foreground space-y-1">
+                    <p>• Montant mensuel du droit de terre non défini</p>
+                    <p>• Date de début des droits de terre à calculer</p>
+                    <p>• Utiliser l'outil de reconstruction pour compléter</p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Droit de terre Information */}
             <Card>
               <CardHeader className="pb-3">
@@ -403,13 +423,17 @@ export function SouscriptionDetailsDialog({
                   <div>
                     <p className="text-sm text-muted-foreground">Montant mensuel</p>
                     <p className="font-bold text-lg">
-                      {(souscription.montant_droit_terre_mensuel || 0).toLocaleString()} FCFA
+                      {souscription.montant_droit_terre_mensuel 
+                        ? `${souscription.montant_droit_terre_mensuel.toLocaleString()} FCFA`
+                        : "Non configuré"}
                     </p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Total sur 20 ans</p>
                     <p className="font-bold text-lg">
-                      {((souscription.montant_droit_terre_mensuel || 0) * 240).toLocaleString()} FCFA
+                      {souscription.montant_droit_terre_mensuel 
+                        ? `${(souscription.montant_droit_terre_mensuel * 240).toLocaleString()} FCFA`
+                        : "Non configuré"}
                     </p>
                   </div>
                 </div>
