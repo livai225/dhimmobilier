@@ -68,6 +68,7 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
     },
   });
 
+
   interface Client {
     id: string;
     nom: string;
@@ -123,6 +124,19 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
       }));
     },
   });
+
+  // Synchroniser les valeurs des comboboxes en mode édition
+  React.useEffect(() => {
+    if (souscription && clients.length > 0 && proprietes.length > 0) {
+      // S'assurer que les valeurs sont bien définies dans le formulaire
+      if (souscription.client_id && !form.getValues("client_id")) {
+        form.setValue("client_id", souscription.client_id);
+      }
+      if (souscription.propriete_id && !form.getValues("propriete_id")) {
+        form.setValue("propriete_id", souscription.propriete_id);
+      }
+    }
+  }, [souscription, form, clients, proprietes]);
 
   const mutation = useMutation({
     mutationFn: async (data: SouscriptionFormData) => {
@@ -379,8 +393,8 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
                       <Input
                         type="number"
                         placeholder={watchedValues.propriete_id && !souscription ? "Auto-rempli" : "Montant droit de terre"}
-                        readOnly={!!watchedValues.propriete_id && !souscription && !['historique', 'mise_en_garde'].includes(souscription?.type_souscription)}
-                        className={watchedValues.propriete_id && !souscription && !['historique', 'mise_en_garde'].includes(souscription?.type_souscription) ? "bg-muted cursor-not-allowed" : ""}
+                        readOnly={false}
+                        className=""
                         {...field}
                       />
                     </FormControl>
