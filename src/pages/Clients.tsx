@@ -149,7 +149,7 @@ export default function Clients() {
   });
 
   // Pagination côté serveur avec tri et filtres
-  const itemsPerPage = 50;
+  const itemsPerPage = 100;
   const { data: clients, isLoading, isFetching } = useQuery({
     queryKey: ['clients', debouncedSearchTerm, filterMissingPhone, filterMissingUrgence, selectedAgentId, clientTypeFilter, currentPage, itemsPerPage, sortBy, sortDir],
     queryFn: async () => {

@@ -39,6 +39,7 @@ export function LocationForm({ onClose, onSuccess }: LocationFormProps) {
       const { data, error } = await supabase
         .from("clients")
         .select("id, nom, prenom, telephone_principal")
+        .limit(999999)
         .order("nom");
       if (error) throw error;
       return data;

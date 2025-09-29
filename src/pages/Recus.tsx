@@ -39,6 +39,7 @@ export default function Recus() {
       const { data, error } = await supabase
         .from("clients")
         .select("id, nom, prenom")
+        .limit(999999)
         .order("nom");
       if (error) throw error;
       return data;

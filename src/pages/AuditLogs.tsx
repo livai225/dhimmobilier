@@ -52,7 +52,7 @@ export default function AuditLogs() {
           users:user_id (nom, prenom)
         `)
         .order('timestamp', { ascending: false })
-        .limit(999999);
+        .limit(1000);
 
       // Apply filters
       if (selectedUser !== 'all') {
