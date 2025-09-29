@@ -579,7 +579,15 @@ export type Database = {
           reference?: string | null
           souscription_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_paiements_droit_terre_souscription"
+            columns: ["souscription_id"]
+            isOneToOne: false
+            referencedRelation: "souscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       paiements_factures: {
         Row: {

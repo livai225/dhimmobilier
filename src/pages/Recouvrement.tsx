@@ -89,20 +89,46 @@ export default function Recouvrement() {
       // Get all payments for locations in the month
       const { data: paiementsLocations, error: locError } = await supabase
         .from('paiements_locations')
-        .select('location_id, montant, locations!inner(propriete_id)')
+        .select('location_id, montant')
         .gte('date_paiement', startOfMonth)
         .lte('date_paiement', endOfMonth);
 
-      if (locError) throw locError;
+      if (locError) {
+        console.error('Error fetching paiements_locations:', locError);
+      }
 
       // Get all payments for land rights in the month
       const { data: paiementsDroitTerre, error: dtError } = await supabase
         .from('paiements_droit_terre')
-        .select('souscription_id, montant, souscriptions!inner(propriete_id)')
+        .select('souscription_id, montant')
         .gte('date_paiement', startOfMonth)
         .lte('date_paiement', endOfMonth);
 
-      if (dtError) throw dtError;
+      if (dtError) {
+        console.error('Error fetching paiements_droit_terre:', dtError);
+      }
+
+      // Get location to property mappings
+      const locationIds = paiementsLocations?.map(p => p.location_id) || [];
+      const { data: locations } = await supabase
+        .from('locations')
+        .select('id, propriete_id')
+        .in('id', locationIds);
+
+      const locationPropertyMap = new Map(
+        locations?.map(l => [l.id, l.propriete_id]) || []
+      );
+
+      // Get souscription to property mappings
+      const souscriptionIds = paiementsDroitTerre?.map(p => p.souscription_id) || [];
+      const { data: souscriptions } = await supabase
+        .from('souscriptions')
+        .select('id, propriete_id')
+        .in('id', souscriptionIds);
+
+      const souscriptionPropertyMap = new Map(
+        souscriptions?.map(s => [s.id, s.propriete_id]) || []
+      );
 
       // Process recovery data
       return agents?.map(agent => {
@@ -136,12 +162,18 @@ export default function Recouvrement() {
         
         // Sum payments for locations managed by this agent
         const verseLoc = paiementsLocations
-          ?.filter((p: any) => propertyIds.includes(p.locations?.propriete_id))
+          ?.filter((p: any) => {
+            const propertyId = locationPropertyMap.get(p.location_id);
+            return propertyId && propertyIds.includes(propertyId);
+          })
           .reduce((sum, p) => sum + (p.montant || 0), 0) || 0;
         
         // Sum payments for land rights managed by this agent
         const verseDT = paiementsDroitTerre
-          ?.filter((p: any) => propertyIds.includes(p.souscriptions?.propriete_id))
+          ?.filter((p: any) => {
+            const propertyId = souscriptionPropertyMap.get(p.souscription_id);
+            return propertyId && propertyIds.includes(propertyId);
+          })
           .reduce((sum, p) => sum + (p.montant || 0), 0) || 0;
         
         const total_verse = verseLoc + verseDT;

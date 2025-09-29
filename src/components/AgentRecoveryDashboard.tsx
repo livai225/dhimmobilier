@@ -143,22 +143,45 @@ export function AgentRecoveryDashboard({ agentId, onBack }: Props) {
         // Get actual payments for locations in this month
         const { data: paiementsLoc } = await supabase
           .from('paiements_locations')
-          .select('montant, locations!inner(propriete_id)')
-          .in('locations.propriete_id', propertyIds)
+          .select('location_id, montant')
           .gte('date_paiement', startDate)
           .lte('date_paiement', endDate);
+
+        // Get locations for this agent's properties
+        const { data: agentLocations } = await supabase
+          .from('locations')
+          .select('id, propriete_id')
+          .in('propriete_id', propertyIds);
+
+        const agentLocationIds = new Set(agentLocations?.map(l => l.id) || []);
 
         // Get actual payments for land rights in this month
         const { data: paiementsDT } = await supabase
           .from('paiements_droit_terre')
-          .select('montant, souscriptions!inner(propriete_id)')
-          .in('souscriptions.propriete_id', propertyIds)
+          .select('souscription_id, montant')
           .gte('date_paiement', startDate)
           .lte('date_paiement', endDate);
 
+        // Get souscriptions for this agent's properties
+        const { data: agentSouscriptions } = await supabase
+          .from('souscriptions')
+          .select('id, propriete_id')
+          .in('propriete_id', propertyIds);
+
+        const agentSouscriptionIds = new Set(agentSouscriptions?.map(s => s.id) || []);
+
+        // Filter payments for agent's properties
+        const filteredPaiementsLoc = paiementsLoc?.filter(p => 
+          agentLocationIds.has(p.location_id)
+        ) || [];
+
+        const filteredPaiementsDT = paiementsDT?.filter(p => 
+          agentSouscriptionIds.has(p.souscription_id)
+        ) || [];
+
         const verse = 
-          (paiementsLoc?.reduce((sum, p) => sum + (p.montant || 0), 0) || 0) +
-          (paiementsDT?.reduce((sum, p) => sum + (p.montant || 0), 0) || 0);
+          (filteredPaiementsLoc.reduce((sum, p) => sum + (p.montant || 0), 0)) +
+          (filteredPaiementsDT.reduce((sum, p) => sum + (p.montant || 0), 0));
         const total_du = du_loyers + du_droits_terre;
         const taux_recouvrement = total_du > 0 ? (verse / total_du) * 100 : 0;
         const ecart = verse - total_du;
