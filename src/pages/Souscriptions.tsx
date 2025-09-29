@@ -21,6 +21,8 @@ import { fr } from "date-fns/locale";
 import { ProtectedAction } from "@/components/ProtectedAction";
 import { AgentSummaryCard } from "@/components/AgentSummaryCard";
 import { useAgentStats } from "@/hooks/useAgentStats";
+import { usePagination } from "@/hooks/usePagination";
+import { PaginationControls } from "@/components/PaginationControls";
 
 export default function Souscriptions() {
   const { canAccessDashboard } = useUserPermissions();
@@ -157,6 +159,17 @@ export default function Souscriptions() {
     return matchesSearch && matchesPhase && matchesAgent;
   });
 
+  const {
+    currentPage,
+    totalPages,
+    paginatedItems: paginatedSouscriptions,
+    goToPage,
+    totalItems,
+  } = usePagination({
+    items: filteredSouscriptions,
+    itemsPerPage: 10,
+  });
+
   if (isLoading) {
     return <div className="flex justify-center items-center h-64">Chargement...</div>;
   }
@@ -257,7 +270,7 @@ export default function Souscriptions() {
 
       {/* Souscriptions List */}
       <div className="grid gap-4">
-        {filteredSouscriptions?.map((souscription) => (
+        {paginatedSouscriptions?.map((souscription) => (
           <Card key={souscription.id}>
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
@@ -401,7 +414,28 @@ export default function Souscriptions() {
             </CardContent>
           </Card>
         ))}
+
+        {filteredSouscriptions && filteredSouscriptions.length === 0 && (
+          <Card>
+            <CardContent className="text-center py-8">
+              <p className="text-muted-foreground">
+                Aucune souscription trouvée.
+              </p>
+            </CardContent>
+          </Card>
+        )}
       </div>
+
+      {/* Pagination */}
+      {filteredSouscriptions && filteredSouscriptions.length > 0 && (
+        <PaginationControls
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={goToPage}
+          totalItems={totalItems}
+          itemsPerPage={10}
+        />
+      )}
 
       {/* Details Dialog */}
       <SouscriptionDetailsDialog

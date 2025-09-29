@@ -19,6 +19,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { calculateLocationDebt, calculateLocationProgress } from "@/utils/locationUtils";
 import { AgentSummaryCard } from "@/components/AgentSummaryCard";
 import { useAgentStats } from "@/hooks/useAgentStats";
+import { usePagination } from "@/hooks/usePagination";
+import { PaginationControls } from "@/components/PaginationControls";
 
 export default function Locations() {
   const { canAccessDashboard } = useUserPermissions();
@@ -112,6 +114,17 @@ export default function Locations() {
       (location.proprietes?.agent_id && location.proprietes.agent_id === agentFilter);
 
     return matchesSearch && matchesStatus && matchesAgent;
+  });
+
+  const {
+    currentPage,
+    totalPages,
+    paginatedItems: paginatedLocations,
+    goToPage,
+    totalItems,
+  } = usePagination({
+    items: filteredLocations,
+    itemsPerPage: 10,
   });
 
   const getStatusBadge = (statut: string) => {
@@ -239,7 +252,7 @@ export default function Locations() {
 
           {/* Locations List */}
           <div className="grid gap-4">
-        {filteredLocations?.map((location) => (
+        {paginatedLocations?.map((location) => (
           <Card key={location.id}>
             <CardHeader>
               <div className="flex justify-between items-start">
@@ -356,6 +369,17 @@ export default function Locations() {
               </Card>
             )}
           </div>
+
+          {/* Pagination */}
+          {filteredLocations && filteredLocations.length > 0 && (
+            <PaginationControls
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={goToPage}
+              totalItems={totalItems}
+              itemsPerPage={10}
+            />
+          )}
         </TabsContent>
       </Tabs>
 
