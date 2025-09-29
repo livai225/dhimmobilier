@@ -82,6 +82,7 @@ export function AgentRecoveryDashboard({ agentId, onBack }: Props) {
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [clientStatusFilter, setClientStatusFilter] = useState<'all' | 'paye' | 'partiel' | 'impaye'>('all');
   const [clientSearchTerm, setClientSearchTerm] = useState("");
+  const [clientContractFilter, setClientContractFilter] = useState<'all' | 'location' | 'souscription'>('all');
 
   // Fetch agent details
   const { data: agent } = useQuery({
@@ -215,7 +216,7 @@ export function AgentRecoveryDashboard({ agentId, onBack }: Props) {
             clients:clients!client_id (nom, prenom)
           ),
           souscriptions:souscriptions!propriete_id (
-            id, client_id, montant_droit_terre_mensuel, type_souscription,
+            id, client_id, montant_droit_terre_mensuel, type_souscription, phase_actuelle, statut,
             clients:clients!client_id (nom, prenom)
           )
         `)
@@ -225,11 +226,11 @@ export function AgentRecoveryDashboard({ agentId, onBack }: Props) {
 
       return props?.map(prop => {
         const locations_count = prop.locations?.length || 0;
-        const souscriptions_count = prop.souscriptions?.filter(s => s.type_souscription === 'mise_en_garde').length || 0;
+        const souscriptions_count = prop.souscriptions?.filter(s => s.phase_actuelle === 'droit_terre' && s.statut === 'active').length || 0;
         
         const monthly_rent_due = prop.locations?.reduce((sum, loc) => sum + (loc.loyer_mensuel || 0), 0) || 0;
         const monthly_droit_terre_due = prop.souscriptions
-          ?.filter(s => s.type_souscription === 'mise_en_garde')
+          ?.filter(s => s.phase_actuelle === 'droit_terre' && s.statut === 'active')
           .reduce((sum, sub) => sum + (sub.montant_droit_terre_mensuel || 0), 0) || 0;
 
         // Determine status based on activity
@@ -272,7 +273,7 @@ export function AgentRecoveryDashboard({ agentId, onBack }: Props) {
             clients:clients!client_id (id, nom, prenom, telephone_principal)
           ),
           souscriptions:souscriptions!propriete_id (
-            id, client_id, montant_droit_terre_mensuel, type_souscription,
+            id, client_id, montant_droit_terre_mensuel, type_souscription, phase_actuelle, statut,
             clients:clients!client_id (id, nom, prenom, telephone_principal)
           )
         `)
@@ -343,7 +344,8 @@ export function AgentRecoveryDashboard({ agentId, onBack }: Props) {
 
         // Traiter les souscriptions
         prop.souscriptions?.forEach((sub: any) => {
-          if (sub.type_souscription !== 'mise_en_garde') return;
+          // Ne comptabiliser que les souscriptions actives en phase de droits de terre
+          if (sub.phase_actuelle !== 'droit_terre' || sub.statut !== 'active') return;
           
           const client = sub.clients;
           if (!client) return;
@@ -417,7 +419,11 @@ export function AgentRecoveryDashboard({ agentId, onBack }: Props) {
     
     const matchesStatus = clientStatusFilter === 'all' || client.statut === clientStatusFilter;
     
-    return matchesSearch && matchesStatus;
+    const matchesContract = 
+      clientContractFilter === 'all' || 
+      client.contract_types.includes(clientContractFilter);
+    
+    return matchesSearch && matchesStatus && matchesContract;
   });
 
   const clientStats = {
@@ -790,13 +796,48 @@ export function AgentRecoveryDashboard({ agentId, onBack }: Props) {
             </Card>
           </div>
 
+          {/* Statistiques par type de contrat */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-blue-600">Locataires</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-blue-600">
+                  {clientsStatus.filter(c => c.contract_types.includes('location')).length}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Payés: {clientsStatus.filter(c => c.contract_types.includes('location') && c.statut === 'paye').length} • 
+                  Partiels: {clientsStatus.filter(c => c.contract_types.includes('location') && c.statut === 'partiel').length} • 
+                  Impayés: {clientsStatus.filter(c => c.contract_types.includes('location') && c.statut === 'impaye').length}
+                </p>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-orange-600">Souscripteurs</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-orange-600">
+                  {clientsStatus.filter(c => c.contract_types.includes('souscription')).length}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Payés: {clientsStatus.filter(c => c.contract_types.includes('souscription') && c.statut === 'paye').length} • 
+                  Partiels: {clientsStatus.filter(c => c.contract_types.includes('souscription') && c.statut === 'partiel').length} • 
+                  Impayés: {clientsStatus.filter(c => c.contract_types.includes('souscription') && c.statut === 'impaye').length}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
           {/* Filtres */}
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Filtres</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <Label htmlFor="client-search">Rechercher un client</Label>
                   <div className="relative">
@@ -822,6 +863,20 @@ export function AgentRecoveryDashboard({ agentId, onBack }: Props) {
                       <SelectItem value="paye">Payés uniquement</SelectItem>
                       <SelectItem value="partiel">Partiels uniquement</SelectItem>
                       <SelectItem value="impaye">Impayés uniquement</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div>
+                  <Label htmlFor="contract-filter">Type de contrat</Label>
+                  <Select value={clientContractFilter} onValueChange={(value: any) => setClientContractFilter(value)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tous les contrats</SelectItem>
+                      <SelectItem value="location">Locataires uniquement</SelectItem>
+                      <SelectItem value="souscription">Souscripteurs uniquement</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
