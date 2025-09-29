@@ -61,7 +61,7 @@ const menuItems = [
     permission: "canAccessInvoices" as const,
   },
   {
-    title: "Souscriptions",
+    title: "Bails",
     url: "/souscriptions",
     icon: UserCheck,
     permission: "canAccessSubscriptions" as const,
