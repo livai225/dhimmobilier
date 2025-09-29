@@ -88,29 +88,89 @@ export default function Souscriptions() {
   const shouldShowAgentSummary = agentFilter !== "all" && selectedAgent && agentStats;
 
   const deleteSouscription = async (souscriptionId: string) => {
-    if (!confirm("Êtes-vous sûr de vouloir supprimer cette souscription ?")) {
+    if (!confirm("Êtes-vous sûr de vouloir supprimer cette souscription ? Cette action supprimera également tous les paiements et reçus associés.")) {
       return;
     }
 
     try {
-      const { error } = await supabase
+      // Étape 1 : Supprimer les reçus liés
+      const { error: recusError } = await supabase
+        .from("recus")
+        .delete()
+        .eq("reference_id", souscriptionId)
+        .in("type_operation", ["paiement_souscription", "paiement_droit_terre"]);
+
+      if (recusError) {
+        console.error("Erreur lors de la suppression des reçus:", recusError);
+        throw new Error("Impossible de supprimer les reçus associés");
+      }
+
+      // Étape 2 : Supprimer les transactions de caisse liées
+      const { error: cashError } = await supabase
+        .from("cash_transactions")
+        .delete()
+        .eq("reference_operation", souscriptionId);
+
+      if (cashError) {
+        console.error("Erreur lors de la suppression des transactions:", cashError);
+        throw new Error("Impossible de supprimer les transactions de caisse associées");
+      }
+
+      // Étape 3 : Supprimer les paiements de souscription
+      const { error: paiementsError } = await supabase
+        .from("paiements_souscriptions")
+        .delete()
+        .eq("souscription_id", souscriptionId);
+
+      if (paiementsError) {
+        console.error("Erreur lors de la suppression des paiements de souscription:", paiementsError);
+        throw new Error("Impossible de supprimer les paiements de souscription");
+      }
+
+      // Étape 4 : Supprimer les paiements de droit de terre
+      const { error: droitTerreError } = await supabase
+        .from("paiements_droit_terre")
+        .delete()
+        .eq("souscription_id", souscriptionId);
+
+      if (droitTerreError) {
+        console.error("Erreur lors de la suppression des paiements de droit de terre:", droitTerreError);
+        throw new Error("Impossible de supprimer les paiements de droit de terre");
+      }
+
+      // Étape 5 : Supprimer les échéances de droit de terre
+      const { error: echeancesError } = await supabase
+        .from("echeances_droit_terre")
+        .delete()
+        .eq("souscription_id", souscriptionId);
+
+      if (echeancesError) {
+        console.error("Erreur lors de la suppression des échéances:", echeancesError);
+        throw new Error("Impossible de supprimer les échéances de droit de terre");
+      }
+
+      // Étape 6 : Supprimer la souscription elle-même
+      const { error: souscriptionError } = await supabase
         .from("souscriptions")
         .delete()
         .eq("id", souscriptionId);
 
-      if (error) throw error;
+      if (souscriptionError) {
+        console.error("Erreur lors de la suppression de la souscription:", souscriptionError);
+        throw new Error("Impossible de supprimer la souscription");
+      }
 
       toast({
         title: "Succès",
-        description: "La souscription a été supprimée.",
+        description: "La souscription et tous ses enregistrements associés ont été supprimés.",
       });
 
       refetch();
     } catch (error) {
-      console.error("Error deleting souscription:", error);
+      console.error("Erreur lors de la suppression:", error);
       toast({
         title: "Erreur",
-        description: "Impossible de supprimer la souscription.",
+        description: error instanceof Error ? error.message : "Impossible de supprimer la souscription.",
         variant: "destructive",
       });
     }
