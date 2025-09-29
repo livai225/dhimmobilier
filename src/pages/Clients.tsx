@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, Edit, Trash2, Users, Phone, Mail, MapPin, AlertTriangle, Search, TrendingUp, Activity, Eye, Loader2, ArrowUpDown } from "lucide-react";
+import { Plus, Edit, Trash2, Users, Phone, Mail, MapPin, AlertTriangle, Search, TrendingUp, Activity, Eye, Loader2, ArrowUpDown, Home, User, UserCheck } from "lucide-react";
 import { ProtectedAction } from "@/components/ProtectedAction";
 import { useToast } from "@/hooks/use-toast";
 import { ClientForm } from "@/components/ClientForm";
@@ -36,6 +36,8 @@ interface Client {
   contact_urgence_relation?: string;
   created_at: string;
   updated_at: string;
+  locations?: Array<{ count: number }>;
+  souscriptions?: Array<{ count: number }>;
 }
 
 export default function Clients() {
@@ -49,6 +51,7 @@ export default function Clients() {
   const [filterMissingPhone, setFilterMissingPhone] = useState(false);
   const [filterMissingUrgence, setFilterMissingUrgence] = useState(false);
   const [selectedAgentId, setSelectedAgentId] = useState<string>("all");
+  const [clientTypeFilter, setClientTypeFilter] = useState<'all' | 'locataires' | 'souscripteurs' | 'mixtes' | 'prospects'>('all');
   // Tri
   const [sortBy, setSortBy] = useState<"nom" | "email" | "telephone" | "created_at">("nom");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
@@ -148,7 +151,7 @@ export default function Clients() {
   // Pagination côté serveur avec tri et filtres
   const itemsPerPage = 50;
   const { data: clients, isLoading, isFetching } = useQuery({
-    queryKey: ['clients', debouncedSearchTerm, filterMissingPhone, filterMissingUrgence, selectedAgentId, currentPage, itemsPerPage, sortBy, sortDir],
+    queryKey: ['clients', debouncedSearchTerm, filterMissingPhone, filterMissingUrgence, selectedAgentId, clientTypeFilter, currentPage, itemsPerPage, sortBy, sortDir],
     queryFn: async () => {
       const term = debouncedSearchTerm;
       const offset = (currentPage - 1) * itemsPerPage;
@@ -156,7 +159,11 @@ export default function Clients() {
 
       let query = supabase
         .from('clients')
-        .select('*');
+        .select(`
+          *,
+          locations:locations!left(count),
+          souscriptions:souscriptions!left(count)
+        `);
 
       // Filter by agent if selected
       if (selectedAgentId && selectedAgentId !== "all") {
@@ -209,6 +216,17 @@ export default function Clients() {
       if (filterMissingPhone) query = query.is('telephone_principal', null);
       if (filterMissingUrgence) query = query.is('contact_urgence_nom', null);
 
+      // Apply client type filter
+      if (clientTypeFilter === 'locataires') {
+        query = query.gt('locations.count', 0).eq('souscriptions.count', 0);
+      } else if (clientTypeFilter === 'souscripteurs') {
+        query = query.eq('locations.count', 0).gt('souscriptions.count', 0);
+      } else if (clientTypeFilter === 'mixtes') {
+        query = query.gt('locations.count', 0).gt('souscriptions.count', 0);
+      } else if (clientTypeFilter === 'prospects') {
+        query = query.eq('locations.count', 0).eq('souscriptions.count', 0);
+      }
+
       // Tri côté serveur
       const sortColumn = sortBy === 'telephone' ? 'telephone_principal' : (sortBy === 'email' ? 'email' : (sortBy === 'created_at' ? 'created_at' : 'nom'));
       query = query.order(sortColumn, { ascending: sortDir === 'asc' });
@@ -223,10 +241,14 @@ export default function Clients() {
 
   // Compte total pour pagination
   const { data: totalCount = 0 } = useQuery({
-    queryKey: ['clients-count', debouncedSearchTerm, filterMissingPhone, filterMissingUrgence, selectedAgentId],
+    queryKey: ['clients-count', debouncedSearchTerm, filterMissingPhone, filterMissingUrgence, selectedAgentId, clientTypeFilter],
     queryFn: async () => {
       const term = debouncedSearchTerm;
-      let query = supabase.from('clients').select('*', { count: 'exact', head: true });
+      let query = supabase.from('clients').select(`
+        *,
+        locations:locations!left(count),
+        souscriptions:souscriptions!left(count)
+      `, { count: 'exact', head: true });
 
       // Filter by agent if selected
       if (selectedAgentId && selectedAgentId !== "all") {
@@ -275,6 +297,17 @@ export default function Clients() {
       }
       if (filterMissingPhone) query = query.is('telephone_principal', null);
       if (filterMissingUrgence) query = query.is('contact_urgence_nom', null);
+
+      // Apply client type filter
+      if (clientTypeFilter === 'locataires') {
+        query = query.gt('locations.count', 0).eq('souscriptions.count', 0);
+      } else if (clientTypeFilter === 'souscripteurs') {
+        query = query.eq('locations.count', 0).gt('souscriptions.count', 0);
+      } else if (clientTypeFilter === 'mixtes') {
+        query = query.gt('locations.count', 0).gt('souscriptions.count', 0);
+      } else if (clientTypeFilter === 'prospects') {
+        query = query.eq('locations.count', 0).eq('souscriptions.count', 0);
+      }
 
       const { count, error } = await query;
       if (error) throw error;
@@ -402,6 +435,21 @@ export default function Clients() {
       contact_urgence_telephone: "",
       contact_urgence_relation: "",
     });
+  };
+
+  const getClientTypeBadge = (client: Client) => {
+    const locationsCount = client.locations?.[0]?.count || 0;
+    const souscriptionsCount = client.souscriptions?.[0]?.count || 0;
+    
+    if (locationsCount > 0 && souscriptionsCount > 0) {
+      return <Badge variant="secondary" className="bg-purple-100 text-purple-800 border-purple-200">Mixte</Badge>;
+    } else if (locationsCount > 0) {
+      return <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200">Locataire</Badge>;
+    } else if (souscriptionsCount > 0) {
+      return <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200">Souscripteur</Badge>;
+    } else {
+      return <Badge variant="outline" className="text-muted-foreground">Prospect</Badge>;
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -625,6 +673,39 @@ export default function Clients() {
           >
             Urgence manquante
           </Button>
+          
+          <Select value={clientTypeFilter} onValueChange={(value) => { setClientTypeFilter(value as any); setCurrentPage(1); }}>
+            <SelectTrigger className="w-auto min-w-[180px]">
+              <SelectValue placeholder="Type de client" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tous les types</SelectItem>
+              <SelectItem value="locataires">
+                <div className="flex items-center gap-2">
+                  <Home className="h-4 w-4" />
+                  Locataires
+                </div>
+              </SelectItem>
+              <SelectItem value="souscripteurs">
+                <div className="flex items-center gap-2">
+                  <UserCheck className="h-4 w-4" />
+                  Souscripteurs
+                </div>
+              </SelectItem>
+              <SelectItem value="mixtes">
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  Mixtes
+                </div>
+              </SelectItem>
+              <SelectItem value="prospects">
+                <div className="flex items-center gap-2">
+                  <User className="h-4 w-4" />
+                  Prospects
+                </div>
+              </SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         {searchTerm && (
           <div className="flex items-center space-x-2 text-sm text-muted-foreground">
@@ -837,7 +918,10 @@ export default function Clients() {
                       <TableRow key={client.id}>
                         <TableCell>
                           <div>
-                            <div className="font-medium">{client.nom} {client.prenom}</div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{client.nom} {client.prenom}</span>
+                              {getClientTypeBadge(client)}
+                            </div>
                             {client.adresse && (
                               <div className="text-sm text-muted-foreground flex items-center gap-1">
                                 <MapPin className="h-3 w-3" />

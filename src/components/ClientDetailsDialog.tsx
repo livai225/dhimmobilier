@@ -40,6 +40,8 @@ interface Client {
   contact_urgence_relation?: string;
   created_at: string;
   updated_at: string;
+  locations?: Array<{ count: number }>;
+  souscriptions?: Array<{ count: number }>;
 }
 
 interface ClientDetailsDialogProps {
@@ -304,6 +306,21 @@ export function ClientDetailsDialog({ client, open, onOpenChange }: ClientDetail
 
   if (!client) return null;
 
+  const locationsCount = client.locations?.[0]?.count || 0;
+  const souscriptionsCount = client.souscriptions?.[0]?.count || 0;
+
+  const getClientTypeBadge = () => {
+    if (locationsCount > 0 && souscriptionsCount > 0) {
+      return <Badge variant="secondary" className="bg-purple-100 text-purple-800 border-purple-200">Mixte</Badge>;
+    } else if (locationsCount > 0) {
+      return <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200">Locataire</Badge>;
+    } else if (souscriptionsCount > 0) {
+      return <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200">Souscripteur</Badge>;
+    } else {
+      return <Badge variant="outline" className="text-muted-foreground">Prospect</Badge>;
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
@@ -311,6 +328,7 @@ export function ClientDetailsDialog({ client, open, onOpenChange }: ClientDetail
           <DialogTitle className="flex items-center gap-2">
             <Eye className="h-5 w-5" />
             Détails du client - {client.nom} {client.prenom}
+            {getClientTypeBadge()}
           </DialogTitle>
         </DialogHeader>
 
@@ -356,6 +374,29 @@ export function ClientDetailsDialog({ client, open, onOpenChange }: ClientDetail
                   </div>
                 </div>
                 
+                <Separator />
+                
+                {/* Statut d'activité */}
+                <div>
+                  <h4 className="font-semibold mb-2">Activité du client</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex items-center gap-2">
+                      <Home className="h-4 w-4 text-blue-600" />
+                      <span className="font-medium">Locations actives:</span>
+                      <Badge variant={locationsCount > 0 ? "default" : "outline"}>
+                        {locationsCount}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-green-600" />
+                      <span className="font-medium">Souscriptions actives:</span>
+                      <Badge variant={souscriptionsCount > 0 ? "default" : "outline"}>
+                        {souscriptionsCount}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+
                 <Separator />
                 
                 <div>
