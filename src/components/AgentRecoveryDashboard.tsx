@@ -116,7 +116,7 @@ export function AgentRecoveryDashboard({ agentId, onBack }: Props) {
           .select(`
             id, loyer_mensuel, droit_terre,
             locations:locations!propriete_id (loyer_mensuel),
-            souscriptions:souscriptions!propriete_id (montant_droit_terre_mensuel, type_souscription)
+            souscriptions:souscriptions!propriete_id (montant_droit_terre_mensuel, type_souscription, phase_actuelle, statut)
           `)
           .eq('agent_id', agentId);
 
@@ -130,11 +130,12 @@ export function AgentRecoveryDashboard({ agentId, onBack }: Props) {
           });
 
           // Calculate land rights dues
-          prop.souscriptions?.forEach(sub => {
-            if (sub.type_souscription === 'mise_en_garde') {
-              du_droits_terre += sub.montant_droit_terre_mensuel || prop.droit_terre || 0;
-            }
-          });
+        prop.souscriptions?.forEach(sub => {
+          // Comptabiliser toutes les souscriptions en phase de paiement des droits de terre
+          if (sub.phase_actuelle === 'droit_terre' && sub.statut === 'active') {
+            du_droits_terre += sub.montant_droit_terre_mensuel || prop.droit_terre || 0;
+          }
+        });
         });
 
         // Get property IDs for this agent

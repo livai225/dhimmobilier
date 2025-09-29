@@ -69,10 +69,10 @@ export default function Recouvrement() {
               id, client_id, loyer_mensuel, date_debut,
               clients:clients!client_id (nom, prenom)
             ),
-            souscriptions:souscriptions!propriete_id (
-              id, client_id, type_souscription, montant_droit_terre_mensuel,
-              clients:clients!client_id (nom, prenom)
-            )
+        souscriptions:souscriptions!propriete_id (
+          id, client_id, type_souscription, montant_droit_terre_mensuel, phase_actuelle, statut,
+          clients:clients!client_id (nom, prenom)
+        )
           )
         `)
         .eq('statut', 'actif')
@@ -147,13 +147,14 @@ export default function Recouvrement() {
           });
 
           // Count and calculate land rights income
-          propriete.souscriptions?.forEach(souscription => {
-            if (souscription.type_souscription === 'mise_en_garde') {
-              souscriptions_count++;
-              const monthlyDroit = souscription.montant_droit_terre_mensuel || propriete.droit_terre || 0;
-              total_du_droits_terre += monthlyDroit;
-            }
-          });
+        propriete.souscriptions?.forEach(souscription => {
+          // Comptabiliser toutes les souscriptions en phase de paiement des droits de terre
+          if (souscription.phase_actuelle === 'droit_terre' && souscription.statut === 'active') {
+            souscriptions_count++;
+            const monthlyDroit = souscription.montant_droit_terre_mensuel || propriete.droit_terre || 0;
+            total_du_droits_terre += monthlyDroit;
+          }
+        });
         });
 
         // Calculate total payments collected by agent for the month
