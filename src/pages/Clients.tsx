@@ -223,8 +223,8 @@ export default function Clients() {
       const sortColumn = sortBy === 'telephone' ? 'telephone_principal' : (sortBy === 'email' ? 'email' : (sortBy === 'created_at' ? 'created_at' : 'nom'));
       query = query.order(sortColumn, { ascending: sortDir === 'asc' });
 
-      // Pagination
-      const { data, error } = await query.range(offset, end);
+      // Charger tous les clients sans limite
+      const { data, error } = await query.limit(999999);
       if (error) throw error;
       return data || [];
     },

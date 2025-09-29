@@ -76,7 +76,8 @@ export default function Recouvrement() {
           )
         `)
         .eq('statut', 'actif')
-        .order('nom');
+        .order('nom')
+        .limit(999999);
 
       if (agentsError) throw agentsError;
 
@@ -91,7 +92,8 @@ export default function Recouvrement() {
         .from('paiements_locations')
         .select('location_id, montant')
         .gte('date_paiement', startOfMonth)
-        .lte('date_paiement', endOfMonth);
+        .lte('date_paiement', endOfMonth)
+        .limit(999999);
 
       if (locError) {
         console.error('Error fetching paiements_locations:', locError);
@@ -102,7 +104,8 @@ export default function Recouvrement() {
         .from('paiements_droit_terre')
         .select('souscription_id, montant')
         .gte('date_paiement', startOfMonth)
-        .lte('date_paiement', endOfMonth);
+        .lte('date_paiement', endOfMonth)
+        .limit(999999);
 
       if (dtError) {
         console.error('Error fetching paiements_droit_terre:', dtError);
@@ -113,7 +116,8 @@ export default function Recouvrement() {
       const { data: locations } = await supabase
         .from('locations')
         .select('id, propriete_id')
-        .in('id', locationIds);
+        .in('id', locationIds)
+        .limit(999999);
 
       const locationPropertyMap = new Map(
         locations?.map(l => [l.id, l.propriete_id]) || []
@@ -124,7 +128,8 @@ export default function Recouvrement() {
       const { data: souscriptions } = await supabase
         .from('souscriptions')
         .select('id, propriete_id')
-        .in('id', souscriptionIds);
+        .in('id', souscriptionIds)
+        .limit(999999);
 
       const souscriptionPropertyMap = new Map(
         souscriptions?.map(s => [s.id, s.propriete_id]) || []

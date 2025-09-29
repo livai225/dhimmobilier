@@ -46,7 +46,8 @@ export default function Locations() {
           proprietes!inner(nom, adresse, loyer_mensuel, agent_id, agents_recouvrement(nom, prenom)),
           paiements_locations(montant)
         `)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(999999);
 
       if (error) throw error;
       return data;

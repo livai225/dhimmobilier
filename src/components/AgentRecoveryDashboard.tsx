@@ -119,7 +119,8 @@ export function AgentRecoveryDashboard({ agentId, onBack }: Props) {
             locations:locations!propriete_id (loyer_mensuel),
             souscriptions:souscriptions!propriete_id (montant_droit_terre_mensuel, type_souscription, phase_actuelle, statut)
           `)
-          .eq('agent_id', agentId);
+          .eq('agent_id', agentId)
+          .limit(999999);
 
         let du_loyers = 0;
         let du_droits_terre = 0;
@@ -147,13 +148,15 @@ export function AgentRecoveryDashboard({ agentId, onBack }: Props) {
           .from('paiements_locations')
           .select('location_id, montant')
           .gte('date_paiement', startDate)
-          .lte('date_paiement', endDate);
+          .lte('date_paiement', endDate)
+          .limit(999999);
 
         // Get locations for this agent's properties
         const { data: agentLocations } = await supabase
           .from('locations')
           .select('id, propriete_id')
-          .in('propriete_id', propertyIds);
+          .in('propriete_id', propertyIds)
+          .limit(999999);
 
         const agentLocationIds = new Set(agentLocations?.map(l => l.id) || []);
 
@@ -162,13 +165,15 @@ export function AgentRecoveryDashboard({ agentId, onBack }: Props) {
           .from('paiements_droit_terre')
           .select('souscription_id, montant')
           .gte('date_paiement', startDate)
-          .lte('date_paiement', endDate);
+          .lte('date_paiement', endDate)
+          .limit(999999);
 
         // Get souscriptions for this agent's properties
         const { data: agentSouscriptions } = await supabase
           .from('souscriptions')
           .select('id, propriete_id')
-          .in('propriete_id', propertyIds);
+          .in('propriete_id', propertyIds)
+          .limit(999999);
 
         const agentSouscriptionIds = new Set(agentSouscriptions?.map(s => s.id) || []);
 
@@ -220,7 +225,8 @@ export function AgentRecoveryDashboard({ agentId, onBack }: Props) {
             clients:clients!client_id (nom, prenom)
           )
         `)
-        .eq('agent_id', agentId);
+        .eq('agent_id', agentId)
+        .limit(999999);
 
       if (error) throw error;
 
@@ -277,20 +283,23 @@ export function AgentRecoveryDashboard({ agentId, onBack }: Props) {
             clients:clients!client_id (id, nom, prenom, telephone_principal)
           )
         `)
-        .eq('agent_id', agentId);
+        .eq('agent_id', agentId)
+        .limit(999999);
 
       // Récupérer tous les paiements du mois
       const { data: paiementsLocations } = await supabase
         .from('paiements_locations')
         .select('location_id, montant')
         .gte('date_paiement', startOfMonth)
-        .lte('date_paiement', endOfMonth);
+        .lte('date_paiement', endOfMonth)
+        .limit(999999);
 
       const { data: paiementsDroitTerre } = await supabase
         .from('paiements_droit_terre')
         .select('souscription_id, montant')
         .gte('date_paiement', startOfMonth)
-        .lte('date_paiement', endOfMonth);
+        .lte('date_paiement', endOfMonth)
+        .limit(999999);
 
       // Grouper par client
       const clientsMap = new Map<string, ClientRecoveryStatus>();

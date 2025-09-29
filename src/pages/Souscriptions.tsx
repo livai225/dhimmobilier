@@ -48,7 +48,8 @@ export default function Souscriptions() {
           clients(nom, prenom),
           proprietes!inner(nom, adresse, agent_id, agents_recouvrement(nom, prenom))
         `)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(999999);
 
       if (error) throw error;
       return data;
