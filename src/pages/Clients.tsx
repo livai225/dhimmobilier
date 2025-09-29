@@ -446,7 +446,7 @@ export default function Clients() {
     } else if (locationsCount > 0) {
       return <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200">Locataire</Badge>;
     } else if (souscriptionsCount > 0) {
-      return <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200">Souscripteur</Badge>;
+      return <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200">Bailleur</Badge>;
     } else {
       return <Badge variant="outline" className="text-muted-foreground">Prospect</Badge>;
     }
@@ -689,7 +689,7 @@ export default function Clients() {
               <SelectItem value="souscripteurs">
                 <div className="flex items-center gap-2">
                   <UserCheck className="h-4 w-4" />
-                  Souscripteurs
+                  Bailleurs
                 </div>
               </SelectItem>
               <SelectItem value="mixtes">

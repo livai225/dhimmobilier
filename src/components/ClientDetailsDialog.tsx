@@ -315,7 +315,7 @@ export function ClientDetailsDialog({ client, open, onOpenChange }: ClientDetail
     } else if (locationsCount > 0) {
       return <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200">Locataire</Badge>;
     } else if (souscriptionsCount > 0) {
-      return <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200">Souscripteur</Badge>;
+      return <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200">Bailleur</Badge>;
     } else {
       return <Badge variant="outline" className="text-muted-foreground">Prospect</Badge>;
     }
@@ -389,7 +389,7 @@ export function ClientDetailsDialog({ client, open, onOpenChange }: ClientDetail
                     </div>
                     <div className="flex items-center gap-2">
                       <FileText className="h-4 w-4 text-green-600" />
-                      <span className="font-medium">Souscriptions actives:</span>
+                      <span className="font-medium">Baux actifs:</span>
                       <Badge variant={souscriptionsCount > 0 ? "default" : "outline"}>
                         {souscriptionsCount}
                       </Badge>
