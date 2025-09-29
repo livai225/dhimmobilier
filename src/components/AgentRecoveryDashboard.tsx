@@ -221,7 +221,10 @@ export function AgentRecoveryDashboard({ agentId, onBack }: Props) {
     queryKey: ['agent-clients-status', agentId, selectedMonth],
     queryFn: async () => {
       const startOfMonth = `${selectedMonth}-01`;
-      const endOfMonth = `${selectedMonth}-31`;
+      // Calculate the last day of the month dynamically
+      const date = new Date(`${selectedMonth}-01`);
+      const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+      const endOfMonth = `${selectedMonth}-${String(lastDay).padStart(2, '0')}`;
 
       // Récupérer toutes les propriétés de l'agent avec clients
       const { data: props } = await supabase
