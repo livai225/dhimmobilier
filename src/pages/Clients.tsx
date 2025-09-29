@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -51,7 +51,7 @@ export default function Clients() {
   const [filterMissingPhone, setFilterMissingPhone] = useState(false);
   const [filterMissingUrgence, setFilterMissingUrgence] = useState(false);
   const [selectedAgentId, setSelectedAgentId] = useState<string>("all");
-  const [clientTypeFilter, setClientTypeFilter] = useState<'all' | 'locataires' | 'souscripteurs' | 'mixtes' | 'prospects'>('all');
+  const [clientTypeFilter, setClientTypeFilter] = useState<'all' | 'locataires' | 'bailleurs' | 'mixtes' | 'prospects'>('all');
   // Tri
   const [sortBy, setSortBy] = useState<"nom" | "email" | "telephone" | "created_at">("nom");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
@@ -216,16 +216,8 @@ export default function Clients() {
       if (filterMissingPhone) query = query.is('telephone_principal', null);
       if (filterMissingUrgence) query = query.is('contact_urgence_nom', null);
 
-      // Apply client type filter
-      if (clientTypeFilter === 'locataires') {
-        query = query.gt('locations.count', 0).eq('souscriptions.count', 0);
-      } else if (clientTypeFilter === 'souscripteurs') {
-        query = query.eq('locations.count', 0).gt('souscriptions.count', 0);
-      } else if (clientTypeFilter === 'mixtes') {
-        query = query.gt('locations.count', 0).gt('souscriptions.count', 0);
-      } else if (clientTypeFilter === 'prospects') {
-        query = query.eq('locations.count', 0).eq('souscriptions.count', 0);
-      }
+      // Apply client type filter - filtering will be done client-side after fetching data
+      // Server-side filtering with LEFT JOIN counts is problematic in Supabase
 
       // Tri côté serveur
       const sortColumn = sortBy === 'telephone' ? 'telephone_principal' : (sortBy === 'email' ? 'email' : (sortBy === 'created_at' ? 'created_at' : 'nom'));
@@ -239,81 +231,35 @@ export default function Clients() {
     placeholderData: (prev) => prev,
   });
 
-  // Compte total pour pagination
-  const { data: totalCount = 0 } = useQuery({
-    queryKey: ['clients-count', debouncedSearchTerm, filterMissingPhone, filterMissingUrgence, selectedAgentId, clientTypeFilter],
-    queryFn: async () => {
-      const term = debouncedSearchTerm;
-      let query = supabase.from('clients').select(`
-        *,
-        locations:locations!left(count),
-        souscriptions:souscriptions!left(count)
-      `, { count: 'exact', head: true });
-
-      // Filter by agent if selected
-      if (selectedAgentId && selectedAgentId !== "all") {
-        const { data: clientIds } = await supabase
-          .from('locations')
-          .select('client_id, proprietes!inner(agent_id)')
-          .eq('proprietes.agent_id', selectedAgentId);
-        
-        const { data: clientIdsFromSouscriptions } = await supabase
-          .from('souscriptions')
-          .select('client_id, proprietes!inner(agent_id)')
-          .eq('proprietes.agent_id', selectedAgentId);
-
-        const allClientIds = [
-          ...(clientIds || []).map(item => item.client_id),
-          ...(clientIdsFromSouscriptions || []).map(item => item.client_id)
-        ];
-        
-        const uniqueClientIds = [...new Set(allClientIds)];
-        
-        if (uniqueClientIds.length === 0) {
-          return 0;
-        }
-        
-        query = query.in('id', uniqueClientIds);
+  // Apply client-side filtering since server-side LEFT JOIN filtering is problematic
+  const filteredClients = useMemo(() => {
+    if (!clients) return [];
+    
+    if (!clientTypeFilter || clientTypeFilter === 'all') {
+      return clients;
+    }
+    
+    return clients.filter((client: any) => {
+      const locationsCount = client.locations?.[0]?.count || 0;
+      const souscriptionsCount = client.souscriptions?.[0]?.count || 0;
+      
+      switch (clientTypeFilter) {
+        case 'locataires':
+          return locationsCount > 0 && souscriptionsCount === 0;
+        case 'bailleurs':
+          return souscriptionsCount > 0 && locationsCount === 0;
+        case 'mixtes':
+          return locationsCount > 0 && souscriptionsCount > 0;
+        case 'prospects':
+          return locationsCount === 0 && souscriptionsCount === 0;
+        default:
+          return true;
       }
+    });
+  }, [clients, clientTypeFilter]);
 
-      if (term.trim().length > 0) {
-        const normalizedSearch = normalizeString(term);
-        const searchWords = normalizedSearch.split(' ').filter(w => w.length > 0);
-        const conditions = [
-          `nom.ilike.%${normalizedSearch}%`,
-          `prenom.ilike.%${normalizedSearch}%`,
-          `email.ilike.%${normalizedSearch}%`,
-          `telephone_principal.ilike.%${term}%`,
-          `adresse.ilike.%${normalizedSearch}%`
-        ];
-        if (searchWords.length > 1) {
-          conditions.push(`nom.ilike.%${searchWords.join('%')}%`);
-          conditions.push(`prenom.ilike.%${searchWords.join('%')}%`);
-          const reversed = [...searchWords].reverse().join(' ');
-          conditions.push(`nom.ilike.%${reversed}%`);
-          conditions.push(`prenom.ilike.%${reversed}%`);
-        }
-        query = query.or(conditions.join(','));
-      }
-      if (filterMissingPhone) query = query.is('telephone_principal', null);
-      if (filterMissingUrgence) query = query.is('contact_urgence_nom', null);
-
-      // Apply client type filter
-      if (clientTypeFilter === 'locataires') {
-        query = query.gt('locations.count', 0).eq('souscriptions.count', 0);
-      } else if (clientTypeFilter === 'souscripteurs') {
-        query = query.eq('locations.count', 0).gt('souscriptions.count', 0);
-      } else if (clientTypeFilter === 'mixtes') {
-        query = query.gt('locations.count', 0).gt('souscriptions.count', 0);
-      } else if (clientTypeFilter === 'prospects') {
-        query = query.eq('locations.count', 0).eq('souscriptions.count', 0);
-      }
-
-      const { count, error } = await query;
-      if (error) throw error;
-      return count || 0;
-    },
-  });
+  // Compte total pour pagination - now using filtered data
+  const totalCount = filteredClients?.length || 0;
 
   // Fetch client statistics
   const { data: stats } = useQuery({
@@ -486,7 +432,7 @@ export default function Clients() {
 
   // Pagination calculée via totalCount et page courante
   const totalPages = Math.max(1, Math.ceil((totalCount as number) / itemsPerPage));
-  const currentClients = clients || [];
+  const currentClients = filteredClients || [];
 
   // Reset to first page when search changes with debouncing
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -686,7 +632,7 @@ export default function Clients() {
                   Locataires
                 </div>
               </SelectItem>
-              <SelectItem value="souscripteurs">
+              <SelectItem value="bailleurs">
                 <div className="flex items-center gap-2">
                   <UserCheck className="h-4 w-4" />
                   Bailleurs
