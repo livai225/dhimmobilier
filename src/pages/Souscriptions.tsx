@@ -17,7 +17,7 @@ import { Plus, Eye, CreditCard, Calendar, Trash2, Coins, BarChart3 } from "lucid
 import { toast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { ExportToExcelButton } from "@/components/ExportToExcelButton";
+import { ExportSouscriptionsButton } from "@/components/ExportSouscriptionsButton";
 import { ProtectedAction } from "@/components/ProtectedAction";
 import { AgentSummaryCard } from "@/components/AgentSummaryCard";
 import { useAgentStats } from "@/hooks/useAgentStats";
@@ -175,16 +175,7 @@ export default function Souscriptions() {
               {showDashboard ? "Masquer" : "Afficher"} le tableau de bord
             </Button>
           )}
-          <ExportToExcelButton
-            filename={`souscriptions_${new Date().toISOString().slice(0,10)}`}
-            rows={filteredSouscriptions || []}
-            columns={[
-              { header: "Client", accessor: (r:any) => `${r.clients?.prenom || ''} ${r.clients?.nom || ''}`.trim() },
-              { header: "Propriété", accessor: (r:any) => r.proprietes?.nom || '' },
-              { header: "Phase", accessor: (r:any) => r.phase_actuelle },
-              { header: "Prix total", accessor: (r:any) => r.prix_total },
-            ]}
-          />
+          <ExportSouscriptionsButton />
           <ProtectedAction permission="canCreateSubscriptions">
             <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
               <DialogTrigger asChild>
