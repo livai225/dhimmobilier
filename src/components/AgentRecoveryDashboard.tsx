@@ -137,16 +137,28 @@ export function AgentRecoveryDashboard({ agentId, onBack }: Props) {
           });
         });
 
-        // Get actual deposits for this month
-        const { data: deposits } = await supabase
-          .from('cash_transactions')
-          .select('montant')
-          .eq('agent_id', agentId)
-          .eq('type_operation', 'versement_agent')
-          .gte('date_transaction', startDate)
-          .lte('date_transaction', endDate);
+        // Get property IDs for this agent
+        const propertyIds = properties?.map(p => p.id) || [];
 
-        const verse = deposits?.reduce((sum, d) => sum + (d.montant || 0), 0) || 0;
+        // Get actual payments for locations in this month
+        const { data: paiementsLoc } = await supabase
+          .from('paiements_locations')
+          .select('montant, locations!inner(propriete_id)')
+          .in('locations.propriete_id', propertyIds)
+          .gte('date_paiement', startDate)
+          .lte('date_paiement', endDate);
+
+        // Get actual payments for land rights in this month
+        const { data: paiementsDT } = await supabase
+          .from('paiements_droit_terre')
+          .select('montant, souscriptions!inner(propriete_id)')
+          .in('souscriptions.propriete_id', propertyIds)
+          .gte('date_paiement', startDate)
+          .lte('date_paiement', endDate);
+
+        const verse = 
+          (paiementsLoc?.reduce((sum, p) => sum + (p.montant || 0), 0) || 0) +
+          (paiementsDT?.reduce((sum, p) => sum + (p.montant || 0), 0) || 0);
         const total_du = du_loyers + du_droits_terre;
         const taux_recouvrement = total_du > 0 ? (verse / total_du) * 100 : 0;
         const ecart = verse - total_du;

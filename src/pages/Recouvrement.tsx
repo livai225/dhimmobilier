@@ -80,18 +80,29 @@ export default function Recouvrement() {
 
       if (agentsError) throw agentsError;
 
-      // Get agent deposits for the month
+      // Calculate the date range for the month
       const startOfMonth = `${monthFilter}-01`;
-      const endOfMonth = `${monthFilter}-31`;
+      const date = new Date(`${monthFilter}-01`);
+      const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+      const endOfMonth = `${monthFilter}-${String(lastDay).padStart(2, '0')}`;
       
-      const { data: deposits, error: depositsError } = await supabase
-        .from('cash_transactions')
-        .select('agent_id, montant')
-        .eq('type_operation', 'versement_agent')
-        .gte('date_transaction', startOfMonth)
-        .lte('date_transaction', endOfMonth);
+      // Get all payments for locations in the month
+      const { data: paiementsLocations, error: locError } = await supabase
+        .from('paiements_locations')
+        .select('location_id, montant, locations!inner(propriete_id)')
+        .gte('date_paiement', startOfMonth)
+        .lte('date_paiement', endOfMonth);
 
-      if (depositsError) throw depositsError;
+      if (locError) throw locError;
+
+      // Get all payments for land rights in the month
+      const { data: paiementsDroitTerre, error: dtError } = await supabase
+        .from('paiements_droit_terre')
+        .select('souscription_id, montant, souscriptions!inner(propriete_id)')
+        .gte('date_paiement', startOfMonth)
+        .lte('date_paiement', endOfMonth);
+
+      if (dtError) throw dtError;
 
       // Process recovery data
       return agents?.map(agent => {
@@ -119,10 +130,21 @@ export default function Recouvrement() {
           });
         });
 
-        // Calculate total deposits by agent for the month
-        const total_verse = deposits
-          ?.filter(deposit => deposit.agent_id === agent.id)
-          .reduce((sum, deposit) => sum + (deposit.montant || 0), 0) || 0;
+        // Calculate total payments collected by agent for the month
+        // Get property IDs for this agent
+        const propertyIds = agent.proprietes?.map(p => p.id) || [];
+        
+        // Sum payments for locations managed by this agent
+        const verseLoc = paiementsLocations
+          ?.filter((p: any) => propertyIds.includes(p.locations?.propriete_id))
+          .reduce((sum, p) => sum + (p.montant || 0), 0) || 0;
+        
+        // Sum payments for land rights managed by this agent
+        const verseDT = paiementsDroitTerre
+          ?.filter((p: any) => propertyIds.includes(p.souscriptions?.propriete_id))
+          .reduce((sum, p) => sum + (p.montant || 0), 0) || 0;
+        
+        const total_verse = verseLoc + verseDT;
 
         const total_du = total_du_loyers + total_du_droits_terre;
         const ecart = total_verse - total_du;
