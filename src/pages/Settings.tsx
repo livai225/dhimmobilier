@@ -11,6 +11,7 @@ import { ImportClientsFromExcel } from "@/components/ImportClientsFromExcel";
 import { DuplicateClientManager } from "@/components/DuplicateClientManager";
 import { MissingReceiptsRecovery } from "@/components/MissingReceiptsRecovery";
 import { LandRightsReconstruction } from "@/components/LandRightsReconstruction";
+import { ExportSouscriptionsButton } from "@/components/ExportSouscriptionsButton";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -283,21 +284,31 @@ export default function Settings() {
           </CardContent>
         </Card>
 
-        {/* Import de données */}
+        {/* Import et Export de données */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Upload className="h-5 w-5" />
-              Import de données
+              Import et Export de données
             </CardTitle>
             <CardDescription>
-              Importez des données depuis des fichiers externes.
+              Importez et exportez des données depuis et vers des fichiers externes.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
               <h4 className="text-sm font-medium mb-2">Import de clients depuis Excel</h4>
               <ImportClientsFromExcel />
+            </div>
+            <div className="border-t pt-4">
+              <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                <Download className="h-4 w-4" />
+                Export des souscriptions
+              </h4>
+              <p className="text-sm text-muted-foreground mb-3">
+                Exportez toutes les souscriptions au format Excel avec les informations clients et propriétés
+              </p>
+              <ExportSouscriptionsButton />
             </div>
           </CardContent>
         </Card>

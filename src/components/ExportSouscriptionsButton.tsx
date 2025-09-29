@@ -16,58 +16,66 @@ export function ExportSouscriptionsButton({ label = "Exporter toutes les souscri
     setIsExporting(true);
     
     try {
-      // Récupérer toutes les souscriptions avec les informations complètes
-      const { data: souscriptions, error } = await supabase
+      console.log("Début de l'export des souscriptions...");
+      
+      // Récupérer toutes les souscriptions d'abord
+      const { data: souscriptions, error: souscriptionsError } = await supabase
         .from("souscriptions")
-        .select(`
-          id,
-          client_id,
-          propriete_id,
-          prix_total,
-          apport_initial,
-          montant_mensuel,
-          nombre_mois,
-          date_debut,
-          solde_restant,
-          periode_finition_mois,
-          date_fin_finition,
-          date_debut_droit_terre,
-          montant_droit_terre_mensuel,
-          montant_souscris,
-          statut,
-          type_souscription,
-          phase_actuelle,
-          type_bien,
-          created_at,
-          updated_at,
-          clients!inner(
-            id,
-            nom,
-            prenom,
-            email,
-            telephone_principal,
-            adresse
-          ),
-          proprietes!inner(
-            id,
-            nom,
-            adresse,
-            zone,
-            usage,
-            surface,
-            loyer_mensuel,
-            prix_achat,
-            agent_id,
-            agents_recouvrement(
-              nom,
-              prenom,
-              code_agent
-            )
-          )
-        `)
+        .select("*")
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
+      if (souscriptionsError) {
+        console.error("Erreur lors de la récupération des souscriptions:", souscriptionsError);
+        throw souscriptionsError;
+      }
+      
+      console.log(`${souscriptions?.length || 0} souscriptions trouvées`);
+
+      if (!souscriptions || souscriptions.length === 0) {
+        toast({
+          title: "Aucune donnée",
+          description: "Aucune souscription à exporter.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Récupérer tous les clients
+      const { data: clients, error: clientsError } = await supabase
+        .from("clients")
+        .select("id, nom, prenom, email, telephone_principal, adresse");
+
+      if (clientsError) {
+        console.error("Erreur lors de la récupération des clients:", clientsError);
+        throw clientsError;
+      }
+
+      // Récupérer toutes les propriétés
+      const { data: proprietes, error: propriétesError } = await supabase
+        .from("proprietes")
+        .select("id, nom, adresse, zone, usage, surface, loyer_mensuel, prix_achat, agent_id");
+
+      if (propriétesError) {
+        console.error("Erreur lors de la récupération des propriétés:", propriétesError);
+        throw propriétesError;
+      }
+
+      // Récupérer tous les agents
+      const { data: agents, error: agentsError } = await supabase
+        .from("agents_recouvrement")
+        .select("id, nom, prenom, code_agent");
+
+      if (agentsError) {
+        console.error("Erreur lors de la récupération des agents:", agentsError);
+        throw agentsError;
+      }
+
+      console.log(`${clients?.length || 0} clients, ${proprietes?.length || 0} propriétés, ${agents?.length || 0} agents récupérés`);
+
+      // Créer des maps pour un accès rapide
+      const clientsMap = new Map(clients?.map(c => [c.id, c]) || []);
+      const propriétesMap = new Map(proprietes?.map(p => [p.id, p]) || []);
+      const agentsMap = new Map(agents?.map(a => [a.id, a]) || []);
 
       if (!souscriptions || souscriptions.length === 0) {
         toast({
@@ -79,32 +87,37 @@ export function ExportSouscriptionsButton({ label = "Exporter toutes les souscri
       }
 
       // Préparer les données pour l'export Excel
-      const excelData = souscriptions.map((sub) => ({
-        // Identifiants
-        "ID_Souscription": sub.id,
-        "ID_Client": sub.client_id,
-        "ID_Propriete": sub.propriete_id,
+      const excelData = souscriptions.map((sub) => {
+        const client = clientsMap.get(sub.client_id);
+        const propriete = propriétesMap.get(sub.propriete_id);
+        const agent = propriete ? agentsMap.get(propriete.agent_id) : null;
         
-        // Informations client
-        "Client_Nom": sub.clients?.nom || "",
-        "Client_Prenom": sub.clients?.prenom || "",
-        "Client_Email": sub.clients?.email || "",
-        "Client_Telephone": sub.clients?.telephone_principal || "",
-        "Client_Adresse": sub.clients?.adresse || "",
-        
-        // Informations propriété
-        "Propriete_Nom": sub.proprietes?.nom || "",
-        "Propriete_Adresse": sub.proprietes?.adresse || "",
-        "Propriete_Zone": sub.proprietes?.zone || "",
-        "Propriete_Usage": sub.proprietes?.usage || "",
-        "Propriete_Surface": sub.proprietes?.surface || "",
-        "Propriete_Loyer_Mensuel": sub.proprietes?.loyer_mensuel || "",
-        "Propriete_Prix_Achat": sub.proprietes?.prix_achat || "",
-        
-        // Informations agent
-        "Agent_Nom": sub.proprietes?.agents_recouvrement?.nom || "",
-        "Agent_Prenom": sub.proprietes?.agents_recouvrement?.prenom || "",
-        "Agent_Code": sub.proprietes?.agents_recouvrement?.code_agent || "",
+        return {
+          // Identifiants
+          "ID_Souscription": sub.id,
+          "ID_Client": sub.client_id,
+          "ID_Propriete": sub.propriete_id,
+          
+          // Informations client
+          "Client_Nom": client?.nom || "",
+          "Client_Prenom": client?.prenom || "",
+          "Client_Email": client?.email || "",
+          "Client_Telephone": client?.telephone_principal || "",
+          "Client_Adresse": client?.adresse || "",
+          
+          // Informations propriété
+          "Propriete_Nom": propriete?.nom || "",
+          "Propriete_Adresse": propriete?.adresse || "",
+          "Propriete_Zone": propriete?.zone || "",
+          "Propriete_Usage": propriete?.usage || "",
+          "Propriete_Surface": propriete?.surface || "",
+          "Propriete_Loyer_Mensuel": propriete?.loyer_mensuel || "",
+          "Propriete_Prix_Achat": propriete?.prix_achat || "",
+          
+          // Informations agent
+          "Agent_Nom": agent?.nom || "",
+          "Agent_Prenom": agent?.prenom || "",
+          "Agent_Code": agent?.code_agent || "",
         
         // Informations souscription
         "Type_Souscription": sub.type_souscription,
@@ -138,10 +151,13 @@ export function ExportSouscriptionsButton({ label = "Exporter toutes les souscri
         "Calcul_Appartement": "=IF(Nouveau_Type_Bien=\"appartement\", 20000, \"\")",
         "Calcul_Commercial": "=IF(Nouveau_Type_Bien=\"commercial\", 30000, \"\")",
         
-        // Métadonnées
-        "Date_Creation": sub.created_at ? new Date(sub.created_at).toLocaleDateString('fr-FR') : "",
-        "Date_Modification": sub.updated_at ? new Date(sub.updated_at).toLocaleDateString('fr-FR') : "",
-      }));
+          // Métadonnées
+          "Date_Creation": sub.created_at ? new Date(sub.created_at).toLocaleDateString('fr-FR') : "",
+          "Date_Modification": sub.updated_at ? new Date(sub.updated_at).toLocaleDateString('fr-FR') : "",
+        };
+      });
+
+      console.log(`${excelData.length} lignes préparées pour l'export`);
 
       // Créer le fichier Excel
       const worksheet = XLSX.utils.json_to_sheet(excelData);
