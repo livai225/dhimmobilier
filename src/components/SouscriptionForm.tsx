@@ -99,14 +99,22 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
   }
 
   const { data: proprietes = [] } = useQuery<Array<Propriete & { label: string; value: string }>>({
-    queryKey: ["proprietes"],
+    queryKey: ["proprietes", souscription?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("proprietes")
         .select("id, nom, adresse, montant_bail, droit_terre")
-        .eq("usage", "Bail")
-        .eq("statut", "Libre")
-        .order("nom");
+        .eq("usage", "Bail");
+      
+      // En mode édition, inclure la propriété actuelle ET les propriétés libres
+      if (souscription?.propriete_id) {
+        query = query.or(`statut.eq.Libre,id.eq.${souscription.propriete_id}`);
+      } else {
+        // En mode création, seulement les propriétés libres
+        query = query.eq("statut", "Libre");
+      }
+      
+      const { data, error } = await query.order("nom");
       if (error) throw error;
       return (data as Propriete[]).map(propriete => ({
         ...propriete,
@@ -222,6 +230,12 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
   // Function to handle property selection and auto-fill
   const handlePropertyChange = (proprieteId: string) => {
     if (!proprieteId) return;
+    
+    // En mode édition, ne pas écraser les valeurs existantes avec l'auto-remplissage
+    if (souscription) {
+      form.setValue("propriete_id", proprieteId);
+      return;
+    }
     
     const selectedPropriete = proprietes.find(p => p.id === proprieteId);
     if (selectedPropriete) {
@@ -344,9 +358,9 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
                     <FormControl>
                       <Input
                         type="number"
-                        placeholder={watchedValues.propriete_id ? "Auto-rempli" : "Sélectionnez une propriété"}
-                        readOnly={!!watchedValues.propriete_id}
-                        className={watchedValues.propriete_id ? "bg-muted cursor-not-allowed" : ""}
+                        placeholder={watchedValues.propriete_id && !souscription ? "Auto-rempli" : "Montant souscris"}
+                        readOnly={!!watchedValues.propriete_id && !souscription}
+                        className={watchedValues.propriete_id && !souscription ? "bg-muted cursor-not-allowed" : ""}
                         {...field}
                       />
                     </FormControl>
@@ -364,9 +378,9 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
                     <FormControl>
                       <Input
                         type="number"
-                        placeholder={watchedValues.propriete_id ? "Auto-rempli" : "Sélectionnez une propriété"}
-                        readOnly={!!watchedValues.propriete_id}
-                        className={watchedValues.propriete_id ? "bg-muted cursor-not-allowed" : ""}
+                        placeholder={watchedValues.propriete_id && !souscription ? "Auto-rempli" : "Montant droit de terre"}
+                        readOnly={!!watchedValues.propriete_id && !souscription && !['historique', 'mise_en_garde'].includes(souscription?.type_souscription)}
+                        className={watchedValues.propriete_id && !souscription && !['historique', 'mise_en_garde'].includes(souscription?.type_souscription) ? "bg-muted cursor-not-allowed" : ""}
                         {...field}
                       />
                     </FormControl>
