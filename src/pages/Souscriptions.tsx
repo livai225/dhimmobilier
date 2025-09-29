@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,6 +25,7 @@ import { usePagination } from "@/hooks/usePagination";
 import { PaginationControls } from "@/components/PaginationControls";
 
 export default function Souscriptions() {
+  const queryClient = useQueryClient();
   const { canAccessDashboard } = useUserPermissions();
   const [searchTerm, setSearchTerm] = useState("");
   const [phaseFilter, setPhaseFilter] = useState<string>("all");
@@ -190,7 +191,15 @@ export default function Souscriptions() {
           )}
           
           <ProtectedAction permission="canCreateSubscriptions">
-            <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+            <Dialog 
+              open={isFormOpen} 
+              onOpenChange={(open) => {
+                setIsFormOpen(open);
+                if (open) {
+                  queryClient.invalidateQueries({ queryKey: ["clients"] });
+                }
+              }}
+            >
               <DialogTrigger asChild>
                 <Button className="w-full sm:w-auto">
                   <Plus className="mr-2 h-4 w-4" />
