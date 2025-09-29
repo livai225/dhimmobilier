@@ -9,9 +9,12 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts';
-import { ArrowLeft, TrendingUp, TrendingDown, Target, Calendar, MapPin, Phone, Mail } from "lucide-react";
+import { ArrowLeft, TrendingUp, TrendingDown, Target, Calendar, MapPin, Phone, Mail, Search } from "lucide-react";
 import { format, subMonths, startOfMonth } from "date-fns";
 import { fr } from "date-fns/locale";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 
 interface AgentDetails {
   id: string;
@@ -48,6 +51,28 @@ interface PropertyAssignment {
   status: 'active' | 'suspended' | 'warning';
 }
 
+interface ClientRecoveryStatus {
+  client_id: string;
+  client_nom: string;
+  client_prenom: string;
+  client_telephone?: string;
+  contract_types: ('location' | 'souscription')[];
+  
+  montant_du_locations: number;
+  montant_du_droits_terre: number;
+  total_du: number;
+  
+  montant_paye_locations: number;
+  montant_paye_droits_terre: number;
+  total_paye: number;
+  
+  statut: 'paye' | 'partiel' | 'impaye';
+  last_payment_date?: string;
+  
+  locations: Array<{ id: string; propriete_nom: string; loyer_mensuel: number }>;
+  souscriptions: Array<{ id: string; propriete_nom: string; montant_mensuel: number }>;
+}
+
 interface Props {
   agentId: string;
   onBack: () => void;
@@ -55,6 +80,8 @@ interface Props {
 
 export function AgentRecoveryDashboard({ agentId, onBack }: Props) {
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
+  const [clientStatusFilter, setClientStatusFilter] = useState<'all' | 'paye' | 'partiel' | 'impaye'>('all');
+  const [clientSearchTerm, setClientSearchTerm] = useState("");
 
   // Fetch agent details
   const { data: agent } = useQuery({
@@ -189,9 +216,180 @@ export function AgentRecoveryDashboard({ agentId, onBack }: Props) {
     },
   });
 
+  // Fetch clients with their payment status for the selected month
+  const { data: clientsStatus = [] } = useQuery({
+    queryKey: ['agent-clients-status', agentId, selectedMonth],
+    queryFn: async () => {
+      const startOfMonth = `${selectedMonth}-01`;
+      const endOfMonth = `${selectedMonth}-31`;
+
+      // Récupérer toutes les propriétés de l'agent avec clients
+      const { data: props } = await supabase
+        .from('proprietes')
+        .select(`
+          id, nom,
+          locations:locations!propriete_id (
+            id, client_id, loyer_mensuel, statut,
+            clients:clients!client_id (id, nom, prenom, telephone_principal)
+          ),
+          souscriptions:souscriptions!propriete_id (
+            id, client_id, montant_droit_terre_mensuel, type_souscription,
+            clients:clients!client_id (id, nom, prenom, telephone_principal)
+          )
+        `)
+        .eq('agent_id', agentId);
+
+      // Récupérer tous les paiements du mois
+      const { data: paiementsLocations } = await supabase
+        .from('paiements_locations')
+        .select('location_id, montant')
+        .gte('date_paiement', startOfMonth)
+        .lte('date_paiement', endOfMonth);
+
+      const { data: paiementsDroitTerre } = await supabase
+        .from('paiements_droit_terre')
+        .select('souscription_id, montant')
+        .gte('date_paiement', startOfMonth)
+        .lte('date_paiement', endOfMonth);
+
+      // Grouper par client
+      const clientsMap = new Map<string, ClientRecoveryStatus>();
+
+      props?.forEach(prop => {
+        // Traiter les locations
+        prop.locations?.forEach((loc: any) => {
+          if (loc.statut !== 'active') return;
+          
+          const client = loc.clients;
+          if (!client) return;
+
+          const clientKey = client.id;
+          if (!clientsMap.has(clientKey)) {
+            clientsMap.set(clientKey, {
+              client_id: client.id,
+              client_nom: client.nom,
+              client_prenom: client.prenom || '',
+              client_telephone: client.telephone_principal,
+              contract_types: [],
+              montant_du_locations: 0,
+              montant_du_droits_terre: 0,
+              total_du: 0,
+              montant_paye_locations: 0,
+              montant_paye_droits_terre: 0,
+              total_paye: 0,
+              statut: 'impaye',
+              locations: [],
+              souscriptions: [],
+            });
+          }
+
+          const clientData = clientsMap.get(clientKey)!;
+          if (!clientData.contract_types.includes('location')) {
+            clientData.contract_types.push('location');
+          }
+
+          clientData.montant_du_locations += loc.loyer_mensuel || 0;
+          clientData.locations.push({
+            id: loc.id,
+            propriete_nom: prop.nom,
+            loyer_mensuel: loc.loyer_mensuel || 0,
+          });
+
+          // Vérifier paiements
+          const paiement = paiementsLocations?.find((p: any) => p.location_id === loc.id);
+          if (paiement) {
+            clientData.montant_paye_locations += paiement.montant || 0;
+          }
+        });
+
+        // Traiter les souscriptions
+        prop.souscriptions?.forEach((sub: any) => {
+          if (sub.type_souscription !== 'mise_en_garde') return;
+          
+          const client = sub.clients;
+          if (!client) return;
+
+          const clientKey = client.id;
+          if (!clientsMap.has(clientKey)) {
+            clientsMap.set(clientKey, {
+              client_id: client.id,
+              client_nom: client.nom,
+              client_prenom: client.prenom || '',
+              client_telephone: client.telephone_principal,
+              contract_types: [],
+              montant_du_locations: 0,
+              montant_du_droits_terre: 0,
+              total_du: 0,
+              montant_paye_locations: 0,
+              montant_paye_droits_terre: 0,
+              total_paye: 0,
+              statut: 'impaye',
+              locations: [],
+              souscriptions: [],
+            });
+          }
+
+          const clientData = clientsMap.get(clientKey)!;
+          if (!clientData.contract_types.includes('souscription')) {
+            clientData.contract_types.push('souscription');
+          }
+
+          clientData.montant_du_droits_terre += sub.montant_droit_terre_mensuel || 0;
+          clientData.souscriptions.push({
+            id: sub.id,
+            propriete_nom: prop.nom,
+            montant_mensuel: sub.montant_droit_terre_mensuel || 0,
+          });
+
+          // Vérifier paiements
+          const paiement = paiementsDroitTerre?.find((p: any) => p.souscription_id === sub.id);
+          if (paiement) {
+            clientData.montant_paye_droits_terre += paiement.montant || 0;
+          }
+        });
+      });
+
+      // Calculer totaux et statuts
+      return Array.from(clientsMap.values()).map(client => {
+        client.total_du = client.montant_du_locations + client.montant_du_droits_terre;
+        client.total_paye = client.montant_paye_locations + client.montant_paye_droits_terre;
+
+        if (client.total_paye >= client.total_du) {
+          client.statut = 'paye';
+        } else if (client.total_paye > 0) {
+          client.statut = 'partiel';
+        } else {
+          client.statut = 'impaye';
+        }
+
+        return client;
+      });
+    },
+  });
+
   if (!agent) {
     return <div>Chargement...</div>;
   }
+
+  const filteredClients = clientsStatus.filter(client => {
+    const matchesSearch = 
+      client.client_nom.toLowerCase().includes(clientSearchTerm.toLowerCase()) ||
+      client.client_prenom.toLowerCase().includes(clientSearchTerm.toLowerCase());
+    
+    const matchesStatus = clientStatusFilter === 'all' || client.statut === clientStatusFilter;
+    
+    return matchesSearch && matchesStatus;
+  });
+
+  const clientStats = {
+    total: clientsStatus.length,
+    payes: clientsStatus.filter(c => c.statut === 'paye').length,
+    partiels: clientsStatus.filter(c => c.statut === 'partiel').length,
+    impayes: clientsStatus.filter(c => c.statut === 'impaye').length,
+    taux_paiement: clientsStatus.length > 0 
+      ? (clientsStatus.filter(c => c.statut === 'paye').length / clientsStatus.length) * 100 
+      : 0,
+  };
 
   const currentMonthData = performance[performance.length - 1] || {
     du_loyers: 0,
@@ -305,6 +503,7 @@ export function AgentRecoveryDashboard({ agentId, onBack }: Props) {
         <TabsList>
           <TabsTrigger value="performance">Performance</TabsTrigger>
           <TabsTrigger value="properties">Portefeuille</TabsTrigger>
+          <TabsTrigger value="clients">Clients ({clientsStatus.length})</TabsTrigger>
           <TabsTrigger value="analytics">Analyses</TabsTrigger>
         </TabsList>
 
@@ -503,6 +702,183 @@ export function AgentRecoveryDashboard({ agentId, onBack }: Props) {
                 </Table>
                 {properties.filter(p => p.souscriptions_count > 0).length === 0 && (
                   <p className="text-center text-muted-foreground py-8">Aucune propriété avec droits de terre assignée</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="clients" className="space-y-4">
+          {/* Cartes récapitulatives */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Total Clients</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{clientStats.total}</div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-green-600">Payés</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">{clientStats.payes}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {clientStats.taux_paiement.toFixed(1)}% du total
+                </p>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-yellow-600">Partiels</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-yellow-600">{clientStats.partiels}</div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-red-600">Impayés</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-red-600">{clientStats.impayes}</div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Filtres */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Filtres</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="client-search">Rechercher un client</Label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                    <Input
+                      id="client-search"
+                      placeholder="Nom ou prénom..."
+                      value={clientSearchTerm}
+                      onChange={(e) => setClientSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+                
+                <div>
+                  <Label htmlFor="status-filter">Statut de paiement</Label>
+                  <Select value={clientStatusFilter} onValueChange={(value: any) => setClientStatusFilter(value)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tous les clients</SelectItem>
+                      <SelectItem value="paye">Payés uniquement</SelectItem>
+                      <SelectItem value="partiel">Partiels uniquement</SelectItem>
+                      <SelectItem value="impaye">Impayés uniquement</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Tableau des clients */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Liste des Clients - {format(new Date(`${selectedMonth}-01`), 'MMMM yyyy', { locale: fr })}</CardTitle>
+              <CardDescription>
+                {filteredClients.length} client{filteredClients.length !== 1 ? 's' : ''} sur {clientsStatus.length}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Client</TableHead>
+                      <TableHead>Téléphone</TableHead>
+                      <TableHead>Type de contrat</TableHead>
+                      <TableHead className="text-right">Montant Dû</TableHead>
+                      <TableHead className="text-right">Montant Payé</TableHead>
+                      <TableHead>Statut</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredClients.map((client) => (
+                      <TableRow key={client.client_id}>
+                        <TableCell className="font-medium">
+                          <div>
+                            <div>{client.client_prenom} {client.client_nom}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {client.locations.length > 0 && `${client.locations.length} location(s)`}
+                              {client.locations.length > 0 && client.souscriptions.length > 0 && ' • '}
+                              {client.souscriptions.length > 0 && `${client.souscriptions.length} souscription(s)`}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {client.client_telephone && (
+                            <div className="flex items-center gap-1 text-sm">
+                              <Phone className="h-3 w-3" />
+                              {client.client_telephone}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-1">
+                            {client.contract_types.includes('location') && (
+                              <Badge variant="outline" className="bg-blue-50">Location</Badge>
+                            )}
+                            {client.contract_types.includes('souscription') && (
+                              <Badge variant="outline" className="bg-orange-50">Souscription</Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="space-y-1">
+                            <div className="font-medium">{client.total_du.toLocaleString()} FCFA</div>
+                            {client.montant_du_locations > 0 && (
+                              <div className="text-xs text-blue-600">
+                                Loyers: {client.montant_du_locations.toLocaleString()}
+                              </div>
+                            )}
+                            {client.montant_du_droits_terre > 0 && (
+                              <div className="text-xs text-orange-600">
+                                Droits: {client.montant_du_droits_terre.toLocaleString()}
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right font-medium">
+                          {client.total_paye.toLocaleString()} FCFA
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={
+                            client.statut === 'paye' ? 'default' :
+                            client.statut === 'partiel' ? 'secondary' :
+                            'destructive'
+                          }>
+                            {client.statut === 'paye' && '✅ Payé'}
+                            {client.statut === 'partiel' && '⏳ Partiel'}
+                            {client.statut === 'impaye' && '❌ Impayé'}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                {filteredClients.length === 0 && (
+                  <p className="text-center text-muted-foreground py-8">
+                    Aucun client trouvé
+                  </p>
                 )}
               </div>
             </CardContent>
