@@ -85,6 +85,7 @@ export function GroupedPaymentDialog({
 }: GroupedPaymentDialogProps) {
   const [selectedClients, setSelectedClients] = useState<SelectedClient[]>([]);
   const [datePaiement, setDatePaiement] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [periodePaiement, setPeriodePaiement] = useState<string>(selectedMonth);
   const [modePaiement, setModePaiement] = useState<string>("");
   const [reference, setReference] = useState<string>("");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -109,10 +110,11 @@ export function GroupedPaymentDialog({
     if (isOpen) {
       setSelectedClients([]);
       setDatePaiement(new Date().toISOString().split('T')[0]);
+      setPeriodePaiement(selectedMonth);
       setModePaiement("");
       setReference("");
     }
-  }, [isOpen, paymentType]);
+  }, [isOpen, paymentType, selectedMonth]);
 
   const handleClientToggle = (client: ClientRecoveryStatus, checked: boolean) => {
     if (checked) {
@@ -202,7 +204,7 @@ export function GroupedPaymentDialog({
         try {
           // Traiter chaque contrat du client
           for (const contract of client.contracts) {
-            const description = `${paymentType === 'location' ? 'Loyer' : 'Droit de terre'} ${format(new Date(`${selectedMonth}-01`), 'MMMM yyyy', { locale: fr })} - ${contract.propriete_nom}`;
+            const description = `${paymentType === 'location' ? 'Loyer' : 'Droit de terre'} ${format(new Date(`${periodePaiement}-01`), 'MMMM yyyy', { locale: fr })} - ${contract.propriete_nom}`;
             
             if (contract.type === 'location') {
               // Vérifier s'il existe déjà un paiement pour ce mois
@@ -210,11 +212,11 @@ export function GroupedPaymentDialog({
                 .from('paiements_locations')
                 .select('id')
                 .eq('location_id', contract.id)
-                .eq('periode_paiement', `${selectedMonth}-01`)
+                .eq('periode_paiement', `${periodePaiement}-01`)
                 .maybeSingle();
 
               if (existingPayment) {
-                results.errors.push(`${client.client_prenom} ${client.client_nom} (Location ${contract.propriete_nom}): Paiement déjà effectué pour ${selectedMonth}`);
+                results.errors.push(`${client.client_prenom} ${client.client_nom} (Location ${contract.propriete_nom}): Paiement déjà effectué pour ${format(new Date(`${periodePaiement}-01`), 'MMMM yyyy', { locale: fr })}`);
                 continue;
               }
 
@@ -225,7 +227,7 @@ export function GroupedPaymentDialog({
                 p_mode_paiement: modePaiement,
                 p_reference: reference || null,
                 p_description: description,
-                p_periode_paiement: `${selectedMonth}-01`
+                p_periode_paiement: `${periodePaiement}-01`
               });
             } else if (contract.type === 'souscription') {
               // Vérifier s'il existe déjà un paiement pour ce mois
@@ -233,11 +235,11 @@ export function GroupedPaymentDialog({
                 .from('paiements_droit_terre')
                 .select('id')
                 .eq('souscription_id', contract.id)
-                .eq('periode_paiement', `${selectedMonth}-01`)
+                .eq('periode_paiement', `${periodePaiement}-01`)
                 .maybeSingle();
 
               if (existingPayment) {
-                results.errors.push(`${client.client_prenom} ${client.client_nom} (Droit de terre ${contract.propriete_nom}): Paiement déjà effectué pour ${selectedMonth}`);
+                results.errors.push(`${client.client_prenom} ${client.client_nom} (Droit de terre ${contract.propriete_nom}): Paiement déjà effectué pour ${format(new Date(`${periodePaiement}-01`), 'MMMM yyyy', { locale: fr })}`);
                 continue;
               }
 
@@ -248,7 +250,7 @@ export function GroupedPaymentDialog({
                 p_mode_paiement: modePaiement,
                 p_reference: reference || null,
                 p_description: description,
-                p_periode_paiement: `${selectedMonth}-01`
+                p_periode_paiement: `${periodePaiement}-01`
               });
             }
           }
@@ -263,9 +265,9 @@ export function GroupedPaymentDialog({
               client_id: client.client_id,
               montant: client.montant_saisi,
               type: paymentType,
-              mois: selectedMonth
+              mois: periodePaiement
             },
-            `Paiement groupé ${paymentType} pour ${client.client_prenom} ${client.client_nom}`
+            `Paiement groupé ${paymentType} pour ${client.client_prenom} ${client.client_nom} - ${format(new Date(`${periodePaiement}-01`), 'MMMM yyyy', { locale: fr })}`
           );
 
         } catch (error) {
@@ -332,9 +334,14 @@ export function GroupedPaymentDialog({
             <CreditCard className="h-5 w-5" />
             Paiement groupé - {paymentType === 'location' ? 'Locations' : 'Droits de terre'}
           </DialogTitle>
-          <p className="text-sm text-muted-foreground">
-            Mois: {format(new Date(`${selectedMonth}-01`), 'MMMM yyyy', { locale: fr })}
-          </p>
+          <div className="space-y-1">
+            <p className="text-sm text-muted-foreground">
+              Recouvrement du mois: {format(new Date(`${selectedMonth}-01`), 'MMMM yyyy', { locale: fr })}
+            </p>
+            <p className="text-sm font-semibold text-primary">
+              Période de paiement: {format(new Date(`${periodePaiement}-01`), 'MMMM yyyy', { locale: fr })}
+            </p>
+          </div>
         </DialogHeader>
 
         <div className="space-y-6">
@@ -347,7 +354,22 @@ export function GroupedPaymentDialog({
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                  <Label htmlFor="periode-paiement" className="text-primary font-semibold">
+                    Période de paiement *
+                  </Label>
+                  <Input
+                    id="periode-paiement"
+                    type="month"
+                    value={periodePaiement}
+                    onChange={(e) => setPeriodePaiement(e.target.value)}
+                    className="font-medium"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Mois pour lequel le paiement est effectué
+                  </p>
+                </div>
                 <div>
                   <Label htmlFor="date-paiement">Date de paiement</Label>
                   <Input
@@ -358,7 +380,7 @@ export function GroupedPaymentDialog({
                   />
                 </div>
                 <div>
-                  <Label htmlFor="mode-paiement">Mode de paiement</Label>
+                  <Label htmlFor="mode-paiement">Mode de paiement *</Label>
                   <Combobox
                     options={[
                       { value: "especes", label: "Espèces" },
