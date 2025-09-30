@@ -5,6 +5,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import BalanceBadge from "@/components/BalanceBadge";
 import { LogoutButton } from "@/components/LogoutButton";
 import { UserInfo } from "@/components/UserInfo";
+import { GlobalSearch } from "@/components/GlobalSearch";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -24,6 +25,7 @@ export function Layout({ children }: LayoutProps) {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <GlobalSearch />
               <BalanceBadge />
               <UserInfo />
               <LogoutButton />
