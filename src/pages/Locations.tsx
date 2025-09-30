@@ -27,6 +27,7 @@ export default function Locations() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [agentFilter, setAgentFilter] = useState<string>("all");
+  const [zoneFilter, setZoneFilter] = useState<string>("all");
   const [selectedMonth, setSelectedMonth] = useState<string>("");
   const [showLocationForm, setShowLocationForm] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState<any>(null);
@@ -43,7 +44,7 @@ export default function Locations() {
         .select(`
           *,
           clients(nom, prenom, telephone_principal),
-          proprietes!inner(nom, adresse, loyer_mensuel, agent_id, agents_recouvrement(nom, prenom)),
+          proprietes!inner(nom, adresse, loyer_mensuel, agent_id, zone, agents_recouvrement(nom, prenom)),
           paiements_locations(montant)
         `)
         .order("created_at", { ascending: false });
@@ -64,6 +65,23 @@ export default function Locations() {
 
       if (error) throw error;
       return data;
+    },
+  });
+
+  const { data: zones } = useQuery({
+    queryKey: ["zones"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("proprietes")
+        .select("zone")
+        .not("zone", "is", null)
+        .neq("zone", "");
+
+      if (error) throw error;
+      
+      // Extraire les zones uniques et les trier
+      const uniqueZones = [...new Set(data?.map(p => p.zone).filter(Boolean))].sort();
+      return uniqueZones;
     },
   });
 
@@ -113,7 +131,10 @@ export default function Locations() {
     const matchesAgent = agentFilter === "all" || 
       (location.proprietes?.agent_id && location.proprietes.agent_id === agentFilter);
 
-    return matchesSearch && matchesStatus && matchesAgent;
+    const matchesZone = zoneFilter === "all" || 
+      (location.proprietes?.zone && location.proprietes.zone === zoneFilter);
+
+    return matchesSearch && matchesStatus && matchesAgent && matchesZone;
   });
 
   const {
@@ -201,7 +222,7 @@ export default function Locations() {
         
         <TabsContent value="list" className="space-y-6">
           {/* Filters */}
-          <div className="flex gap-4">
+          <div className="flex flex-wrap gap-4">
             <div className="relative flex-1">
               <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -221,7 +242,7 @@ export default function Locations() {
               value={statusFilter}
               onChange={setStatusFilter}
               placeholder="Filtrer par statut"
-              buttonClassName="w-48 justify-start"
+              buttonClassName="w-48 min-w-40 justify-start"
             />
             <Combobox
               options={[
@@ -234,7 +255,20 @@ export default function Locations() {
               value={agentFilter}
               onChange={setAgentFilter}
               placeholder="Filtrer par agent"
-              buttonClassName="w-48 justify-start"
+              buttonClassName="w-48 min-w-40 justify-start"
+            />
+            <Combobox
+              options={[
+                { value: "all", label: "Toutes les zones" },
+                ...(zones?.map(zone => ({
+                  value: zone,
+                  label: zone
+                })) || [])
+              ]}
+              value={zoneFilter}
+              onChange={setZoneFilter}
+              placeholder="Filtrer par zone"
+              buttonClassName="w-48 min-w-40 justify-start"
             />
           </div>
 
@@ -263,6 +297,11 @@ export default function Locations() {
                   <p className="text-sm text-muted-foreground">
                     {location.proprietes?.adresse}
                   </p>
+                  {location.proprietes?.zone && (
+                    <p className="text-xs text-blue-600 font-medium">
+                      Zone: {location.proprietes.zone}
+                    </p>
+                  )}
                 </div>
                 <Badge variant={getStatusBadge(location.statut)}>
                   {getStatusLabel(location.statut)}
