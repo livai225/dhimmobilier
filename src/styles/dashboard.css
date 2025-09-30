@@ -1,0 +1,518 @@
+/* Animations et styles personnalisés pour le dashboard moderne */
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: calc(200px + 100%) 0;
+  }
+}
+
+/* Classes d'animation */
+.animate-fade-in-up {
+  animation: fadeInUp 0.6s ease-out;
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.6s ease-out;
+}
+
+.animate-pulse-slow {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200px 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* Styles pour les cartes du dashboard */
+.dashboard-card {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid hsl(var(--border));
+}
+
+.dashboard-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.dashboard-card:hover .card-icon {
+  transform: scale(1.1);
+}
+
+.card-icon {
+  transition: transform 0.3s ease;
+}
+
+/* Styles pour les graphiques */
+.chart-container {
+  position: relative;
+  overflow: hidden;
+}
+
+.chart-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  animation: shimmer 2s infinite;
+}
+
+/* Correction pour les graphiques en donut */
+.recharts-pie-chart {
+  overflow: hidden !important;
+}
+
+.recharts-pie {
+  overflow: hidden !important;
+}
+
+/* Assurer que les labels ne débordent pas */
+.recharts-pie-label {
+  font-size: 12px !important;
+  max-width: 80px !important;
+  word-wrap: break-word !important;
+}
+
+/* Conteneur de graphique avec padding suffisant */
+.pie-chart-container {
+  padding: 16px !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  max-width: 100% !important;
+}
+
+/* Forcer le conteneur à ne pas déborder */
+.pie-chart-container .recharts-wrapper {
+  overflow: hidden !important;
+  max-width: 100% !important;
+}
+
+.pie-chart-container .recharts-surface {
+  overflow: hidden !important;
+  max-width: 100% !important;
+}
+
+/* Conteneur du graphique avec contraintes strictes */
+.pie-chart-container > div {
+  max-width: 100% !important;
+  overflow: hidden !important;
+}
+
+/* Forcer les dimensions du graphique */
+.pie-chart-container .recharts-pie-chart {
+  max-width: 200px !important;
+  max-height: 200px !important;
+  overflow: hidden !important;
+}
+
+.pie-chart-container .recharts-pie {
+  max-width: 200px !important;
+  max-height: 200px !important;
+  overflow: hidden !important;
+}
+
+/* Styles pour les métriques */
+.metric-value {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.metric-trend-positive {
+  color: #10b981;
+}
+
+.metric-trend-negative {
+  color: #ef4444;
+}
+
+/* Styles pour les badges */
+.badge-glow {
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
+}
+
+.badge-success {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+}
+
+.badge-warning {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: white;
+}
+
+.badge-error {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: white;
+}
+
+/* Styles pour les boutons */
+.btn-gradient {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  color: white;
+  transition: all 0.3s ease;
+}
+
+.btn-gradient:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+/* Styles pour les progress bars */
+.progress-bar {
+  background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+
+/* Styles pour les alertes */
+.alert-card {
+  border-left: 4px solid;
+  transition: all 0.3s ease;
+}
+
+.alert-card:hover {
+  transform: translateX(4px);
+}
+
+.alert-critical {
+  border-left-color: #ef4444;
+  background: linear-gradient(135deg, #fef2f2, #fee2e2);
+}
+
+.alert-warning {
+  border-left-color: #f59e0b;
+  background: linear-gradient(135deg, #fffbeb, #fef3c7);
+}
+
+.alert-info {
+  border-left-color: #3b82f6;
+  background: linear-gradient(135deg, #eff6ff, #dbeafe);
+}
+
+/* Styles pour les tableaux */
+.table-row-hover {
+  transition: all 0.2s ease;
+}
+
+.table-row-hover:hover {
+  background: hsl(var(--muted) / 0.5);
+  transform: scale(1.01);
+}
+
+/* Styles pour les tooltips */
+.tooltip-modern {
+  background: rgba(0, 0, 0, 0.9);
+  color: white;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Styles pour les modales */
+.modal-backdrop {
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+}
+
+.modal-content {
+  background: hsl(var(--background));
+  border-radius: 12px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+/* Styles pour les notifications */
+.notification-slide-in {
+  animation: slideInRight 0.3s ease-out;
+}
+
+.notification-slide-out {
+  animation: slideInRight 0.3s ease-out reverse;
+}
+
+/* Styles pour les skeletons de chargement */
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200px 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 4px;
+}
+
+.skeleton-text {
+  height: 16px;
+  margin-bottom: 8px;
+}
+
+.skeleton-title {
+  height: 24px;
+  width: 60%;
+  margin-bottom: 16px;
+}
+
+.skeleton-card {
+  height: 200px;
+  border-radius: 8px;
+}
+
+/* Styles pour les graphiques en mode sombre */
+.dark .chart-container {
+  filter: brightness(0.9) contrast(1.1);
+}
+
+/* Styles pour les cartes en mode sombre */
+.dark .dashboard-card {
+  background: hsl(var(--card));
+  border-color: hsl(var(--border));
+}
+
+.dark .dashboard-card:hover {
+  background: hsl(var(--card) / 0.8);
+}
+
+/* Responsive styles */
+@media (max-width: 768px) {
+  .dashboard-card {
+    margin-bottom: 16px;
+  }
+  
+  .chart-container {
+    height: 250px !important;
+  }
+  
+  .metric-value {
+    font-size: 1.5rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .dashboard-card {
+    padding: 16px;
+  }
+  
+  .chart-container {
+    height: 200px !important;
+  }
+  
+  .metric-value {
+    font-size: 1.25rem;
+  }
+}
+
+/* Styles pour les animations de chargement */
+.loading-spinner {
+  border: 2px solid #f3f3f3;
+  border-top: 2px solid #3498db;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Styles pour les indicateurs de statut */
+.status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 8px;
+}
+
+.status-online {
+  background: #10b981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
+}
+
+.status-offline {
+  background: #6b7280;
+}
+
+.status-warning {
+  background: #f59e0b;
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.5);
+}
+
+.status-error {
+  background: #ef4444;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.5);
+}
+
+/* Styles pour les graphiques en temps réel */
+.realtime-chart {
+  position: relative;
+}
+
+.realtime-chart::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 2px;
+  height: 100%;
+  background: #3b82f6;
+  animation: pulse 1s infinite;
+}
+
+/* Optimisation de l'espace pour les graphiques composés */
+.composed-chart-container {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+.composed-chart-container .recharts-wrapper {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+.composed-chart-container .recharts-surface {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+/* Réduction des marges pour maximiser l'espace */
+.composed-chart-container .recharts-cartesian-axis {
+  font-size: 11px !important;
+}
+
+.composed-chart-container .recharts-cartesian-axis-tick {
+  font-size: 11px !important;
+}
+
+/* Styles pour les cartes de statistiques */
+.stat-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #3b82f6, #8b5cf6, #10b981);
+}
+
+/* Styles pour les listes d'activité */
+.activity-item {
+  position: relative;
+  padding-left: 20px;
+}
+
+.activity-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #e5e7eb;
+}
+
+.activity-item:last-child::before {
+  display: none;
+}
+
+.activity-item::after {
+  content: '';
+  position: absolute;
+  left: -3px;
+  top: 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #3b82f6;
+  border: 2px solid white;
+}
+
+/* Styles pour les filtres */
+.filter-active {
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  color: white;
+}
+
+.filter-inactive {
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+}
+
+/* Styles pour les boutons d'action */
+.action-btn {
+  transition: all 0.2s ease;
+}
+
+.action-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.action-btn:active {
+  transform: translateY(0);
+}
+
+/* Styles pour les tooltips personnalisés */
+.custom-tooltip {
+  background: rgba(0, 0, 0, 0.9);
+  color: white;
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.custom-tooltip::before {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: rgba(0, 0, 0, 0.9);
+}

@@ -23,8 +23,7 @@ import {
 import { Combobox } from "@/components/ui/combobox";
 import { useToast } from "@/hooks/use-toast";
 import { useAuditLog } from "@/hooks/useAuditLog";
-import { format, addMonths, startOfMonth } from "date-fns";
-import { fr } from "date-fns/locale";
+import { generateCurrentYearMonthOptions } from "@/utils/monthOptions";
 
 
 const paiementSchema = z.object({
@@ -65,22 +64,9 @@ export function PaiementSouscriptionDialog({
     },
   });
 
-  // Generate available months for payment
+  // Generate available months for payment - Show all months of the year
   const generateAvailableMonths = () => {
-    const months: { value: string; label: string }[] = [];
-    const startDate = souscription?.date_debut ? new Date(souscription.date_debut) : new Date();
-    
-    // Show 12 previous months and 12 future months
-    for (let i = -12; i <= 12; i++) {
-      const date = addMonths(startOfMonth(startDate), i);
-      const monthValue = format(date, "yyyy-MM");
-      months.push({
-        value: monthValue,
-        label: format(date, "MMMM yyyy", { locale: fr })
-      });
-    }
-    
-    return months;
+    return generateCurrentYearMonthOptions();
   };
 
   const mutation = useMutation({

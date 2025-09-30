@@ -130,3 +130,7 @@ All colors MUST be HSL.
     transform: translateY(0);
   }
 }
+
+/* Import des styles personnalisés du dashboard */
+@import './styles/dashboard.css';
+@import './styles/recouvrement.css';

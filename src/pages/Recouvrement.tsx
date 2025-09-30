@@ -263,7 +263,7 @@ export default function Recouvrement() {
     <div className="space-y-6">
       <div className="flex flex-col space-y-4 lg:flex-row lg:items-center lg:justify-between lg:space-y-0">
         <div>
-          <h2 className="text-2xl md:text-3xl font-bold tracking-tight">Situation de Recouvrement</h2>
+          <h2 className="text-2xl md:text-3xl font-bold tracking-tight bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">Situation de Recouvrement</h2>
           <p className="text-muted-foreground">
             Suivi des recouvrements par agent de terrain - Vue globale
           </p>
@@ -308,61 +308,71 @@ export default function Recouvrement() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
+        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200 hover:shadow-lg transition-all duration-300 hover:scale-105">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Agents Actifs</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium text-blue-800">Agents Actifs</CardTitle>
+            <Users className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{agentsRecovery.length}</div>
-            <p className="text-xs text-muted-foreground">
+            <div className="text-2xl font-bold text-blue-600">{agentsRecovery.length}</div>
+            <p className="text-xs text-blue-600">
               {totalStats.total_proprietes} propriétés confiées
             </p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200 hover:shadow-lg transition-all duration-300 hover:scale-105">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Dû</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium text-orange-800">Total Dû</CardTitle>
+            <DollarSign className="h-4 w-4 text-orange-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-2xl font-bold text-orange-600">
               {totalStats.total_du.toLocaleString()} FCFA
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-orange-600">
               Montant à collecter ce mois
             </p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200 hover:shadow-lg transition-all duration-300 hover:scale-105">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Versé</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium text-green-800">Total Versé</CardTitle>
+            <TrendingUp className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-2xl font-bold text-green-600">
               {totalStats.total_verse.toLocaleString()} FCFA
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-green-600">
               Montant versé en caisse
             </p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className={`bg-gradient-to-br border-2 hover:shadow-lg transition-all duration-300 hover:scale-105 ${
+          totalStats.total_ecart >= 0 
+            ? 'from-green-50 to-green-100 border-green-200' 
+            : 'from-red-50 to-red-100 border-red-200'
+        }`}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Écart Global</CardTitle>
-            <TrendingDown className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className={`text-sm font-medium ${
+              totalStats.total_ecart >= 0 ? 'text-green-800' : 'text-red-800'
+            }`}>Écart Global</CardTitle>
+            <TrendingDown className={`h-4 w-4 ${
+              totalStats.total_ecart >= 0 ? 'text-green-600' : 'text-red-600'
+            }`} />
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold ${
+            <div className={`text-2xl font-bold transition-all duration-300 ${
               totalStats.total_ecart >= 0 ? 'text-green-600' : 'text-red-600'
             }`}>
               {totalStats.total_ecart.toLocaleString()} FCFA
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className={`text-xs ${
+              totalStats.total_ecart >= 0 ? 'text-green-600' : 'text-red-600'
+            }`}>
               {totalStats.total_ecart >= 0 ? 'Excédent' : 'Retard'}
             </p>
           </CardContent>
@@ -370,11 +380,11 @@ export default function Recouvrement() {
       </div>
 
       {/* Filters and Agent Selection */}
-      <Card>
+      <Card className="bg-gradient-to-br from-gray-50 to-white border-gray-200 shadow-sm">
         <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
+          <CardTitle className="text-lg flex items-center gap-2 text-gray-800">
             Filtres et Sélection d'Agent
-            <Badge variant="outline">{viewMode === 'global' ? 'Vue Globale' : 'Vue Agent'}</Badge>
+            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">{viewMode === 'global' ? 'Vue Globale' : 'Vue Agent'}</Badge>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -455,84 +465,103 @@ export default function Recouvrement() {
       </Card>
 
       {/* Recovery Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <DollarSign className="h-5 w-5" />
+      <Card className="bg-gradient-to-br from-white to-gray-50 border-gray-200 shadow-lg">
+        <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
+          <CardTitle className="flex items-center gap-2 text-gray-800">
+            <DollarSign className="h-5 w-5 text-purple-600" />
             Tableau de Recouvrement - {format(new Date(`${monthFilter}-01`), 'MMMM yyyy', { locale: fr })}
           </CardTitle>
-          <CardDescription>
+          <CardDescription className="text-gray-600">
             {filteredAgents.length} agent{filteredAgents.length !== 1 ? 's' : ''} sur {agentsRecovery.length}
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           {isLoading ? (
-            <p>Chargement...</p>
+            <div className="p-8 text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto"></div>
+              <p className="mt-2 text-gray-600">Chargement...</p>
+            </div>
           ) : filteredAgents.length === 0 ? (
             <div className="text-center py-10">
-              <Users className="mx-auto h-12 w-12 text-muted-foreground" />
-              <h3 className="mt-2 text-sm font-semibold">Aucun agent trouvé</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <Users className="mx-auto h-12 w-12 text-gray-400" />
+              <h3 className="mt-2 text-sm font-semibold text-gray-600">Aucun agent trouvé</h3>
+              <p className="mt-1 text-sm text-gray-500">
                 Aucun agent ne correspond aux critères de recherche.
               </p>
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Agent</TableHead>
-                    <TableHead>Code</TableHead>
-                    <TableHead>Portefeuille</TableHead>
-                    <TableHead className="text-right">Dû Loyers</TableHead>
-                    <TableHead className="text-right">Dû Droits Terre</TableHead>
-                    <TableHead className="text-right">Total Dû</TableHead>
-                    <TableHead className="text-right">Versé</TableHead>
-                    <TableHead className="text-right">Écart</TableHead>
-                    <TableHead>Statut</TableHead>
-                    <TableHead>Actions</TableHead>
+              <Table className="bg-white">
+                <TableHeader className="bg-gradient-to-r from-gray-50 to-gray-100">
+                  <TableRow className="border-gray-200">
+                    <TableHead className="text-gray-700 font-semibold">Agent</TableHead>
+                    <TableHead className="text-gray-700 font-semibold">Code</TableHead>
+                    <TableHead className="text-gray-700 font-semibold">Portefeuille</TableHead>
+                    <TableHead className="text-right text-gray-700 font-semibold">Dû Loyers</TableHead>
+                    <TableHead className="text-right text-gray-700 font-semibold">Dû Droits Terre</TableHead>
+                    <TableHead className="text-right text-gray-700 font-semibold">Total Dû</TableHead>
+                    <TableHead className="text-right text-gray-700 font-semibold">Versé</TableHead>
+                    <TableHead className="text-right text-gray-700 font-semibold">Écart</TableHead>
+                    <TableHead className="text-gray-700 font-semibold">Statut</TableHead>
+                    <TableHead className="text-gray-700 font-semibold">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredAgents.map((agent) => (
-                    <TableRow key={agent.agent_id}>
-                      <TableCell className="font-medium">
+                    <TableRow key={agent.agent_id} className="hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-all duration-200 border-gray-100">
+                      <TableCell className="font-medium text-gray-800">
                         {agent.agent_prenom} {agent.agent_nom}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline">{agent.agent_code}</Badge>
+                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">{agent.agent_code}</Badge>
                       </TableCell>
                       <TableCell>
                         <div className="text-sm">
-                          <div>{agent.proprietes_count} propriétés</div>
-                          <div className="text-muted-foreground">
+                          <div className="text-gray-800 font-medium">{agent.proprietes_count} propriétés</div>
+                          <div className="text-gray-500">
                             {agent.locations_count} locations, {agent.souscriptions_count} droits terre
                           </div>
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        {agent.total_du_loyers.toLocaleString()} FCFA
+                        <div className="text-orange-600 font-semibold bg-orange-50 px-2 py-1 rounded-md">
+                          {agent.total_du_loyers.toLocaleString()} FCFA
+                        </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        {agent.total_du_droits_terre.toLocaleString()} FCFA
-                      </TableCell>
-                      <TableCell className="text-right font-medium">
-                        {agent.total_du.toLocaleString()} FCFA
+                        <div className="text-amber-600 font-semibold bg-amber-50 px-2 py-1 rounded-md">
+                          {agent.total_du_droits_terre.toLocaleString()} FCFA
+                        </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        {agent.total_verse.toLocaleString()} FCFA
+                        <div className="text-purple-600 font-bold bg-purple-50 px-2 py-1 rounded-md">
+                          {agent.total_du.toLocaleString()} FCFA
+                        </div>
                       </TableCell>
-                      <TableCell className={`text-right font-medium ${
-                        agent.ecart >= 0 ? 'text-green-600' : 'text-red-600'
-                      }`}>
-                        {agent.ecart >= 0 ? '+' : ''}{agent.ecart.toLocaleString()} FCFA
+                      <TableCell className="text-right">
+                        <div className="text-blue-600 font-semibold bg-blue-50 px-2 py-1 rounded-md">
+                          {agent.total_verse.toLocaleString()} FCFA
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className={`font-bold px-2 py-1 rounded-md transition-all duration-300 ${
+                          agent.ecart > 0 
+                            ? 'text-green-600 bg-green-50' 
+                            : agent.ecart < 0 
+                            ? 'text-red-600 bg-red-50' 
+                            : 'text-gray-600 bg-gray-50'
+                        }`}>
+                          {agent.ecart >= 0 ? '+' : ''}{agent.ecart.toLocaleString()} FCFA
+                        </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={
-                          agent.ecart < 0 ? 'destructive' : 
-                          agent.ecart > 0 ? 'default' : 
-                          'secondary'
-                        }>
+                        <Badge className={`font-medium ${
+                          agent.ecart < 0 
+                            ? 'bg-red-100 text-red-700 border-red-200' 
+                            : agent.ecart > 0 
+                            ? 'bg-green-100 text-green-700 border-green-200' 
+                            : 'bg-blue-100 text-blue-700 border-blue-200'
+                        }`}>
                           {agent.ecart < 0 ? 'En retard' : 
                            agent.ecart > 0 ? 'En avance' : 
                            'À jour'}
@@ -543,7 +572,7 @@ export default function Recouvrement() {
                           variant="outline"
                           size="sm"
                           onClick={() => handleAgentSelect(agent.agent_id)}
-                          className="flex items-center gap-1"
+                          className="flex items-center gap-1 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 transition-all duration-200"
                         >
                           <User className="h-3 w-3" />
                           Détails

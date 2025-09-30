@@ -1,0 +1,162 @@
+/* Styles personnalisés pour la page de recouvrement */
+
+/* Couleurs douces pour les montants */
+.amount-due {
+  @apply text-orange-600 font-semibold;
+}
+
+.amount-paid {
+  @apply text-blue-600 font-semibold;
+}
+
+.amount-total {
+  @apply text-purple-600 font-bold;
+}
+
+.amount-excess {
+  @apply text-green-600 font-semibold;
+}
+
+.amount-deficit {
+  @apply text-red-600 font-semibold;
+}
+
+/* Cartes avec couleurs douces */
+.card-summary {
+  @apply bg-gradient-to-br from-white to-gray-50 border-gray-200;
+}
+
+.card-summary-agents {
+  @apply bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200;
+}
+
+.card-summary-due {
+  @apply bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200;
+}
+
+.card-summary-paid {
+  @apply bg-gradient-to-br from-green-50 to-green-100 border-green-200;
+}
+
+.card-summary-balance {
+  @apply bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200;
+}
+
+/* Tableau avec couleurs douces */
+.table-recovery {
+  @apply bg-white;
+}
+
+.table-recovery thead {
+  @apply bg-gradient-to-r from-gray-50 to-gray-100;
+}
+
+.table-recovery tbody tr:hover {
+  @apply bg-gradient-to-r from-blue-50 to-indigo-50;
+}
+
+/* Cellules de montants avec couleurs */
+.cell-due-loyers {
+  @apply text-orange-600 font-medium bg-orange-50;
+}
+
+.cell-due-droits {
+  @apply text-amber-600 font-medium bg-amber-50;
+}
+
+.cell-total-due {
+  @apply text-purple-600 font-bold bg-purple-50;
+}
+
+.cell-paid {
+  @apply text-blue-600 font-medium bg-blue-50;
+}
+
+.cell-balance {
+  @apply font-bold;
+}
+
+.cell-balance.positive {
+  @apply text-green-600 bg-green-50;
+}
+
+.cell-balance.negative {
+  @apply text-red-600 bg-red-50;
+}
+
+.cell-balance.neutral {
+  @apply text-gray-600 bg-gray-50;
+}
+
+/* Badges avec couleurs douces */
+.badge-status-retard {
+  @apply bg-red-100 text-red-700 border-red-200;
+}
+
+.badge-status-avance {
+  @apply bg-green-100 text-green-700 border-green-200;
+}
+
+.badge-status-jour {
+  @apply bg-blue-100 text-blue-700 border-blue-200;
+}
+
+/* Animations douces */
+.amount-animation {
+  @apply transition-all duration-300 ease-in-out;
+}
+
+.card-hover {
+  @apply transition-all duration-300 hover:shadow-lg hover:scale-105;
+}
+
+/* Icônes avec couleurs */
+.icon-agents {
+  @apply text-blue-500;
+}
+
+.icon-due {
+  @apply text-orange-500;
+}
+
+.icon-paid {
+  @apply text-green-500;
+}
+
+.icon-balance {
+  @apply text-purple-500;
+}
+
+/* Filtres avec couleurs douces */
+.filters-card {
+  @apply bg-gradient-to-br from-gray-50 to-white border-gray-200;
+}
+
+/* Titre avec gradient */
+.title-gradient {
+  @apply bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent;
+}
+
+/* Statistiques avec couleurs */
+.stat-positive {
+  @apply text-green-600 bg-green-50 border-green-200;
+}
+
+.stat-negative {
+  @apply text-red-600 bg-red-50 border-red-200;
+}
+
+.stat-neutral {
+  @apply text-gray-600 bg-gray-50 border-gray-200;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .table-recovery {
+    @apply text-sm;
+  }
+  
+  .cell-balance {
+    @apply text-xs;
+  }
+}
