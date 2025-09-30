@@ -90,6 +90,7 @@ export function PaiementDroitTerreDialog({ open, onOpenChange, souscription, onS
         p_mode_paiement: formData.mode_paiement || null,
         p_reference: formData.reference || null,
         p_description: "Paiement droit de terre",
+        p_periode_paiement: null
       });
       if (error) throw error;
 
