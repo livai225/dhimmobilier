@@ -30,6 +30,7 @@ export default function Souscriptions() {
   const [searchTerm, setSearchTerm] = useState("");
   const [phaseFilter, setPhaseFilter] = useState<string>("all");
   const [agentFilter, setAgentFilter] = useState<string>("all");
+  const [zoneFilter, setZoneFilter] = useState<string>("all");
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
   const [selectedSouscription, setSelectedSouscription] = useState<any>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -62,7 +63,7 @@ export default function Souscriptions() {
           .select(`
             *,
             clients(nom, prenom),
-            proprietes!inner(nom, adresse, agent_id, agents_recouvrement(nom, prenom))
+            proprietes!inner(nom, adresse, agent_id, zone, agents_recouvrement(nom, prenom))
           `)
           .order("created_at", { ascending: false })
           .limit(10000);
@@ -78,7 +79,7 @@ export default function Souscriptions() {
           .select(`
             *,
             clients(nom, prenom),
-            proprietes!inner(nom, adresse, agent_id, agents_recouvrement(nom, prenom))
+            proprietes!inner(nom, adresse, agent_id, zone, agents_recouvrement(nom, prenom))
           `)
           .order("created_at", { ascending: false });
 
@@ -102,6 +103,23 @@ export default function Souscriptions() {
 
       if (error) throw error;
       return data;
+    },
+  });
+
+  const { data: zones } = useQuery({
+    queryKey: ["zones"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("proprietes")
+        .select("zone")
+        .not("zone", "is", null)
+        .neq("zone", "");
+
+      if (error) throw error;
+      
+      // Extraire les zones uniques et les trier
+      const uniqueZones = [...new Set(data?.map(p => p.zone).filter(Boolean))].sort();
+      return uniqueZones;
     },
   });
 
@@ -252,8 +270,11 @@ export default function Souscriptions() {
     
     const matchesAgent = agentFilter === "all" || 
       (sub.proprietes?.agent_id && sub.proprietes.agent_id === agentFilter);
+
+    const matchesZone = zoneFilter === "all" || 
+      (sub.proprietes?.zone && sub.proprietes.zone === zoneFilter);
     
-    return matchesSearch && matchesPhase && matchesAgent;
+    return matchesSearch && matchesPhase && matchesAgent && matchesZone;
   });
 
   const {
@@ -342,7 +363,7 @@ export default function Souscriptions() {
       {showDashboard && canAccessDashboard && <SouscriptionsDashboard />}
 
       {/* Filters */}
-      <div className="flex gap-4 mb-6">
+      <div className="flex flex-wrap gap-4 mb-6">
         <Input
           placeholder="Rechercher par client ou propriété..."
           value={searchTerm}
@@ -373,7 +394,20 @@ export default function Souscriptions() {
           value={agentFilter}
           onChange={setAgentFilter}
           placeholder="Filtrer par agent"
-          buttonClassName="w-48 justify-start"
+          buttonClassName="w-48 min-w-40 justify-start"
+        />
+        <Combobox
+          options={[
+            { value: "all", label: "Toutes les zones" },
+            ...(zones?.map(zone => ({
+              value: zone,
+              label: zone
+            })) || [])
+          ]}
+          value={zoneFilter}
+          onChange={setZoneFilter}
+          placeholder="Filtrer par zone"
+          buttonClassName="w-48 min-w-40 justify-start"
         />
       </div>
 
@@ -417,6 +451,11 @@ export default function Souscriptions() {
                     <div>
                       <p className="text-muted-foreground">Propriété</p>
                       <p className="font-medium">{souscription.proprietes?.nom}</p>
+                      {souscription.proprietes?.zone && (
+                        <p className="text-xs text-blue-600 font-medium">
+                          Zone: {souscription.proprietes.zone}
+                        </p>
+                      )}
                       {souscription.proprietes?.agents_recouvrement && (
                         <p className="text-xs text-blue-600 font-medium">
                           Agent: {souscription.proprietes.agents_recouvrement.prenom} {souscription.proprietes.agents_recouvrement.nom}
