@@ -282,6 +282,25 @@ export default function Recouvrement() {
               { header: "Versé", accessor: (r: AgentRecoveryData) => r.total_verse },
               { header: "Écart", accessor: (r: AgentRecoveryData) => r.ecart },
             ]}
+            label="Export Résumé"
+          />
+          <ExportToExcelButton
+            filename={`recouvrement_global_${monthFilter}`}
+            rows={filteredAgents}
+            columns={[
+              { header: "Agent", accessor: (r: AgentRecoveryData) => `${r.agent_prenom} ${r.agent_nom}` },
+              { header: "Code", accessor: (r: AgentRecoveryData) => r.agent_code },
+              { header: "Propriétés", accessor: (r: AgentRecoveryData) => r.proprietes_count },
+              { header: "Locations", accessor: (r: AgentRecoveryData) => r.locations_count },
+              { header: "Souscriptions", accessor: (r: AgentRecoveryData) => r.souscriptions_count },
+              { header: "Dû Loyers (FCFA)", accessor: (r: AgentRecoveryData) => r.total_du_loyers },
+              { header: "Dû Droits Terre (FCFA)", accessor: (r: AgentRecoveryData) => r.total_du_droits_terre },
+              { header: "Total Dû (FCFA)", accessor: (r: AgentRecoveryData) => r.total_du },
+              { header: "Versé (FCFA)", accessor: (r: AgentRecoveryData) => r.total_verse },
+              { header: "Écart (FCFA)", accessor: (r: AgentRecoveryData) => r.ecart },
+              { header: "Statut", accessor: (r: AgentRecoveryData) => r.ecart < 0 ? 'En retard' : r.ecart > 0 ? 'En avance' : 'À jour' }
+            ]}
+            label="Export Détaillé"
           />
         </div>
       </div>

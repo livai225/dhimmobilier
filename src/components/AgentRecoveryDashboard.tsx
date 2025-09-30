@@ -10,6 +10,7 @@ import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { ArrowLeft, TrendingUp, TrendingDown, Target, Calendar, MapPin, Phone, Mail, Search } from "lucide-react";
+import { ExportToExcelButton } from "@/components/ExportToExcelButton";
 import { format, subMonths, startOfMonth } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -895,11 +896,34 @@ export function AgentRecoveryDashboard({ agentId, onBack }: Props) {
 
           {/* Tableau des clients */}
           <Card>
-            <CardHeader>
-              <CardTitle>Liste des Clients - {format(new Date(`${selectedMonth}-01`), 'MMMM yyyy', { locale: fr })}</CardTitle>
-              <CardDescription>
-                {filteredClients.length} client{filteredClients.length !== 1 ? 's' : ''} sur {clientsStatus.length}
-              </CardDescription>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>Liste des Clients - {format(new Date(`${selectedMonth}-01`), 'MMMM yyyy', { locale: fr })}</CardTitle>
+                <CardDescription>
+                  {filteredClients.length} client{filteredClients.length !== 1 ? 's' : ''} sur {clientsStatus.length}
+                </CardDescription>
+              </div>
+              <ExportToExcelButton
+                filename={`paiements_agent_${agent.code_agent}_${selectedMonth}`}
+                rows={filteredClients}
+                columns={[
+                  { header: "Client", accessor: (c) => `${c.client_prenom} ${c.client_nom}` },
+                  { header: "Téléphone", accessor: (c) => c.client_telephone || "" },
+                  { header: "Type de contrat", accessor: (c) => c.contract_types.includes('location') && c.contract_types.includes('souscription') ? "Location + Souscription" : c.contract_types.includes('location') ? "Location" : "Souscription" },
+                  { header: "Locations", accessor: (c) => c.locations.length },
+                  { header: "Souscriptions", accessor: (c) => c.souscriptions.length },
+                  { header: "Dû Loyers (FCFA)", accessor: (c) => c.montant_du_locations },
+                  { header: "Dû Droits Terre (FCFA)", accessor: (c) => c.montant_du_droits_terre },
+                  { header: "Total Dû (FCFA)", accessor: (c) => c.total_du },
+                  { header: "Payé Loyers (FCFA)", accessor: (c) => c.montant_paye_locations },
+                  { header: "Payé Droits Terre (FCFA)", accessor: (c) => c.montant_paye_droits_terre },
+                  { header: "Total Payé (FCFA)", accessor: (c) => c.total_paye },
+                  { header: "Reste à payer (FCFA)", accessor: (c) => c.total_du - c.total_paye },
+                  { header: "Statut", accessor: (c) => c.statut === 'paye' ? 'Payé' : c.statut === 'partiel' ? 'Partiel' : 'Impayé' },
+                  { header: "Adresse propriété", accessor: (c) => c.locations.map((l: any) => l.propriete_adresse || '').concat(c.souscriptions.map((s: any) => s.propriete_adresse || '')).filter(Boolean).join('; ') }
+                ]}
+                label="Exporter en Excel"
+              />
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
