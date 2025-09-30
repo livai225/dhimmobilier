@@ -31,9 +31,9 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import ModernDashboard from "./ModernDashboard";
-import AdvancedCharts from "./AdvancedCharts";
-import AdvancedMetrics from "./AdvancedMetrics";
-import InteractiveDashboard from "./InteractiveDashboard";
+import { AdvancedCharts } from "./AdvancedCharts";
+import { AdvancedMetrics } from "./AdvancedMetrics";
+import { InteractiveDashboard } from "./InteractiveDashboard";
 
 export function DashboardShowcase() {
   const navigate = useNavigate();
