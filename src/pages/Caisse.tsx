@@ -204,6 +204,16 @@ export default function Caisse() {
     description: "",
   });
 
+  // Auto-fill beneficiaire when agent is selected for versement
+  useEffect(() => {
+    if (tab === "entree" && entryType === "versement" && form.agent_id) {
+      const selectedAgent = agents.find((a: any) => a.id === form.agent_id);
+      if (selectedAgent) {
+        setForm(f => ({ ...f, beneficiaire: `${selectedAgent.prenom} ${selectedAgent.nom}` }));
+      }
+    }
+  }, [form.agent_id, tab, entryType, agents]);
+
   const createTransaction = useMutation({
     mutationFn: async () => {
       const montantNum = Number(form.montant || 0);
@@ -513,6 +523,15 @@ export default function Caisse() {
                     />
                   </div>
                 )}
+                
+                <div>
+                  <label className="text-sm">Bénéficiaire</label>
+                  <Input 
+                    value={form.beneficiaire} 
+                    onChange={(e) => setForm({ ...form, beneficiaire: e.target.value })} 
+                    placeholder={entryType === "vente" ? "Nom du client" : "Nom du bénéficiaire"}
+                  />
+                </div>
                 
                 <div>
                   <label className="text-sm">Montant (FCFA)</label>
