@@ -230,17 +230,17 @@ export function GroupedPaymentDialog({
           results.success++;
           
           // Log audit
-          await logCreate({
-            table_name: 'paiements_groupes',
-            action_type: 'create',
-            description: `Paiement groupé ${paymentType} pour ${client.client_prenom} ${client.client_nom}`,
-            new_values: {
+          await logCreate(
+            'paiements_groupes',
+            client.client_id,
+            {
               client_id: client.client_id,
               montant: client.montant_saisi,
               type: paymentType,
               mois: selectedMonth
-            }
-          });
+            },
+            `Paiement groupé ${paymentType} pour ${client.client_prenom} ${client.client_nom}`
+          );
 
         } catch (error) {
           console.error(`Erreur pour ${client.client_prenom} ${client.client_nom}:`, error);
@@ -263,6 +263,10 @@ export function GroupedPaymentDialog({
         queryClient.invalidateQueries({ queryKey: ['agents-recovery'] });
         queryClient.invalidateQueries({ queryKey: ['agent-performance', agentId] });
         queryClient.invalidateQueries({ queryKey: ['agent-properties', agentId] });
+        queryClient.invalidateQueries({ queryKey: ['paiements_locations'] });
+        queryClient.invalidateQueries({ queryKey: ['paiements_droit_terre'] });
+        queryClient.invalidateQueries({ queryKey: ['paiements_souscriptions'] });
+        queryClient.invalidateQueries({ queryKey: ['recus'] });
         onSuccess();
         onClose();
       } else {
