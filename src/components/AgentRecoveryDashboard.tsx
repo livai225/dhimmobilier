@@ -150,52 +150,44 @@ export function AgentRecoveryDashboard({ agentId, onBack, initialMonth }: Props)
         // Get property IDs for this agent
         const propertyIds = properties?.map(p => p.id) || [];
 
-        // Get actual payments for locations in this month
-        const { data: paiementsLoc } = await supabase
+        // Récupérer directement les paiements de locations liés aux propriétés de l'agent
+        const { data: paiementsLocations } = await supabase
           .from('paiements_locations')
-          .select('location_id, montant')
+          .select(`
+            montant,
+            locations:locations!inner(propriete_id)
+          `)
+          .in('locations.propriete_id', propertyIds)
           .gte('date_paiement', startDate)
           .lte('date_paiement', endDate)
           .limit(999999);
 
-        // Get locations for this agent's properties
-        const { data: agentLocations } = await supabase
-          .from('locations')
-          .select('id, propriete_id')
-          .in('propriete_id', propertyIds)
-          .limit(999999);
-
-        const agentLocationIds = new Set(agentLocations?.map(l => l.id) || []);
-
-        // Get actual payments for land rights in this month
-        const { data: paiementsDT } = await supabase
+        // Récupérer directement les paiements de droits de terre liés aux propriétés de l'agent
+        const { data: paiementsDroitTerre } = await supabase
           .from('paiements_droit_terre')
-          .select('souscription_id, montant')
+          .select(`
+            montant,
+            souscriptions:souscriptions!inner(propriete_id)
+          `)
+          .in('souscriptions.propriete_id', propertyIds)
           .gte('date_paiement', startDate)
           .lte('date_paiement', endDate)
           .limit(999999);
 
-        // Get souscriptions for this agent's properties
-        const { data: agentSouscriptions } = await supabase
-          .from('souscriptions')
-          .select('id, propriete_id')
-          .in('propriete_id', propertyIds)
-          .limit(999999);
+        const totalPaiementsLocations = paiementsLocations?.reduce((sum, p) => sum + (p.montant || 0), 0) || 0;
+        const totalPaiementsDroitTerre = paiementsDroitTerre?.reduce((sum, p) => sum + (p.montant || 0), 0) || 0;
+        const verse = totalPaiementsLocations + totalPaiementsDroitTerre;
 
-        const agentSouscriptionIds = new Set(agentSouscriptions?.map(s => s.id) || []);
-
-        // Filter payments for agent's properties
-        const filteredPaiementsLoc = paiementsLoc?.filter(p => 
-          agentLocationIds.has(p.location_id)
-        ) || [];
-
-        const filteredPaiementsDT = paiementsDT?.filter(p => 
-          agentSouscriptionIds.has(p.souscription_id)
-        ) || [];
-
-        const verse = 
-          (filteredPaiementsLoc.reduce((sum, p) => sum + (p.montant || 0), 0)) +
-          (filteredPaiementsDT.reduce((sum, p) => sum + (p.montant || 0), 0));
+        console.log(`Performance ${monthKey}:`, {
+          propertyIds: propertyIds.length,
+          paiementsLocations: paiementsLocations?.length || 0,
+          paiementsDroitTerre: paiementsDroitTerre?.length || 0,
+          totalPaiementsLocations,
+          totalPaiementsDroitTerre,
+          verse,
+          du_loyers,
+          du_droits_terre,
+        });
         const total_du = du_loyers + du_droits_terre;
         const taux_recouvrement = total_du > 0 ? (verse / total_du) * 100 : 0;
         const ecart = verse - total_du;
