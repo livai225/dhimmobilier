@@ -88,7 +88,7 @@ const menuItems = [
     title: "Recouvrement",
     url: "/recouvrement",
     icon: Receipt,
-    permission: "canAccessAgents" as const,
+    permission: "canAccessRecouvrement" as const,
   },
   {
     title: "Reçus",
