@@ -107,6 +107,7 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["locations"] });
       queryClient.invalidateQueries({ queryKey: ["paid_months", location.id] });
+      queryClient.invalidateQueries({ queryKey: ["paiements_locations", location.id] });
       queryClient.invalidateQueries({ queryKey: ["cash_transactions"] });
       queryClient.invalidateQueries({ queryKey: ["cash_balance"] });
 
