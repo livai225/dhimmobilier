@@ -21,6 +21,7 @@ import { AgentSummaryCard } from "@/components/AgentSummaryCard";
 import { useAgentStats } from "@/hooks/useAgentStats";
 import { usePagination } from "@/hooks/usePagination";
 import { PaginationControls } from "@/components/PaginationControls";
+import { DuplicateLocationManager } from "@/components/DuplicateLocationManager";
 
 export default function Locations() {
   const { canAccessDashboard } = useUserPermissions();
@@ -33,6 +34,7 @@ export default function Locations() {
   const [selectedLocation, setSelectedLocation] = useState<any>(null);
   const [showDetailsDialog, setShowDetailsDialog] = useState(false);
   const [showPaiementDialog, setShowPaiementDialog] = useState(false);
+  const [showDuplicatesManager, setShowDuplicatesManager] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -96,24 +98,25 @@ export default function Locations() {
 
   const deleteLocationMutation = useMutation({
     mutationFn: async (locationId: string) => {
-      const { error } = await supabase
-        .from("locations")
-        .delete()
-        .eq("id", locationId);
+      const { data, error } = await supabase
+        .rpc("delete_location_safely", { p_location_id: locationId });
 
       if (error) throw error;
+      return data;
     },
-    onSuccess: () => {
+    onSuccess: (report: any) => {
       queryClient.invalidateQueries({ queryKey: ["locations"] });
+      queryClient.invalidateQueries({ queryKey: ["cash_transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["cash_balance"] });
       toast({
-        title: "Location supprimée",
-        description: "La location a été supprimée avec succès.",
+        title: "Location supprimée avec succès",
+        description: `${report.paiements_supprimes} paiement(s) et ${report.recus_supprimes} reçu(s) supprimés. Montant total: ${report.montant_total_paiements?.toLocaleString()} FCFA. Les soldes de caisse ont été recalculés.`,
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       toast({
         title: "Erreur",
-        description: "Impossible de supprimer la location.",
+        description: error.message || "Impossible de supprimer la location.",
         variant: "destructive",
       });
     },
@@ -167,7 +170,12 @@ export default function Locations() {
   };
 
   const handleDeleteLocation = (location: any) => {
-    if (confirm("Êtes-vous sûr de vouloir supprimer cette location ?")) {
+    const totalPayments = location.paiements_locations?.reduce((sum: number, p: any) => sum + p.montant, 0) || 0;
+    const message = totalPayments > 0
+      ? `Attention ! Cette location a ${location.paiements_locations?.length || 0} paiement(s) pour un total de ${totalPayments.toLocaleString()} FCFA.\n\nTous les paiements, reçus et transactions de caisse liés seront supprimés, et le solde de caisse sera recalculé automatiquement.\n\nÊtes-vous sûr de vouloir continuer ?`
+      : `Êtes-vous sûr de vouloir supprimer cette location ?`;
+    
+    if (confirm(message)) {
       deleteLocationMutation.mutate(location.id);
     }
   };
@@ -207,11 +215,12 @@ export default function Locations() {
       </div>
 
       <Tabs defaultValue={canAccessDashboard ? "dashboard" : "list"} className="w-full">
-        <TabsList className={`grid w-full ${canAccessDashboard ? 'grid-cols-2' : 'grid-cols-1'} mb-6`}>
+        <TabsList className={`grid w-full ${canAccessDashboard ? 'grid-cols-3' : 'grid-cols-2'} mb-6`}>
           {canAccessDashboard && (
             <TabsTrigger value="dashboard">📊 Dashboard</TabsTrigger>
           )}
           <TabsTrigger value="list">📋 Liste des locations</TabsTrigger>
+          <TabsTrigger value="duplicates">⚠️ Gérer les doublons</TabsTrigger>
         </TabsList>
         
         {canAccessDashboard && (
@@ -419,6 +428,20 @@ export default function Locations() {
               itemsPerPage={10}
             />
           )}
+        </TabsContent>
+
+        <TabsContent value="duplicates" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Gestionnaire de Doublons</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Identifiez et supprimez les locations en doublon (même client + même propriété)
+              </p>
+            </CardHeader>
+            <CardContent>
+              <DuplicateLocationManager />
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 

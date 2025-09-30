@@ -1135,6 +1135,10 @@ export type Database = {
           souscription_id: string
         }[]
       }
+      delete_location_safely: {
+        Args: { p_location_id: string }
+        Returns: Json
+      }
       fix_historical_subscription_balances: {
         Args: Record<PropertyKey, never>
         Returns: {
