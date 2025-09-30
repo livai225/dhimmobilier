@@ -91,6 +91,90 @@ export function AgentRecoveryDashboard({ agentId, onBack, initialMonth }: Props)
     paymentType: 'location' | 'souscription' | 'droit_terre';
   }>({ isOpen: false, paymentType: 'location' });
 
+  // Query alternative pour calculer les montants versés de manière plus directe
+  const { data: agentPayments } = useQuery({
+    queryKey: ['agent-payments', agentId, selectedMonth],
+    queryFn: async () => {
+      if (!selectedMonth) return { totalVerse: 0, details: [] };
+
+      const startDate = `${selectedMonth}-01`;
+      const endDate = `${selectedMonth}-31`;
+
+      // Get agent's properties
+      const { data: properties } = await supabase
+        .from('proprietes')
+        .select('id')
+        .eq('agent_id', agentId)
+        .limit(999999);
+
+      if (!properties || properties.length === 0) {
+        return { totalVerse: 0, details: [] };
+      }
+
+      const propertyIds = properties.map(p => p.id);
+
+      // Get locations for these properties
+      const { data: locations } = await supabase
+        .from('locations')
+        .select('id')
+        .in('propriete_id', propertyIds)
+        .limit(999999);
+
+      const locationIds = locations?.map(l => l.id) || [];
+
+      // Get souscriptions for these properties
+      const { data: souscriptions } = await supabase
+        .from('souscriptions')
+        .select('id')
+        .in('propriete_id', propertyIds)
+        .limit(999999);
+
+      const souscriptionIds = souscriptions?.map(s => s.id) || [];
+
+      // Get payments for locations
+      const { data: paiementsLoc } = await supabase
+        .from('paiements_locations')
+        .select('montant, date_paiement, location_id')
+        .in('location_id', locationIds)
+        .gte('date_paiement', startDate)
+        .lte('date_paiement', endDate)
+        .limit(999999);
+
+      // Get payments for souscriptions
+      const { data: paiementsDT } = await supabase
+        .from('paiements_droit_terre')
+        .select('montant, date_paiement, souscription_id')
+        .in('souscription_id', souscriptionIds)
+        .gte('date_paiement', startDate)
+        .lte('date_paiement', endDate)
+        .limit(999999);
+
+      const totalVerse = 
+        (paiementsLoc?.reduce((sum, p) => sum + (p.montant || 0), 0) || 0) +
+        (paiementsDT?.reduce((sum, p) => sum + (p.montant || 0), 0) || 0);
+
+      console.log(`Debug Agent Payments ${selectedMonth}:`, {
+        agentId,
+        propertyIds: propertyIds.length,
+        locationIds: locationIds.length,
+        souscriptionIds: souscriptionIds.length,
+        paiementsLoc: paiementsLoc?.length || 0,
+        paiementsDT: paiementsDT?.length || 0,
+        totalVerse,
+        paiementsLocDetails: paiementsLoc?.map(p => ({ montant: p.montant, date: p.date_paiement })),
+        paiementsDTDetails: paiementsDT?.map(p => ({ montant: p.montant, date: p.date_paiement }))
+      });
+
+      return {
+        totalVerse,
+        details: [
+          ...(paiementsLoc || []),
+          ...(paiementsDT || [])
+        ]
+      };
+    },
+  });
+
   // Fetch agent details
   const { data: agent } = useQuery({
     queryKey: ['agent-details', agentId],
@@ -139,12 +223,12 @@ export function AgentRecoveryDashboard({ agentId, onBack, initialMonth }: Props)
           });
 
           // Calculate land rights dues
-        prop.souscriptions?.forEach(sub => {
-          // Comptabiliser toutes les souscriptions en phase de paiement des droits de terre
-          if (sub.phase_actuelle === 'droit_terre' && sub.statut === 'active') {
-            du_droits_terre += sub.montant_droit_terre_mensuel || prop.droit_terre || 0;
-          }
-        });
+          prop.souscriptions?.forEach(sub => {
+            // Comptabiliser toutes les souscriptions en phase de paiement des droits de terre
+            if (sub.phase_actuelle === 'droit_terre' && sub.statut === 'active') {
+              du_droits_terre += sub.montant_droit_terre_mensuel || prop.droit_terre || 0;
+            }
+          });
         });
 
         // Get property IDs for this agent
@@ -199,6 +283,23 @@ export function AgentRecoveryDashboard({ agentId, onBack, initialMonth }: Props)
         const total_du = du_loyers + du_droits_terre;
         const taux_recouvrement = total_du > 0 ? (verse / total_du) * 100 : 0;
         const ecart = verse - total_du;
+
+        // Debug logging pour identifier le problème
+        console.log(`Debug Agent Performance ${monthKey}:`, {
+          agentId,
+          propertyIds: propertyIds.length,
+          agentLocationIds: agentLocationIds.size,
+          agentSouscriptionIds: agentSouscriptionIds.size,
+          paiementsLocTotal: paiementsLoc?.length || 0,
+          paiementsDTTotal: paiementsDT?.length || 0,
+          filteredPaiementsLoc: filteredPaiementsLoc.length,
+          filteredPaiementsDT: filteredPaiementsDT.length,
+          verse,
+          du_loyers,
+          du_droits_terre,
+          total_du,
+          taux_recouvrement
+        });
 
         results.unshift({
           month: format(targetDate, 'MMM yyyy', { locale: fr }),
@@ -486,6 +587,11 @@ export function AgentRecoveryDashboard({ agentId, onBack, initialMonth }: Props)
     ecart: 0
   };
 
+  // Calculer le taux de recouvrement avec les nouvelles données
+  const actualVerse = agentPayments?.totalVerse || 0;
+  const actualTauxRecouvrement = currentMonthData.total_du > 0 ? (actualVerse / currentMonthData.total_du) * 100 : 0;
+  const actualEcart = actualVerse - currentMonthData.total_du;
+
   const handleGroupedPayment = (paymentType: 'location' | 'souscription' | 'droit_terre') => {
     setGroupedPaymentDialog({ isOpen: true, paymentType });
   };
@@ -566,10 +672,10 @@ export function AgentRecoveryDashboard({ agentId, onBack, initialMonth }: Props)
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {currentMonthData.verse.toLocaleString()} FCFA
+              {(agentPayments?.totalVerse || 0).toLocaleString()} FCFA
             </div>
             <p className="text-xs text-muted-foreground">
-              Taux: {currentMonthData.taux_recouvrement.toFixed(1)}%
+              Taux: {actualTauxRecouvrement.toFixed(1)}%
             </p>
           </CardContent>
         </Card>
@@ -581,12 +687,12 @@ export function AgentRecoveryDashboard({ agentId, onBack, initialMonth }: Props)
           </CardHeader>
           <CardContent>
             <div className={`text-2xl font-bold ${
-              currentMonthData.ecart >= 0 ? 'text-green-600' : 'text-red-600'
+              actualEcart >= 0 ? 'text-green-600' : 'text-red-600'
             }`}>
-              {currentMonthData.ecart >= 0 ? '+' : ''}{currentMonthData.ecart.toLocaleString()}
+              {actualEcart >= 0 ? '+' : ''}{actualEcart.toLocaleString()}
             </div>
             <Progress 
-              value={Math.min(currentMonthData.taux_recouvrement, 100)} 
+              value={Math.min(actualTauxRecouvrement, 100)} 
               className="mt-2" 
             />
           </CardContent>
