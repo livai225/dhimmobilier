@@ -98,8 +98,8 @@ export function InteractiveDashboard() {
     queryKey: ['dashboard-alerts'],
     queryFn: async () => {
       const [factures, locations, proprietes, echeances] = await Promise.all([
-        supabase.from('factures_fournisseurs').select('*').eq('solde', 0, { gt: true }),
-        supabase.from('locations').select('*').gt('dette_totale', 100000),
+        supabase.from('factures_fournisseurs').select('*, fournisseurs(nom)').gt('solde', 0),
+        supabase.from('locations').select('*, clients(nom, prenom)').gt('dette_totale', 100000),
         supabase.from('proprietes').select('*').eq('statut', 'Libre'),
         supabase.from('echeances_droit_terre').select('*').eq('statut', 'en_attente').lt('date_echeance', new Date().toISOString())
       ]);
@@ -336,7 +336,7 @@ export function InteractiveDashboard() {
                           Facture impayée
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {formatCurrency(facture.solde)} - {facture.fournisseur}
+                          {formatCurrency(facture.solde)} - {facture.fournisseurs?.nom || 'Fournisseur inconnu'}
                         </p>
                       </div>
                     </div>
@@ -369,7 +369,7 @@ export function InteractiveDashboard() {
                           Location endettée
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {formatCurrency(location.dette_totale)} - {location.clients?.nom}
+                          {formatCurrency(location.dette_totale)} - {location.clients?.prenom} {location.clients?.nom}
                         </p>
                       </div>
                     </div>

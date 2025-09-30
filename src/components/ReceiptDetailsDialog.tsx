@@ -6,7 +6,7 @@ import { ReceiptWithDetails } from "@/hooks/useReceipts";
 import { downloadReceiptPDF, printReceiptPDF } from "@/utils/pdfGenerator";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useEffect, useState } from "react";
+import { useCompanyLogo } from "@/hooks/useCompanyLogo";
 
 interface ReceiptDetailsDialogProps {
   receipt: ReceiptWithDetails | null;
@@ -19,22 +19,7 @@ export function ReceiptDetailsDialog({
   open, 
   onOpenChange 
 }: ReceiptDetailsDialogProps) {
-  const [logoUrl, setLogoUrl] = useState<string>();
-
-  // Fetch company logo
-  useEffect(() => {
-    const fetchLogo = async () => {
-      const { data } = await supabase
-        .from('company_settings')
-        .select('logo_url')
-        .single();
-      
-      if (data?.logo_url) {
-        setLogoUrl(data.logo_url);
-      }
-    };
-    fetchLogo();
-  }, []);
+  const { data: logoUrl } = useCompanyLogo();
 
   // Fetch agent details for versement_agent receipts
   const { data: agentDetails } = useQuery({
@@ -87,11 +72,11 @@ export function ReceiptDetailsDialog({
   const clientName = `${receipt.client?.nom || ""} ${receipt.client?.prenom || ""}`.trim();
 
   const handleDownload = () => {
-    downloadReceiptPDF(receipt, logoUrl);
+    downloadReceiptPDF(receipt, logoUrl || undefined);
   };
 
   const handlePrint = () => {
-    printReceiptPDF(receipt, logoUrl);
+    printReceiptPDF(receipt, logoUrl || undefined);
   };
 
   return (

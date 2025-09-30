@@ -74,6 +74,7 @@ export const useUserPermissions = () => {
       canAccessCashbox: false,
       canAccessAgents: false,
       canAccessReceipts: false,
+      canAccessRecouvrement: false,
       // Nouvelles permissions de création
       canCreateClients: false,
       canCreateProperties: false,
@@ -116,7 +117,7 @@ export const useUserPermissions = () => {
     
     // Secrétaire permissions (opérationnel uniquement)
     canMakeDeposits: isAdmin || isSecretaire,
-    canMakeExpenses: isAdmin, // Seuls les admins peuvent faire des dépenses d'entreprise
+    canMakeExpenses: isAdmin || isSecretaire, // Admin et secrétaire peuvent faire des dépenses
     canCreateSubscriptions: isAdmin || isSecretaire,
     canCreateRentals: isAdmin || isSecretaire,
     
@@ -131,6 +132,7 @@ export const useUserPermissions = () => {
     canAccessCashbox: isAdmin || isSecretaire, // Accès caisse pour admin et secrétaire seulement
     canAccessAgents: isAdmin,
     canAccessReceipts: isAdmin || isComptable || isSecretaire, // Accès reçus pour secrétaire
+    canAccessRecouvrement: isAdmin || isComptable, // Comptable peut accéder au recouvrement
     
     // Nouvelles permissions de création
     ...creationPermissions,

@@ -233,53 +233,64 @@ export function AgentRecoveryDashboard({ agentId, onBack, initialMonth }: Props)
 
         // Get property IDs for this agent
         const propertyIds = properties?.map(p => p.id) || [];
+        
+        console.log(`[${monthKey}] PropertyIds for agent:`, propertyIds.length);
 
-        // Get actual payments for locations in this month
-        const { data: paiementsLoc } = await supabase
-          .from('paiements_locations')
-          .select('location_id, montant')
-          .gte('date_paiement', startDate)
-          .lte('date_paiement', endDate)
-          .limit(999999);
-
-        // Get locations for this agent's properties
+        // Étape 1: Récupérer les IDs des locations liées aux propriétés de l'agent
         const { data: agentLocations } = await supabase
           .from('locations')
-          .select('id, propriete_id')
+          .select('id')
           .in('propriete_id', propertyIds)
+          .eq('statut', 'active')
           .limit(999999);
 
-        const agentLocationIds = new Set(agentLocations?.map(l => l.id) || []);
+        const locationIds = agentLocations?.map(l => l.id) || [];
+        console.log(`[${monthKey}] LocationIds found:`, locationIds.length);
 
-        // Get actual payments for land rights in this month
-        const { data: paiementsDT } = await supabase
-          .from('paiements_droit_terre')
-          .select('souscription_id, montant')
-          .gte('date_paiement', startDate)
-          .lte('date_paiement', endDate)
-          .limit(999999);
-
-        // Get souscriptions for this agent's properties
+        // Étape 2: Récupérer les IDs des souscriptions liées aux propriétés de l'agent
         const { data: agentSouscriptions } = await supabase
           .from('souscriptions')
-          .select('id, propriete_id')
+          .select('id')
           .in('propriete_id', propertyIds)
+          .eq('statut', 'active')
           .limit(999999);
 
-        const agentSouscriptionIds = new Set(agentSouscriptions?.map(s => s.id) || []);
+        const souscriptionIds = agentSouscriptions?.map(s => s.id) || [];
+        console.log(`[${monthKey}] SouscriptionIds found:`, souscriptionIds.length);
 
-        // Filter payments for agent's properties
-        const filteredPaiementsLoc = paiementsLoc?.filter(p => 
-          agentLocationIds.has(p.location_id)
-        ) || [];
+        // Étape 3: Récupérer les paiements de locations pour ce mois
+        let totalPaiementsLocations = 0;
+        if (locationIds.length > 0) {
+          const { data: paiementsLocations } = await supabase
+            .from('paiements_locations')
+            .select('montant')
+            .in('location_id', locationIds)
+            .gte('date_paiement', startDate)
+            .lte('date_paiement', endDate)
+            .limit(999999);
 
-        const filteredPaiementsDT = paiementsDT?.filter(p => 
-          agentSouscriptionIds.has(p.souscription_id)
-        ) || [];
+          totalPaiementsLocations = paiementsLocations?.reduce((sum, p) => sum + (p.montant || 0), 0) || 0;
+          console.log(`[${monthKey}] Paiements locations:`, paiementsLocations?.length || 0, 'Total:', totalPaiementsLocations);
+        }
 
-        const verse = 
-          (filteredPaiementsLoc.reduce((sum, p) => sum + (p.montant || 0), 0)) +
-          (filteredPaiementsDT.reduce((sum, p) => sum + (p.montant || 0), 0));
+        // Étape 4: Récupérer les paiements de droits de terre pour ce mois
+        let totalPaiementsDroitTerre = 0;
+        if (souscriptionIds.length > 0) {
+          const { data: paiementsDroitTerre } = await supabase
+            .from('paiements_droit_terre')
+            .select('montant')
+            .in('souscription_id', souscriptionIds)
+            .gte('date_paiement', startDate)
+            .lte('date_paiement', endDate)
+            .limit(999999);
+
+          totalPaiementsDroitTerre = paiementsDroitTerre?.reduce((sum, p) => sum + (p.montant || 0), 0) || 0;
+          console.log(`[${monthKey}] Paiements droit terre:`, paiementsDroitTerre?.length || 0, 'Total:', totalPaiementsDroitTerre);
+        }
+
+        const verse = totalPaiementsLocations + totalPaiementsDroitTerre;
+
+        console.log(`[${monthKey}] FINAL - Versé:`, verse, 'Dû loyers:', du_loyers, 'Dû droits:', du_droits_terre);
         const total_du = du_loyers + du_droits_terre;
         const taux_recouvrement = total_du > 0 ? (verse / total_du) * 100 : 0;
         const ecart = verse - total_du;

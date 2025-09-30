@@ -20,7 +20,7 @@ import {
   ScatterChart,
   Scatter
 } from "recharts";
-import { TrendingUp, BarChart3, PieChart, Activity, Target, Zap } from "lucide-react";
+import { TrendingUp, BarChart3, PieChart as PieChartIcon, Activity, Target, Zap } from "lucide-react";
 
 interface AdvancedChartsProps {
   monthlyRevenue: any[];
@@ -132,10 +132,10 @@ export function AdvancedCharts({ monthlyRevenue, revenueBreakdown, weeklyData, f
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <PieChart className="h-5 w-5" />
-              Répartition des revenus
-            </CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <PieChartIcon className="h-5 w-5" />
+            Répartition des revenus
+          </CardTitle>
             <CardDescription>
               Distribution par type d'activité avec pourcentages
             </CardDescription>
