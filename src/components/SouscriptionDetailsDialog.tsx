@@ -70,7 +70,15 @@ export function SouscriptionDetailsDialog({
       console.log("Récupération des paiements pour souscription:", souscription.id);
       const { data, error } = await supabase
         .from("paiements_souscriptions")
-        .select("*")
+        .select(`
+          *,
+          recus!reference_id (
+            numero,
+            periode_debut,
+            periode_fin,
+            date_generation
+          )
+        `)
         .eq("souscription_id", souscription.id)
         .order("date_paiement", { ascending: false });
       if (error) throw error;
@@ -492,7 +500,16 @@ export function SouscriptionDetailsDialog({
                       <TableBody>
                         {/* Autres paiements */}
                         {paiements?.map((paiement) => {
-                          const matchingReceipt = (recus || []).find(r => r.reference_id === paiement.id);
+                          // Extraire la période du paiement
+                          let periodePaiement = null;
+                          if ((paiement as any).periode_paiement) {
+                            try {
+                              const date = new Date((paiement as any).periode_paiement);
+                              periodePaiement = format(date, "MMMM yyyy", { locale: fr });
+                            } catch (e) {
+                              console.warn("Erreur lors du parsing de periode_paiement:", e);
+                            }
+                          }
                           
                           return (
                             <TableRow key={paiement.id}>
@@ -500,9 +517,9 @@ export function SouscriptionDetailsDialog({
                                 {format(new Date(paiement.date_paiement), "dd/MM/yyyy")}
                               </TableCell>
                               <TableCell className="text-sm">
-                                {(paiement as any).periode_paiement ? (
+                                {periodePaiement ? (
                                   <span className="font-medium text-primary">
-                                    {format(new Date((paiement as any).periode_paiement), "MMMM yyyy", { locale: fr })}
+                                    {periodePaiement}
                                   </span>
                                 ) : (
                                   <span className="text-muted-foreground">-</span>

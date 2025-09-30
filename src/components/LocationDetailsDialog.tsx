@@ -37,39 +37,27 @@ export function LocationDetailsDialog({ location, onClose, onUpdate }: LocationD
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Fetch payments for this location
+  // Fetch payments for this location with their receipts
   const { data: paiements } = useQuery({
     queryKey: ["paiements_locations", location.id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("paiements_locations")
-        .select("*")
+        .select(`
+          *,
+          recus!reference_id (
+            numero,
+            periode_debut,
+            periode_fin,
+            date_generation
+          )
+        `)
         .eq("location_id", location.id)
         .order("date_paiement", { ascending: false });
 
       if (error) throw error;
       return data;
     },
-  });
-
-  // Fetch receipts for payments
-  const { data: recus } = useQuery({
-    queryKey: ["recus_location_payments", location.id],
-    queryFn: async () => {
-      if (!paiements || paiements.length === 0) return [];
-      
-      const paymentIds = paiements.map(p => p.id);
-      const { data, error } = await supabase
-        .from("recus")
-        .select("*")
-        .in("reference_id", paymentIds)
-        .eq("type_operation", "location")
-        .order("date_generation", { ascending: false });
-
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!paiements && paiements.length > 0,
   });
 
   const terminateLocationMutation = useMutation({
