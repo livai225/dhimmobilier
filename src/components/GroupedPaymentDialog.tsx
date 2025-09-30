@@ -90,6 +90,7 @@ export function GroupedPaymentDialog({
   const [reference, setReference] = useState<string>("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStep, setProcessingStep] = useState<string>("");
+  const [selectAll, setSelectAll] = useState(false);
   
   const { toast } = useToast();
   const { logCreate } = useAuditLog();
@@ -179,6 +180,56 @@ export function GroupedPaymentDialog({
 
   const totalAmount = selectedClients.reduce((sum, client) => sum + client.montant_saisi, 0);
   const totalRestant = selectedClients.reduce((sum, client) => sum + client.montant_restant, 0);
+
+  const handleSelectAll = (checked: boolean) => {
+    setSelectAll(checked);
+    if (checked) {
+      // Sélectionner tous les clients filtrés
+      const allSelectedClients: SelectedClient[] = filteredClients.map(client => {
+        const contracts = [];
+        
+        if (paymentType === 'location') {
+          client.locations.forEach(loc => {
+            contracts.push({
+              id: loc.id,
+              type: 'location' as const,
+              propriete_nom: loc.propriete_nom,
+              montant: loc.loyer_mensuel
+            });
+          });
+        } else if (paymentType === 'souscription') {
+          client.souscriptions.forEach(sub => {
+            contracts.push({
+              id: sub.id,
+              type: 'souscription' as const,
+              propriete_nom: sub.propriete_nom,
+              montant: sub.montant_mensuel
+            });
+          });
+        }
+
+        const montantDu = paymentType === 'location' ? client.montant_du_locations : client.montant_du_droits_terre;
+        const montantPaye = paymentType === 'location' ? client.montant_paye_locations : client.montant_paye_droits_terre;
+        const montantRestant = montantDu - montantPaye;
+
+        return {
+          client_id: client.client_id,
+          client_nom: client.client_nom,
+          client_prenom: client.client_prenom,
+          montant_du: montantDu,
+          montant_paye: montantPaye,
+          montant_restant: montantRestant,
+          montant_saisi: montantRestant,
+          contracts
+        };
+      });
+      
+      setSelectedClients(allSelectedClients);
+    } else {
+      // Tout désélectionner
+      setSelectedClients([]);
+    }
+  };
 
   const paymentMutation = useMutation({
     mutationFn: async () => {
@@ -443,10 +494,22 @@ export function GroupedPaymentDialog({
           {/* Liste des clients */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Users className="h-4 w-4" />
-                Sélection des clients ({filteredClients.length} disponibles)
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  Sélection des clients ({filteredClients.length} disponibles)
+                </CardTitle>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="select-all"
+                    checked={selectAll}
+                    onCheckedChange={handleSelectAll}
+                  />
+                  <Label htmlFor="select-all" className="cursor-pointer font-medium">
+                    Tout sélectionner
+                  </Label>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
