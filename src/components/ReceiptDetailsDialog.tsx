@@ -6,6 +6,7 @@ import { ReceiptWithDetails } from "@/hooks/useReceipts";
 import { downloadReceiptPDF, printReceiptPDF } from "@/utils/pdfGenerator";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useEffect, useState } from "react";
 
 interface ReceiptDetailsDialogProps {
   receipt: ReceiptWithDetails | null;
@@ -18,6 +19,23 @@ export function ReceiptDetailsDialog({
   open, 
   onOpenChange 
 }: ReceiptDetailsDialogProps) {
+  const [logoUrl, setLogoUrl] = useState<string>();
+
+  // Fetch company logo
+  useEffect(() => {
+    const fetchLogo = async () => {
+      const { data } = await supabase
+        .from('company_settings')
+        .select('logo_url')
+        .single();
+      
+      if (data?.logo_url) {
+        setLogoUrl(data.logo_url);
+      }
+    };
+    fetchLogo();
+  }, []);
+
   // Fetch agent details for versement_agent receipts
   const { data: agentDetails } = useQuery({
     queryKey: ["agent-for-receipt", receipt?.reference_id],
@@ -69,7 +87,11 @@ export function ReceiptDetailsDialog({
   const clientName = `${receipt.client?.nom || ""} ${receipt.client?.prenom || ""}`.trim();
 
   const handleDownload = () => {
-    downloadReceiptPDF(receipt);
+    downloadReceiptPDF(receipt, logoUrl);
+  };
+
+  const handlePrint = () => {
+    printReceiptPDF(receipt, logoUrl);
   };
 
   return (
@@ -79,7 +101,7 @@ export function ReceiptDetailsDialog({
           <DialogTitle className="flex items-center justify-between">
             <span>Détails du reçu</span>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => printReceiptPDF(receipt)}>
+              <Button variant="outline" size="sm" onClick={handlePrint}>
                 <Printer className="h-4 w-4 mr-2" />
                 Imprimer
               </Button>

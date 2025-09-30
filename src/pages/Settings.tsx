@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, Trash2, Download, Settings as SettingsIcon, Database, Upload, Calculator, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, Trash2, Download, Settings as SettingsIcon, Database, Upload, Calculator, CheckCircle2, Building2, ImagePlus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ImportClientsFromExcel } from "@/components/ImportClientsFromExcel";
 import { DuplicateClientManager } from "@/components/DuplicateClientManager";
@@ -40,6 +40,86 @@ export default function Settings() {
   } | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isSettling, setIsSettling] = useState(false);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+
+  // Fetch company settings
+  const { data: companySettings } = useQuery({
+    queryKey: ['company_settings'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('company_settings')
+        .select('*')
+        .single();
+      
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  // Upload logo mutation
+  const uploadLogoMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `logo-${Date.now()}.${fileExt}`;
+      
+      // Upload to Supabase Storage (you'll need to create this bucket)
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('company-assets')
+        .upload(fileName, file, { upsert: true });
+      
+      if (uploadError) throw uploadError;
+      
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('company-assets')
+        .getPublicUrl(fileName);
+      
+      // Update company settings
+      const { error: updateError } = await supabase
+        .from('company_settings')
+        .update({ logo_url: publicUrl })
+        .eq('id', '00000000-0000-0000-0000-000000000001');
+      
+      if (updateError) throw updateError;
+      
+      return publicUrl;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['company_settings'] });
+      setLogoFile(null);
+      setLogoPreview(null);
+      toast({
+        title: "✅ Logo mis à jour",
+        description: "Le logo de l'entreprise a été mis à jour avec succès",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "❌ Erreur",
+        description: error.message || "Impossible de télécharger le logo",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleLogoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setLogoFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setLogoPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleUploadLogo = () => {
+    if (logoFile) {
+      uploadLogoMutation.mutate(logoFile);
+    }
+  };
 
   const clearFinancialData = useMutation({
     mutationFn: async () => {
@@ -279,6 +359,67 @@ export default function Settings() {
               <div>
                 <p className="font-medium">Statut</p>
                 <Badge variant="default" className="bg-green-600">Connecté</Badge>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Company Settings */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Building2 className="w-5 h-5" />
+              Paramètres de l'entreprise
+            </CardTitle>
+            <CardDescription>
+              Configurez les informations de votre entreprise qui apparaîtront sur les reçus
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                <ImagePlus className="h-4 w-4" />
+                Logo de l'entreprise
+              </h4>
+              <p className="text-sm text-muted-foreground mb-3">
+                Le logo apparaîtra sur tous les reçus PDF générés
+              </p>
+              
+              {companySettings?.logo_url && !logoPreview && (
+                <div className="mb-3 p-3 border rounded-lg bg-muted/50">
+                  <p className="text-sm font-medium mb-2">Logo actuel :</p>
+                  <img 
+                    src={companySettings.logo_url} 
+                    alt="Logo entreprise" 
+                    className="h-20 object-contain"
+                  />
+                </div>
+              )}
+              
+              {logoPreview && (
+                <div className="mb-3 p-3 border rounded-lg bg-muted/50">
+                  <p className="text-sm font-medium mb-2">Aperçu :</p>
+                  <img 
+                    src={logoPreview} 
+                    alt="Aperçu logo" 
+                    className="h-20 object-contain"
+                  />
+                </div>
+              )}
+              
+              <div className="flex gap-2">
+                <Input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleLogoFileChange}
+                  className="flex-1"
+                />
+                <Button
+                  onClick={handleUploadLogo}
+                  disabled={!logoFile || uploadLogoMutation.isPending}
+                >
+                  {uploadLogoMutation.isPending ? "Upload..." : "Enregistrer"}
+                </Button>
               </div>
             </div>
           </CardContent>

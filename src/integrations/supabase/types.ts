@@ -330,6 +330,39 @@ export type Database = {
         }
         Relationships: []
       }
+      company_settings: {
+        Row: {
+          company_address: string | null
+          company_email: string | null
+          company_name: string | null
+          company_phone: string | null
+          created_at: string | null
+          id: string
+          logo_url: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          company_address?: string | null
+          company_email?: string | null
+          company_name?: string | null
+          company_phone?: string | null
+          created_at?: string | null
+          id?: string
+          logo_url?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          company_address?: string | null
+          company_email?: string | null
+          company_name?: string | null
+          company_phone?: string | null
+          created_at?: string | null
+          id?: string
+          logo_url?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       echeances_droit_terre: {
         Row: {
           created_at: string

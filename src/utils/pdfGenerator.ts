@@ -18,6 +18,15 @@ const generateSingleReceipt = (
     return `${formattedNumber} FCFA`;
   };
   
+  // Logo (if provided)
+  if (logoDataUrl) {
+    try {
+      doc.addImage(logoDataUrl, 'PNG', 7, yOffset + 5, 20, 20);
+    } catch (error) {
+      console.error('Error adding logo to PDF:', error);
+    }
+  }
+  
   // Header avec fond coloré (compact)
   doc.setFillColor('#1e40af');
   doc.rect(5, yOffset + 5, 138, 15, 'F');
