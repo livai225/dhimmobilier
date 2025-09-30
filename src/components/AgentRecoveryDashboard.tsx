@@ -350,11 +350,10 @@ export function AgentRecoveryDashboard({ agentId, onBack }: Props) {
             loyer_mensuel: loc.loyer_mensuel || 0,
           });
 
-          // Vérifier paiements
-          const paiement = paiementsLocations?.find((p: any) => p.location_id === loc.id);
-          if (paiement) {
-            clientData.montant_paye_locations += paiement.montant || 0;
-          }
+          // Vérifier paiements - SOMME de tous les paiements du mois
+          const paiements = paiementsLocations?.filter((p: any) => p.location_id === loc.id) || [];
+          const totalPaiements = paiements.reduce((sum, p) => sum + (p.montant || 0), 0);
+          clientData.montant_paye_locations += totalPaiements;
         });
 
         // Traiter les souscriptions
@@ -397,11 +396,10 @@ export function AgentRecoveryDashboard({ agentId, onBack }: Props) {
             montant_mensuel: sub.montant_droit_terre_mensuel || 0,
           });
 
-          // Vérifier paiements
-          const paiement = paiementsDroitTerre?.find((p: any) => p.souscription_id === sub.id);
-          if (paiement) {
-            clientData.montant_paye_droits_terre += paiement.montant || 0;
-          }
+          // Vérifier paiements - SOMME de tous les paiements du mois
+          const paiements = paiementsDroitTerre?.filter((p: any) => p.souscription_id === sub.id) || [];
+          const totalPaiements = paiements.reduce((sum, p) => sum + (p.montant || 0), 0);
+          clientData.montant_paye_droits_terre += totalPaiements;
         });
       });
 
