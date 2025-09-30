@@ -350,11 +350,10 @@ export function AgentRecoveryDashboard({ agentId, onBack }: Props) {
             loyer_mensuel: loc.loyer_mensuel || 0,
           });
 
-          // Vérifier paiements
-          const paiement = paiementsLocations?.find((p: any) => p.location_id === loc.id);
-          if (paiement) {
-            clientData.montant_paye_locations += paiement.montant || 0;
-          }
+          // Vérifier paiements - SOMME de tous les paiements du mois
+          const paiements = paiementsLocations?.filter((p: any) => p.location_id === loc.id) || [];
+          const totalPaiements = paiements.reduce((sum, p) => sum + (p.montant || 0), 0);
+          clientData.montant_paye_locations += totalPaiements;
         });
 
         // Traiter les souscriptions
@@ -397,11 +396,10 @@ export function AgentRecoveryDashboard({ agentId, onBack }: Props) {
             montant_mensuel: sub.montant_droit_terre_mensuel || 0,
           });
 
-          // Vérifier paiements
-          const paiement = paiementsDroitTerre?.find((p: any) => p.souscription_id === sub.id);
-          if (paiement) {
-            clientData.montant_paye_droits_terre += paiement.montant || 0;
-          }
+          // Vérifier paiements - SOMME de tous les paiements du mois
+          const paiements = paiementsDroitTerre?.filter((p: any) => p.souscription_id === sub.id) || [];
+          const totalPaiements = paiements.reduce((sum, p) => sum + (p.montant || 0), 0);
+          clientData.montant_paye_droits_terre += totalPaiements;
         });
       });
 
@@ -948,28 +946,28 @@ export function AgentRecoveryDashboard({ agentId, onBack }: Props) {
                         variant="outline"
                         size="sm"
                         onClick={() => handleGroupedPayment('location')}
-                        disabled={filteredClients.filter(c => c.contract_types.includes('location') && c.montant_du_locations > c.montant_paye_locations).length === 0}
+                        disabled={clientsStatus.filter(c => c.contract_types.includes('location') && c.montant_du_locations > c.montant_paye_locations).length === 0}
                         className="flex items-center gap-2"
-                        title={`Clients avec dettes de location: ${filteredClients.filter(c => c.contract_types.includes('location') && c.montant_du_locations > c.montant_paye_locations).length}`}
+                        title={`Clients avec dettes de location: ${clientsStatus.filter(c => c.contract_types.includes('location') && c.montant_du_locations > c.montant_paye_locations).length}`}
                       >
                         <CreditCard className="h-4 w-4" />
                         Paiement Locations
                         <span className="text-xs ml-1">
-                          ({filteredClients.filter(c => c.contract_types.includes('location') && c.montant_du_locations > c.montant_paye_locations).length})
+                          ({clientsStatus.filter(c => c.contract_types.includes('location') && c.montant_du_locations > c.montant_paye_locations).length})
                         </span>
                       </Button>
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => handleGroupedPayment('souscription')}
-                        disabled={filteredClients.filter(c => c.contract_types.includes('souscription') && c.montant_du_droits_terre > c.montant_paye_droits_terre).length === 0}
+                        disabled={clientsStatus.filter(c => c.contract_types.includes('souscription') && c.montant_du_droits_terre > c.montant_paye_droits_terre).length === 0}
                         className="flex items-center gap-2"
-                        title={`Clients avec dettes de droits de terre: ${filteredClients.filter(c => c.contract_types.includes('souscription') && c.montant_du_droits_terre > c.montant_paye_droits_terre).length}`}
+                        title={`Clients avec dettes de droits de terre: ${clientsStatus.filter(c => c.contract_types.includes('souscription') && c.montant_du_droits_terre > c.montant_paye_droits_terre).length}`}
                       >
                         <CreditCard className="h-4 w-4" />
                         Paiement Droits Terre
                         <span className="text-xs ml-1">
-                          ({filteredClients.filter(c => c.contract_types.includes('souscription') && c.montant_du_droits_terre > c.montant_paye_droits_terre).length})
+                          ({clientsStatus.filter(c => c.contract_types.includes('souscription') && c.montant_du_droits_terre > c.montant_paye_droits_terre).length})
                         </span>
                       </Button>
                     </div>

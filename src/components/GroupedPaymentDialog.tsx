@@ -205,6 +205,19 @@ export function GroupedPaymentDialog({
             const description = `${paymentType === 'location' ? 'Loyer' : 'Droit de terre'} ${format(new Date(`${selectedMonth}-01`), 'MMMM yyyy', { locale: fr })} - ${contract.propriete_nom}`;
             
             if (contract.type === 'location') {
+              // Vérifier s'il existe déjà un paiement pour ce mois
+              const { data: existingPayment } = await supabase
+                .from('paiements_locations')
+                .select('id')
+                .eq('location_id', contract.id)
+                .eq('periode_paiement', `${selectedMonth}-01`)
+                .maybeSingle();
+
+              if (existingPayment) {
+                results.errors.push(`${client.client_prenom} ${client.client_nom} (Location ${contract.propriete_nom}): Paiement déjà effectué pour ${selectedMonth}`);
+                continue;
+              }
+
               await supabase.rpc("pay_location_with_cash", {
                 p_location_id: contract.id,
                 p_montant: contract.montant,
@@ -215,7 +228,20 @@ export function GroupedPaymentDialog({
                 p_periode_paiement: `${selectedMonth}-01`
               });
             } else if (contract.type === 'souscription') {
-              await supabase.rpc("pay_souscription_with_cash", {
+              // Vérifier s'il existe déjà un paiement pour ce mois
+              const { data: existingPayment } = await supabase
+                .from('paiements_droit_terre')
+                .select('id')
+                .eq('souscription_id', contract.id)
+                .eq('periode_paiement', `${selectedMonth}-01`)
+                .maybeSingle();
+
+              if (existingPayment) {
+                results.errors.push(`${client.client_prenom} ${client.client_nom} (Droit de terre ${contract.propriete_nom}): Paiement déjà effectué pour ${selectedMonth}`);
+                continue;
+              }
+
+              await supabase.rpc("pay_droit_terre_with_cash", {
                 p_souscription_id: contract.id,
                 p_montant: contract.montant,
                 p_date_paiement: datePaiement,
@@ -230,17 +256,17 @@ export function GroupedPaymentDialog({
           results.success++;
           
           // Log audit
-          await logCreate({
-            table_name: 'paiements_groupes',
-            action_type: 'create',
-            description: `Paiement groupé ${paymentType} pour ${client.client_prenom} ${client.client_nom}`,
-            new_values: {
+          await logCreate(
+            'paiements_groupes',
+            client.client_id,
+            {
               client_id: client.client_id,
               montant: client.montant_saisi,
               type: paymentType,
               mois: selectedMonth
-            }
-          });
+            },
+            `Paiement groupé ${paymentType} pour ${client.client_prenom} ${client.client_nom}`
+          );
 
         } catch (error) {
           console.error(`Erreur pour ${client.client_prenom} ${client.client_nom}:`, error);
@@ -259,16 +285,26 @@ export function GroupedPaymentDialog({
           title: "Paiements groupés effectués",
           description: `${results.success} paiement(s) traité(s) avec succès`,
         });
-        queryClient.invalidateQueries({ queryKey: ['agent-clients-status', agentId, selectedMonth] });
-        queryClient.invalidateQueries({ queryKey: ['agents-recovery'] });
-        queryClient.invalidateQueries({ queryKey: ['agent-performance', agentId] });
-        queryClient.invalidateQueries({ queryKey: ['agent-properties', agentId] });
+        
+        // Attendre que les transactions soient commitées puis invalider les caches
+        setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: ['agent-clients-status', agentId, selectedMonth] });
+          queryClient.invalidateQueries({ queryKey: ['agents-recovery'] });
+          queryClient.invalidateQueries({ queryKey: ['agent-performance', agentId] });
+          queryClient.invalidateQueries({ queryKey: ['agent-properties', agentId] });
+          queryClient.invalidateQueries({ queryKey: ['agent-stats'] });
+          queryClient.invalidateQueries({ queryKey: ['paiements_locations'] });
+          queryClient.invalidateQueries({ queryKey: ['paiements_droit_terre'] });
+          queryClient.invalidateQueries({ queryKey: ['paiements_souscriptions'] });
+          queryClient.invalidateQueries({ queryKey: ['recus'] });
+        }, 100);
+        
         onSuccess();
         onClose();
       } else {
         toast({
           title: "Paiements partiellement effectués",
-          description: `${results.success} succès, ${results.errors.length} erreur(s)`,
+          description: `${results.success} succès, ${results.errors.length} erreur(s). ${results.errors.join(', ')}`,
           variant: "destructive",
         });
       }
