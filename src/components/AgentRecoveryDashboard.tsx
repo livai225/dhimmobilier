@@ -78,10 +78,11 @@ interface ClientRecoveryStatus {
 interface Props {
   agentId: string;
   onBack: () => void;
+  initialMonth?: string;
 }
 
-export function AgentRecoveryDashboard({ agentId, onBack }: Props) {
-  const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
+export function AgentRecoveryDashboard({ agentId, onBack, initialMonth }: Props) {
+  const [selectedMonth, setSelectedMonth] = useState(initialMonth || format(new Date(), 'yyyy-MM'));
   const [clientStatusFilter, setClientStatusFilter] = useState<'all' | 'paye' | 'partiel' | 'impaye'>('all');
   const [clientSearchTerm, setClientSearchTerm] = useState("");
   const [clientContractFilter, setClientContractFilter] = useState<'all' | 'location' | 'souscription'>('all');

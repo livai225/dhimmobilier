@@ -254,6 +254,7 @@ export default function Recouvrement() {
       <AgentRecoveryDashboard 
         agentId={selectedAgentId} 
         onBack={handleBackToGlobal}
+        initialMonth={monthFilter}
       />
     );
   }
