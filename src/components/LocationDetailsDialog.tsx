@@ -267,8 +267,6 @@ export function LocationDetailsDialog({ location, onClose, onUpdate }: LocationD
               {paiements && paiements.length > 0 ? (
                 <div className="space-y-2">
                   {paiements.map((paiement) => {
-                    const matchingReceipt = (recus || []).find(r => r.reference_id === paiement.id);
-
                     return (
                       <div key={paiement.id} className="grid grid-cols-1 md:grid-cols-3 gap-4 p-3 border rounded-lg">
                         <div className="md:col-span-2">
