@@ -14,6 +14,7 @@ import { downloadReceiptPDF } from "@/utils/pdfGenerator";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ExportToExcelButton } from "@/components/ExportToExcelButton";
+import { useCompanyLogo } from "@/hooks/useCompanyLogo";
 
 
 export default function Recus() {
@@ -29,8 +30,8 @@ export default function Recus() {
   const [detailsOpen, setDetailsOpen] = useState(false);
 
   const { data: receipts, isLoading } = useReceipts(filters);
-
   const { data: stats } = useReceiptStats();
+  const { data: logoUrl } = useCompanyLogo();
 
   // Get clients for filter dropdown
   const { data: clients } = useQuery({
@@ -62,7 +63,7 @@ export default function Recus() {
   };
 
   const handleDownload = (receipt: ReceiptWithDetails) => {
-    downloadReceiptPDF(receipt);
+    downloadReceiptPDF(receipt, logoUrl || undefined);
   };
 
   // Reset page on filters change

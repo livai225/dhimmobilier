@@ -18,26 +18,26 @@ const generateSingleReceipt = (
     return `${formattedNumber} FCFA`;
   };
   
-  // Logo (if provided)
+  // Logo (if provided) - positioned in top left
   if (logoDataUrl) {
     try {
-      doc.addImage(logoDataUrl, 'PNG', 7, yOffset + 5, 20, 20);
+      doc.addImage(logoDataUrl, 'PNG', 7, yOffset + 6, 18, 18);
     } catch (error) {
       console.error('Error adding logo to PDF:', error);
     }
   }
   
-  // Header avec fond coloré (compact)
+  // Header avec fond coloré (compact) - with space for logo
   doc.setFillColor('#1e40af');
-  doc.rect(5, yOffset + 5, 138, 15, 'F');
+  doc.rect(28, yOffset + 5, 115, 15, 'F');
   doc.setTextColor('#ffffff');
   doc.setFontSize(12);
   doc.setFont("helvetica", "bold");
-  doc.text("REÇU DE PAIEMENT", 74, yOffset + 14, { align: "center" });
+  doc.text("REÇU DE PAIEMENT", 85.5, yOffset + 14, { align: "center" });
   
   // Stub type indicator
   doc.setFontSize(8);
-  doc.text(`EXEMPLAIRE ${stubType}`, 74, yOffset + 18, { align: "center" });
+  doc.text(`EXEMPLAIRE ${stubType}`, 85.5, yOffset + 18, { align: "center" });
   
   // Receipt number et date
   doc.setTextColor('#000000');
@@ -182,14 +182,22 @@ export const generateReceiptPDF = (receipt: ReceiptWithDetails, logoDataUrl?: st
 
 // Load image as DataURL for jsPDF
 const loadImageAsDataURL = async (url: string): Promise<string> => {
-  const res = await fetch(url);
-  const blob = await res.blob();
-  return await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      throw new Error(`Failed to fetch image: ${res.statusText}`);
+    }
+    const blob = await res.blob();
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error("Failed to read image as DataURL"));
+      reader.readAsDataURL(blob);
+    });
+  } catch (error) {
+    console.error("Error loading image:", error);
+    throw error;
+  }
 };
 
 // Download receipt as PDF (dual-stub format)
