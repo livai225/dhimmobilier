@@ -9,8 +9,9 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts';
-import { ArrowLeft, TrendingUp, TrendingDown, Target, Calendar, MapPin, Phone, Mail, Search } from "lucide-react";
+import { ArrowLeft, TrendingUp, TrendingDown, Target, Calendar, MapPin, Phone, Mail, Search, CreditCard } from "lucide-react";
 import { ExportToExcelButton } from "@/components/ExportToExcelButton";
+import { GroupedPaymentDialog } from "@/components/GroupedPaymentDialog";
 import { format, subMonths, startOfMonth } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -84,6 +85,10 @@ export function AgentRecoveryDashboard({ agentId, onBack }: Props) {
   const [clientStatusFilter, setClientStatusFilter] = useState<'all' | 'paye' | 'partiel' | 'impaye'>('all');
   const [clientSearchTerm, setClientSearchTerm] = useState("");
   const [clientContractFilter, setClientContractFilter] = useState<'all' | 'location' | 'souscription'>('all');
+  const [groupedPaymentDialog, setGroupedPaymentDialog] = useState<{
+    isOpen: boolean;
+    paymentType: 'location' | 'souscription' | 'droit_terre';
+  }>({ isOpen: false, paymentType: 'location' });
 
   // Fetch agent details
   const { data: agent } = useQuery({
@@ -436,6 +441,33 @@ export function AgentRecoveryDashboard({ agentId, onBack }: Props) {
     return matchesSearch && matchesStatus && matchesContract;
   });
 
+  // Debug: afficher les statistiques des clients
+  const clientsAvecLocations = clientsStatus.filter(c => c.contract_types.includes('location'));
+  const clientsAvecLocationsDettes = clientsStatus.filter(c => c.contract_types.includes('location') && c.montant_du_locations > c.montant_paye_locations);
+  const clientsAvecSouscriptions = clientsStatus.filter(c => c.contract_types.includes('souscription'));
+  const clientsAvecSouscriptionsDettes = clientsStatus.filter(c => c.contract_types.includes('souscription') && c.montant_du_droits_terre > c.montant_paye_droits_terre);
+  
+  console.log('Debug clientsStatus:', {
+    total: clientsStatus.length,
+    payes: clientsStatus.filter(c => c.statut === 'paye').length,
+    partiels: clientsStatus.filter(c => c.statut === 'partiel').length,
+    impayes: clientsStatus.filter(c => c.statut === 'impaye').length,
+    souscriptions: clientsAvecSouscriptions.length,
+    locations: clientsAvecLocations.length,
+    souscriptionsAvecDettes: clientsAvecSouscriptionsDettes.length,
+    locationsAvecDettes: clientsAvecLocationsDettes.length,
+    filteredClients: filteredClients.length,
+    clientStatusFilter,
+    clientContractFilter,
+    // Détails des clients avec locations
+    clientsAvecLocations: clientsAvecLocations.map(c => ({
+      nom: `${c.client_prenom} ${c.client_nom}`,
+      montantDu: c.montant_du_locations,
+      montantPaye: c.montant_paye_locations,
+      reste: c.montant_du_locations - c.montant_paye_locations
+    }))
+  });
+
   const clientStats = {
     total: clientsStatus.length,
     payes: clientsStatus.filter(c => c.statut === 'paye').length,
@@ -453,6 +485,14 @@ export function AgentRecoveryDashboard({ agentId, onBack }: Props) {
     verse: 0,
     taux_recouvrement: 0,
     ecart: 0
+  };
+
+  const handleGroupedPayment = (paymentType: 'location' | 'souscription' | 'droit_terre') => {
+    setGroupedPaymentDialog({ isOpen: true, paymentType });
+  };
+
+  const handleGroupedPaymentSuccess = () => {
+    // Les queries seront invalidées automatiquement par le composant GroupedPaymentDialog
   };
 
   return (
@@ -841,54 +881,99 @@ export function AgentRecoveryDashboard({ agentId, onBack }: Props) {
             </Card>
           </div>
 
-          {/* Filtres */}
+          {/* Filtres et Actions */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Filtres</CardTitle>
+              <CardTitle className="text-lg">Filtres et Actions</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <Label htmlFor="client-search">Rechercher un client</Label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                    <Input
-                      id="client-search"
-                      placeholder="Nom ou prénom..."
-                      value={clientSearchTerm}
-                      onChange={(e) => setClientSearchTerm(e.target.value)}
-                      className="pl-10"
-                    />
+              <div className="space-y-4">
+                {/* Filtres */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <Label htmlFor="client-search">Rechercher un client</Label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                      <Input
+                        id="client-search"
+                        placeholder="Nom ou prénom..."
+                        value={clientSearchTerm}
+                        onChange={(e) => setClientSearchTerm(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="status-filter">Statut de paiement</Label>
+                    <Select value={clientStatusFilter} onValueChange={(value: any) => setClientStatusFilter(value)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Tous les clients</SelectItem>
+                        <SelectItem value="paye">Payés uniquement</SelectItem>
+                        <SelectItem value="partiel">Partiels uniquement</SelectItem>
+                        <SelectItem value="impaye">Impayés uniquement</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="contract-filter">Type de contrat</Label>
+                    <Select value={clientContractFilter} onValueChange={(value: any) => setClientContractFilter(value)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Tous les contrats</SelectItem>
+                        <SelectItem value="location">Locataires uniquement</SelectItem>
+                        <SelectItem value="souscription">Souscripteurs uniquement</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
-                
-                <div>
-                  <Label htmlFor="status-filter">Statut de paiement</Label>
-                  <Select value={clientStatusFilter} onValueChange={(value: any) => setClientStatusFilter(value)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Tous les clients</SelectItem>
-                      <SelectItem value="paye">Payés uniquement</SelectItem>
-                      <SelectItem value="partiel">Partiels uniquement</SelectItem>
-                      <SelectItem value="impaye">Impayés uniquement</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div>
-                  <Label htmlFor="contract-filter">Type de contrat</Label>
-                  <Select value={clientContractFilter} onValueChange={(value: any) => setClientContractFilter(value)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Tous les contrats</SelectItem>
-                      <SelectItem value="location">Locataires uniquement</SelectItem>
-                      <SelectItem value="souscription">Souscripteurs uniquement</SelectItem>
-                    </SelectContent>
-                  </Select>
+
+                {/* Actions de paiement groupé */}
+                <div className="border-t pt-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-sm font-medium">Paiements groupés</h4>
+                      <p className="text-xs text-muted-foreground">
+                        Effectuer des paiements groupés pour le mois sélectionné
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleGroupedPayment('location')}
+                        disabled={filteredClients.filter(c => c.contract_types.includes('location') && c.montant_du_locations > c.montant_paye_locations).length === 0}
+                        className="flex items-center gap-2"
+                        title={`Clients avec dettes de location: ${filteredClients.filter(c => c.contract_types.includes('location') && c.montant_du_locations > c.montant_paye_locations).length}`}
+                      >
+                        <CreditCard className="h-4 w-4" />
+                        Paiement Locations
+                        <span className="text-xs ml-1">
+                          ({filteredClients.filter(c => c.contract_types.includes('location') && c.montant_du_locations > c.montant_paye_locations).length})
+                        </span>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleGroupedPayment('souscription')}
+                        disabled={filteredClients.filter(c => c.contract_types.includes('souscription') && c.montant_du_droits_terre > c.montant_paye_droits_terre).length === 0}
+                        className="flex items-center gap-2"
+                        title={`Clients avec dettes de droits de terre: ${filteredClients.filter(c => c.contract_types.includes('souscription') && c.montant_du_droits_terre > c.montant_paye_droits_terre).length}`}
+                      >
+                        <CreditCard className="h-4 w-4" />
+                        Paiement Droits Terre
+                        <span className="text-xs ml-1">
+                          ({filteredClients.filter(c => c.contract_types.includes('souscription') && c.montant_du_droits_terre > c.montant_paye_droits_terre).length})
+                        </span>
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </CardContent>
@@ -901,6 +986,16 @@ export function AgentRecoveryDashboard({ agentId, onBack }: Props) {
                 <CardTitle>Liste des Clients - {format(new Date(`${selectedMonth}-01`), 'MMMM yyyy', { locale: fr })}</CardTitle>
                 <CardDescription>
                   {filteredClients.length} client{filteredClients.length !== 1 ? 's' : ''} sur {clientsStatus.length}
+                  {clientStatusFilter !== 'all' && (
+                    <span className="ml-2 text-blue-600">
+                      (Filtre: {clientStatusFilter === 'paye' ? 'Payés' : clientStatusFilter === 'partiel' ? 'Partiels' : 'Impayés'})
+                    </span>
+                  )}
+                  {clientContractFilter !== 'all' && (
+                    <span className="ml-2 text-green-600">
+                      (Type: {clientContractFilter === 'location' ? 'Locations' : 'Souscriptions'})
+                    </span>
+                  )}
                 </CardDescription>
               </div>
               <ExportToExcelButton
@@ -997,6 +1092,9 @@ export function AgentRecoveryDashboard({ agentId, onBack }: Props) {
                             {client.statut === 'partiel' && '⏳ Partiel'}
                             {client.statut === 'impaye' && '❌ Impayé'}
                           </Badge>
+                          <div className="text-xs text-muted-foreground mt-1">
+                            Dû: {client.total_du.toLocaleString()} | Payé: {client.total_paye.toLocaleString()}
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -1084,6 +1182,17 @@ export function AgentRecoveryDashboard({ agentId, onBack }: Props) {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Dialog de paiement groupé */}
+      <GroupedPaymentDialog
+        agentId={agentId}
+        selectedMonth={selectedMonth}
+        paymentType={groupedPaymentDialog.paymentType}
+        clients={clientsStatus}
+        isOpen={groupedPaymentDialog.isOpen}
+        onClose={() => setGroupedPaymentDialog({ isOpen: false, paymentType: 'location' })}
+        onSuccess={handleGroupedPaymentSuccess}
+      />
     </div>
   );
 }
