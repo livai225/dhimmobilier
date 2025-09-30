@@ -116,7 +116,7 @@ export const useUserPermissions = () => {
     
     // Secrétaire permissions (opérationnel uniquement)
     canMakeDeposits: isAdmin || isSecretaire,
-    canMakeExpenses: isAdmin, // Seuls les admins peuvent faire des dépenses d'entreprise
+    canMakeExpenses: isAdmin || isSecretaire, // Admin et secrétaire peuvent faire des dépenses
     canCreateSubscriptions: isAdmin || isSecretaire,
     canCreateRentals: isAdmin || isSecretaire,
     
