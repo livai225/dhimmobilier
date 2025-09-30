@@ -96,27 +96,11 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
         p_mode_paiement: modePaiement || null,
         p_reference: reference || null,
         p_description: description,
+        p_periode_paiement: selectedMonth ? selectedMonth + "-01" : null,
       });
       if (rpcError) throw rpcError;
 
-      // Mettre à jour le reçu créé par le trigger pour inclure la période (mois)
-      const { data: paiementData, error: paiementError } = await supabase
-        .from("paiements_locations")
-        .select("id")
-        .eq("location_id", location.id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single();
-      if (paiementError) throw paiementError;
-
-      await supabase
-        .from("recus")
-        .update({
-          periode_debut: selectedMonth ? (selectedMonth + "-01") : null,
-          periode_fin: selectedMonth ? (selectedMonth + "-01") : null,
-        })
-        .eq("type_operation", "location")
-        .eq("reference_id", paiementData.id);
+      // Le trigger se charge maintenant automatiquement de créer le reçu avec la bonne période
 
       return { paiementId };
     },

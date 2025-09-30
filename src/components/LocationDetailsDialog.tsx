@@ -52,20 +52,24 @@ export function LocationDetailsDialog({ location, onClose, onUpdate }: LocationD
     },
   });
 
-  // Fetch receipts for this location
+  // Fetch receipts for payments
   const { data: recus } = useQuery({
-    queryKey: ["recus", location.id],
+    queryKey: ["recus_location_payments", location.id],
     queryFn: async () => {
+      if (!paiements || paiements.length === 0) return [];
+      
+      const paymentIds = paiements.map(p => p.id);
       const { data, error } = await supabase
         .from("recus")
         .select("*")
-        .eq("reference_id", location.id)
+        .in("reference_id", paymentIds)
         .eq("type_operation", "location")
         .order("date_generation", { ascending: false });
 
       if (error) throw error;
       return data;
     },
+    enabled: !!paiements && paiements.length > 0,
   });
 
   const terminateLocationMutation = useMutation({
@@ -275,32 +279,25 @@ export function LocationDetailsDialog({ location, onClose, onUpdate }: LocationD
               {paiements && paiements.length > 0 ? (
                 <div className="space-y-2">
                   {paiements.map((paiement) => {
-                    const matchingReceipt = (recus || []).reduce((closest: any, r: any) => {
-                      if (r.type_operation !== 'location') return closest;
-                      if (Number(r.montant_total) !== Number(paiement.montant)) return closest;
-                      const diff = Math.abs(new Date(r.date_generation).getTime() - new Date(paiement.date_paiement).getTime());
-                      if (!closest) return r;
-                      const prevDiff = Math.abs(new Date(closest.date_generation).getTime() - new Date(paiement.date_paiement).getTime());
-                      return diff < prevDiff ? r : closest;
-                    }, null);
+                    const matchingReceipt = (recus || []).find(r => r.reference_id === paiement.id);
 
                     return (
                       <div key={paiement.id} className="grid grid-cols-1 md:grid-cols-3 gap-4 p-3 border rounded-lg">
                         <div className="md:col-span-2">
                           <p className="font-medium">{paiement.montant?.toLocaleString()} FCFA</p>
                           <p className="text-sm text-muted-foreground">
-                            {format(new Date(paiement.date_paiement), "PPP", { locale: fr })}
+                            Payé le: {format(new Date(paiement.date_paiement), "PPP", { locale: fr })}
                           </p>
+                          {(paiement as any).periode_paiement && (
+                            <p className="text-sm font-medium text-primary">
+                              Mois payé: {format(new Date((paiement as any).periode_paiement), "MMMM yyyy", { locale: fr })}
+                            </p>
+                          )}
                           {paiement.reference && (
                             <p className="text-xs text-muted-foreground">Réf: {paiement.reference}</p>
                           )}
                         </div>
                         <div className="text-right">
-                          {matchingReceipt?.periode_debut && (
-                            <p className="text-sm font-medium text-primary">
-                              Mois payé: {format(new Date(matchingReceipt.periode_debut), "MMMM yyyy", { locale: fr })}
-                            </p>
-                          )}
                           <p className="text-sm text-muted-foreground">{paiement.mode_paiement}</p>
                           <Button variant="ghost" size="sm">
                             <FileText className="w-4 h-4" />

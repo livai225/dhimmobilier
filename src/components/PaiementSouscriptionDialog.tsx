@@ -23,7 +23,7 @@ import {
 import { Combobox } from "@/components/ui/combobox";
 import { useToast } from "@/hooks/use-toast";
 import { useAuditLog } from "@/hooks/useAuditLog";
-import { format } from "date-fns";
+import { format, addMonths, startOfMonth } from "date-fns";
 import { fr } from "date-fns/locale";
 
 
@@ -32,6 +32,7 @@ const paiementSchema = z.object({
   date_paiement: z.string().min(1, "La date est requise"),
   mode_paiement: z.string().optional(),
   reference: z.string().optional(),
+  periode_paiement: z.string().optional(),
 });
 
 type PaiementFormData = z.infer<typeof paiementSchema>;
@@ -60,8 +61,27 @@ export function PaiementSouscriptionDialog({
       date_paiement: new Date().toISOString().split('T')[0],
       mode_paiement: "",
       reference: "",
+      periode_paiement: "",
     },
   });
+
+  // Generate available months for payment
+  const generateAvailableMonths = () => {
+    const months: { value: string; label: string }[] = [];
+    const startDate = souscription?.date_debut ? new Date(souscription.date_debut) : new Date();
+    
+    // Show 12 previous months and 12 future months
+    for (let i = -12; i <= 12; i++) {
+      const date = addMonths(startOfMonth(startDate), i);
+      const monthValue = format(date, "yyyy-MM");
+      months.push({
+        value: monthValue,
+        label: format(date, "MMMM yyyy", { locale: fr })
+      });
+    }
+    
+    return months;
+  };
 
   const mutation = useMutation({
     mutationFn: async (data: PaiementFormData) => {
@@ -75,7 +95,10 @@ export function PaiementSouscriptionDialog({
         p_date_paiement: data.date_paiement,
         p_mode_paiement: data.mode_paiement || null,
         p_reference: data.reference || null,
-        p_description: "Paiement souscription",
+        p_description: data.periode_paiement 
+          ? `Paiement souscription - ${format(new Date(data.periode_paiement + "-01"), "MMMM yyyy", { locale: fr })}`
+          : "Paiement souscription",
+        p_periode_paiement: data.periode_paiement ? data.periode_paiement + "-01" : null,
       });
       if (error) throw error;
 
@@ -156,6 +179,25 @@ export function PaiementSouscriptionDialog({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
+                name="periode_paiement"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Période de paiement</FormLabel>
+                    <FormControl>
+                      <Combobox
+                        options={generateAvailableMonths()}
+                        value={field.value}
+                        onChange={field.onChange}
+                        placeholder="Sélectionner la période"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
                 name="montant"
                 render={({ field }) => (
                   <FormItem>
@@ -174,7 +216,9 @@ export function PaiementSouscriptionDialog({
                   </FormItem>
                 )}
               />
+            </div>
 
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="date_paiement"

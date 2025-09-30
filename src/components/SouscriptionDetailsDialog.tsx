@@ -82,6 +82,26 @@ export function SouscriptionDetailsDialog({
     staleTime: 0, // Force fresh data
   });
 
+  // Fetch receipts for payments
+  const { data: recus } = useQuery({
+    queryKey: ["recus_subscription_payments", souscription?.id],
+    queryFn: async () => {
+      if (!paiements || paiements.length === 0) return [];
+      
+      const paymentIds = paiements.map(p => p.id);
+      const { data, error } = await supabase
+        .from("recus")
+        .select("*")
+        .in("reference_id", paymentIds)
+        .eq("type_operation", "apport_souscription")
+        .order("date_generation", { ascending: false });
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!paiements && paiements.length > 0,
+  });
+
   if (!souscription) return null;
 
   // Use the balance from database instead of recalculating to avoid inconsistencies with historical subscriptions
@@ -459,43 +479,53 @@ export function SouscriptionDetailsDialog({
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Montant</TableHead>
-                        <TableHead>Mode</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead></TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {/* Autres paiements */}
-                      {paiements?.map((paiement) => (
-                        <TableRow key={paiement.id}>
-                          <TableCell className="text-sm">
-                            {format(new Date(paiement.date_paiement), "dd/MM/yyyy")}
-                          </TableCell>
-                          <TableCell className="text-sm font-medium">
-                            {Number(paiement.montant).toLocaleString()} FCFA
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {paiement.mode_paiement || "-"}
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            <Badge variant="outline">Paiement</Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={() => handleViewReceipt(paiement.id)}
-                            >
-                              <Printer className="h-3 w-3" />
-                            </Button>
-                          </TableCell>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date de paiement</TableHead>
+                          <TableHead>Période payée</TableHead>
+                          <TableHead>Montant</TableHead>
+                          <TableHead>Mode</TableHead>
+                          <TableHead></TableHead>
                         </TableRow>
-                      ))}
+                      </TableHeader>
+                      <TableBody>
+                        {/* Autres paiements */}
+                        {paiements?.map((paiement) => {
+                          const matchingReceipt = (recus || []).find(r => r.reference_id === paiement.id);
+                          
+                          return (
+                            <TableRow key={paiement.id}>
+                              <TableCell className="text-sm">
+                                {format(new Date(paiement.date_paiement), "dd/MM/yyyy")}
+                              </TableCell>
+                              <TableCell className="text-sm">
+                                {(paiement as any).periode_paiement ? (
+                                  <span className="font-medium text-primary">
+                                    {format(new Date((paiement as any).periode_paiement), "MMMM yyyy", { locale: fr })}
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground">-</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-sm font-medium">
+                                {Number(paiement.montant).toLocaleString()} FCFA
+                              </TableCell>
+                              <TableCell className="text-sm">
+                                {paiement.mode_paiement || "-"}
+                              </TableCell>
+                              <TableCell>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm"
+                                  onClick={() => handleViewReceipt(paiement.id)}
+                                >
+                                  <Printer className="h-3 w-3" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
                       
                       {/* Affichage si aucun paiement */}
                       {(!paiements || paiements.length === 0) && (
