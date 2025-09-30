@@ -31,6 +31,8 @@ interface ComboboxProps {
   emptyText?: string
   className?: string
   buttonClassName?: string
+  onSearchChange?: (search: string) => void
+  isLoading?: boolean
 }
 
 export function Combobox({
@@ -42,18 +44,36 @@ export function Combobox({
   emptyText = "Aucun résultat trouvé.",
   className,
   buttonClassName,
+  onSearchChange,
+  isLoading = false,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
   const [search, setSearch] = React.useState("")
+  
+  // Gestion du délai pour la recherche côté serveur
+  React.useEffect(() => {
+    if (onSearchChange) {
+      const timeoutId = setTimeout(() => {
+        onSearchChange(search);
+      }, 300);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [search, onSearchChange]);
 
   const filteredOptions = React.useMemo(() => {
     if (!options || !Array.isArray(options)) return [];
+    // Si on utilise la recherche côté serveur, retourner toutes les options
+    // car le filtrage se fait déjà côté serveur
+    if (onSearchChange) {
+      return options;
+    }
+    // Sinon, utiliser le filtrage côté client comme avant
     if (!search.trim()) return options;
     const searchLower = search.toLowerCase();
     return options.filter(option => 
       option?.label?.toLowerCase().includes(searchLower)
     );
-  }, [options, search]);
+  }, [options, search, onSearchChange]);
 
   const selectedOption = React.useMemo(() => {
     return options?.find(option => option.value === value);
@@ -82,11 +102,13 @@ export function Combobox({
               placeholder={searchPlaceholder}
               className="h-11 border-0 ring-0 focus:ring-0"
               value={search}
-              onValueChange={(value) => setSearch(value)}
+              onValueChange={setSearch}
             />
           </div>
           <CommandList>
-            <CommandEmpty>{emptyText}</CommandEmpty>
+            <CommandEmpty>
+              {isLoading ? "Recherche en cours..." : emptyText}
+            </CommandEmpty>
             <CommandGroup className="max-h-[300px] overflow-y-auto">
               {filteredOptions.map((option) => (
                 <CommandItem

@@ -75,21 +75,35 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
     prenom: string;
   }
 
-  const { data: clients = [] } = useQuery<Array<Client & { label: string; value: string }>>({
-    queryKey: ["clients"],
+  // État pour la recherche de clients
+  const [clientSearchTerm, setClientSearchTerm] = React.useState("");
+  
+  const { data: clients = [], isLoading: clientsLoading } = useQuery<Array<Client & { label: string; value: string }>>({
+    queryKey: ["clients", clientSearchTerm],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("clients")
         .select("id, nom, prenom")
-        .limit(999999)
         .order("nom");
+      
+      // Si on a un terme de recherche, filtrer côté serveur
+      if (clientSearchTerm.trim()) {
+        query = query.or(`nom.ilike.%${clientSearchTerm}%,prenom.ilike.%${clientSearchTerm}%`);
+      }
+      
+      const { data, error } = await query;
       if (error) throw error;
+      
+      console.log(`Clients chargés: ${data?.length || 0} (recherche: "${clientSearchTerm}")`);
+      
       return (data as Client[]).map(client => ({
         ...client,
         label: `${client.prenom} ${client.nom}`,
         value: client.id
       }));
     },
+    // Charger tous les clients au début, puis filtrer selon la recherche
+    enabled: true,
   });
 
   interface Propriete {
@@ -318,6 +332,8 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
                         }}
                         placeholder="Sélectionner un client"
                         searchPlaceholder="Rechercher un client..."
+                        onSearchChange={setClientSearchTerm}
+                        isLoading={clientsLoading}
                         emptyText="Aucun client trouvé"
                       />
                     </FormControl>

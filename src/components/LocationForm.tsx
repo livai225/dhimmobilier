@@ -29,21 +29,32 @@ export function LocationForm({ onClose, onSuccess }: LocationFormProps) {
   const [dateFin, setDateFin] = useState<Date>();
   const [isLoading, setIsLoading] = useState(false);
   const [selectedLoyer, setSelectedLoyer] = useState(0);
+  const [clientSearchTerm, setClientSearchTerm] = useState("");
   const { toast } = useToast();
   const { logCreate } = useAuditLog();
 
-  // Fetch clients
-  const { data: clients } = useQuery({
-    queryKey: ["clients"],
+  // Fetch clients avec recherche côté serveur
+  const { data: clients = [], isLoading: clientsLoading } = useQuery({
+    queryKey: ["clients", clientSearchTerm],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("clients")
         .select("id, nom, prenom, telephone_principal")
-        .limit(999999)
         .order("nom");
+      
+      // Si on a un terme de recherche, filtrer côté serveur
+      if (clientSearchTerm.trim()) {
+        query = query.or(`nom.ilike.%${clientSearchTerm}%,prenom.ilike.%${clientSearchTerm}%`);
+      }
+      
+      const { data, error } = await query;
       if (error) throw error;
+      
+      console.log(`Clients chargés pour location: ${data?.length || 0} (recherche: "${clientSearchTerm}")`);
+      
       return data;
     },
+    enabled: true,
   });
 
   // Fetch available properties (status = 'Libre')
@@ -216,6 +227,10 @@ export function LocationForm({ onClose, onSuccess }: LocationFormProps) {
                 value={clientId}
                 onChange={setClientId}
                 placeholder="Sélectionner un client"
+                searchPlaceholder="Rechercher un client..."
+                onSearchChange={setClientSearchTerm}
+                isLoading={clientsLoading}
+                emptyText="Aucun client trouvé"
               />
             </div>
 

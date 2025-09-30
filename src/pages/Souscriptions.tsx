@@ -37,21 +37,57 @@ export default function Souscriptions() {
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
   const [isDroitTerreDialogOpen, setIsDroitTerreDialogOpen] = useState(false);
   const [showDashboard, setShowDashboard] = useState(true);
+  const [allSouscriptionsLoaded, setAllSouscriptionsLoaded] = useState(false);
 
   const { data: souscriptions, isLoading, refetch } = useQuery({
     queryKey: ["souscriptions"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // Récupérer d'abord le nombre total de souscriptions
+      const { count, error: countError } = await supabase
         .from("souscriptions")
-        .select(`
-          *,
-          clients(nom, prenom),
-          proprietes!inner(nom, adresse, agent_id, agents_recouvrement(nom, prenom))
-        `)
-        .order("created_at", { ascending: false });
+        .select("*", { count: "exact", head: true });
+      
+      if (countError) throw countError;
+      
+      console.log(`Nombre total de souscriptions dans la base: ${count}`);
+      
+      // Si plus de 10000 souscriptions, utiliser une approche par lots
+      if (count && count > 10000) {
+        console.log("Trop de souscriptions, chargement par lots...");
+        setAllSouscriptionsLoaded(false);
+        
+        // Charger les 10000 plus récentes d'abord
+        const { data, error } = await supabase
+          .from("souscriptions")
+          .select(`
+            *,
+            clients(nom, prenom),
+            proprietes!inner(nom, adresse, agent_id, agents_recouvrement(nom, prenom))
+          `)
+          .order("created_at", { ascending: false })
+          .limit(10000);
 
-      if (error) throw error;
-      return data;
+        if (error) throw error;
+        
+        console.log(`Souscriptions chargées (premiers 10000): ${data?.length || 0}`);
+        return data;
+      } else {
+        // Charger toutes les souscriptions si moins de 10000
+        const { data, error } = await supabase
+          .from("souscriptions")
+          .select(`
+            *,
+            clients(nom, prenom),
+            proprietes!inner(nom, adresse, agent_id, agents_recouvrement(nom, prenom))
+          `)
+          .order("created_at", { ascending: false });
+
+        if (error) throw error;
+        
+        console.log(`Toutes les souscriptions chargées: ${data?.length || 0}`);
+        setAllSouscriptionsLoaded(true);
+        return data;
+      }
     },
   });
 
@@ -238,7 +274,22 @@ export default function Souscriptions() {
   return (
     <div className="container mx-auto p-4 lg:p-6">
       <div className="flex flex-col space-y-4 lg:flex-row lg:items-center lg:justify-between lg:space-y-0 mb-6">
-        <h1 className="text-2xl md:text-3xl font-bold">Gestion des Souscriptions</h1>
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold">Gestion des Souscriptions</h1>
+          <div className="flex items-center gap-4 mt-1">
+            {souscriptions && (
+              <p className="text-sm text-muted-foreground">
+                {filteredSouscriptions?.length || 0} souscription{(filteredSouscriptions?.length || 0) !== 1 ? 's' : ''} affichée{(filteredSouscriptions?.length || 0) !== 1 ? 's' : ''}
+                {!allSouscriptionsLoaded && ` (sur ${souscriptions.length} chargées)`}
+              </p>
+            )}
+            {!allSouscriptionsLoaded && souscriptions && (
+              <p className="text-sm text-amber-600">
+                ⚠️ Affichage des 10 000 souscriptions les plus récentes. Utilisez les filtres pour rechercher dans l'historique complet.
+              </p>
+            )}
+          </div>
+        </div>
         <div className="flex items-center gap-2">
           {canAccessDashboard && (
             <Button
@@ -376,17 +427,15 @@ export default function Souscriptions() {
                       <p className="text-muted-foreground">Prix total</p>
                       <p className="font-medium">{souscription.prix_total?.toLocaleString()} FCFA</p>
                     </div>
+                    <div>
+                      <p className="text-muted-foreground">Droit de terre</p>
+                      <p className="font-medium">{souscription.montant_droit_terre_mensuel?.toLocaleString()} FCFA/mois</p>
+                    </div>
                     {souscription.type_souscription === "mise_en_garde" && (
-                      <>
-                        <div>
-                          <p className="text-muted-foreground">Type de bien</p>
-                          <p className="font-medium">{souscription.type_bien}</p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground">Droit de terre</p>
-                          <p className="font-medium">{souscription.montant_droit_terre_mensuel?.toLocaleString()} FCFA/mois</p>
-                        </div>
-                      </>
+                      <div>
+                        <p className="text-muted-foreground">Type de bien</p>
+                        <p className="font-medium">{souscription.type_bien}</p>
+                      </div>
                     )}
                   </div>
 
