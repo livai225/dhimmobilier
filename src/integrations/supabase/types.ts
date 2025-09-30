@@ -558,6 +558,7 @@ export type Database = {
           id: string
           mode_paiement: string | null
           montant: number
+          periode_paiement: string | null
           reference: string | null
           souscription_id: string
         }
@@ -567,6 +568,7 @@ export type Database = {
           id?: string
           mode_paiement?: string | null
           montant: number
+          periode_paiement?: string | null
           reference?: string | null
           souscription_id: string
         }
@@ -576,6 +578,7 @@ export type Database = {
           id?: string
           mode_paiement?: string | null
           montant?: number
+          periode_paiement?: string | null
           reference?: string | null
           souscription_id?: string
         }
@@ -635,6 +638,7 @@ export type Database = {
           location_id: string
           mode_paiement: string | null
           montant: number
+          periode_paiement: string | null
           reference: string | null
         }
         Insert: {
@@ -644,6 +648,7 @@ export type Database = {
           location_id: string
           mode_paiement?: string | null
           montant: number
+          periode_paiement?: string | null
           reference?: string | null
         }
         Update: {
@@ -653,6 +658,7 @@ export type Database = {
           location_id?: string
           mode_paiement?: string | null
           montant?: number
+          periode_paiement?: string | null
           reference?: string | null
         }
         Relationships: [
@@ -672,6 +678,7 @@ export type Database = {
           id: string
           mode_paiement: string | null
           montant: number
+          periode_paiement: string | null
           reference: string | null
           souscription_id: string
         }
@@ -681,6 +688,7 @@ export type Database = {
           id?: string
           mode_paiement?: string | null
           montant: number
+          periode_paiement?: string | null
           reference?: string | null
           souscription_id: string
         }
@@ -690,6 +698,7 @@ export type Database = {
           id?: string
           mode_paiement?: string | null
           montant?: number
+          periode_paiement?: string | null
           reference?: string | null
           souscription_id?: string
         }
@@ -1214,14 +1223,24 @@ export type Database = {
         Returns: string
       }
       pay_droit_terre_with_cash: {
-        Args: {
-          p_date_paiement: string
-          p_description?: string
-          p_mode_paiement?: string
-          p_montant: number
-          p_reference?: string
-          p_souscription_id: string
-        }
+        Args:
+          | {
+              p_date_paiement: string
+              p_description?: string
+              p_mode_paiement?: string
+              p_montant: number
+              p_periode_paiement?: string
+              p_reference?: string
+              p_souscription_id: string
+            }
+          | {
+              p_date_paiement: string
+              p_description?: string
+              p_mode_paiement?: string
+              p_montant: number
+              p_reference?: string
+              p_souscription_id: string
+            }
         Returns: string
       }
       pay_facture_with_cash: {
@@ -1236,45 +1255,27 @@ export type Database = {
         Returns: string
       }
       pay_location_with_cash: {
-        Args:
-          | {
-              p_date_paiement: string
-              p_description?: string
-              p_location_id: string
-              p_mode_paiement?: string
-              p_montant: number
-              p_periode_paiement?: string
-              p_reference?: string
-            }
-          | {
-              p_date_paiement: string
-              p_description?: string
-              p_location_id: string
-              p_mode_paiement?: string
-              p_montant: number
-              p_reference?: string
-            }
+        Args: {
+          p_date_paiement: string
+          p_description?: string
+          p_location_id: string
+          p_mode_paiement?: string
+          p_montant: number
+          p_periode_paiement?: string
+          p_reference?: string
+        }
         Returns: string
       }
       pay_souscription_with_cash: {
-        Args:
-          | {
-              p_date_paiement: string
-              p_description?: string
-              p_mode_paiement?: string
-              p_montant: number
-              p_periode_paiement?: string
-              p_reference?: string
-              p_souscription_id: string
-            }
-          | {
-              p_date_paiement: string
-              p_description?: string
-              p_mode_paiement?: string
-              p_montant: number
-              p_reference?: string
-              p_souscription_id: string
-            }
+        Args: {
+          p_date_paiement: string
+          p_description?: string
+          p_mode_paiement?: string
+          p_montant: number
+          p_periode_paiement?: string
+          p_reference?: string
+          p_souscription_id: string
+        }
         Returns: string
       }
       recalculate_all_location_debts: {
