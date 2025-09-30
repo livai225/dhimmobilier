@@ -295,23 +295,6 @@ export function AgentRecoveryDashboard({ agentId, onBack, initialMonth }: Props)
         const taux_recouvrement = total_du > 0 ? (verse / total_du) * 100 : 0;
         const ecart = verse - total_du;
 
-        // Debug logging pour identifier le problème
-        console.log(`Debug Agent Performance ${monthKey}:`, {
-          agentId,
-          propertyIds: propertyIds.length,
-          agentLocationIds: agentLocationIds.size,
-          agentSouscriptionIds: agentSouscriptionIds.size,
-          paiementsLocTotal: paiementsLoc?.length || 0,
-          paiementsDTTotal: paiementsDT?.length || 0,
-          filteredPaiementsLoc: filteredPaiementsLoc.length,
-          filteredPaiementsDT: filteredPaiementsDT.length,
-          verse,
-          du_loyers,
-          du_droits_terre,
-          total_du,
-          taux_recouvrement
-        });
-
         results.unshift({
           month: format(targetDate, 'MMM yyyy', { locale: fr }),
           du_loyers,
