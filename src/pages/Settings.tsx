@@ -31,9 +31,11 @@ export default function Settings() {
   const [confirmText, setConfirmText] = useState("");
   const [confirmClientText, setConfirmClientText] = useState("");
   const [confirmAllText, setConfirmAllText] = useState("");
+  const [confirmFinancialOnlyText, setConfirmFinancialOnlyText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingClients, setIsLoadingClients] = useState(false);
   const [isLoadingAll, setIsLoadingAll] = useState(false);
+  const [isLoadingFinancialOnly, setIsLoadingFinancialOnly] = useState(false);
   const [historicalStats, setHistoricalStats] = useState<{
     count: number;
     totalAmount: number;
@@ -120,6 +122,68 @@ export default function Settings() {
       uploadLogoMutation.mutate(logoFile);
     }
   };
+
+  const clearFinancialDataOnly = useMutation({
+    mutationFn: async () => {
+      setIsLoadingFinancialOnly(true);
+      
+      // Supprimer uniquement les paiements et transactions (SANS toucher aux contrats)
+      await supabase.from('paiements_factures').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('paiements_locations').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('paiements_souscriptions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('paiements_droit_terre').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('echeances_droit_terre').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('cash_transactions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('recus').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('factures_fournisseurs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('ventes').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+
+      // Réinitialiser les soldes des souscriptions au prix total
+      const { data: souscriptions } = await supabase
+        .from('souscriptions')
+        .select('id, prix_total');
+      
+      if (souscriptions) {
+        for (const sub of souscriptions) {
+          await supabase
+            .from('souscriptions')
+            .update({ solde_restant: sub.prix_total, updated_at: new Date().toISOString() })
+            .eq('id', sub.id);
+        }
+      }
+
+      // Déclencher le recalcul des dettes de location
+      await supabase
+        .from('locations')
+        .update({ updated_at: new Date().toISOString() })
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+
+      // Réinitialiser le solde caisse
+      const { error: balanceError } = await supabase
+        .from('caisse_balance')
+        .update({ solde_courant: 0, derniere_maj: new Date().toISOString() })
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+      
+      if (balanceError) throw balanceError;
+    },
+    onSuccess: () => {
+      setConfirmFinancialOnlyText("");
+      setIsLoadingFinancialOnly(false);
+      queryClient.invalidateQueries();
+      toast({
+        title: "✅ Paiements supprimés",
+        description: "Tous les paiements ont été supprimés. Les contrats (locations et souscriptions) sont conservés.",
+      });
+    },
+    onError: (error: any) => {
+      setIsLoadingFinancialOnly(false);
+      toast({
+        title: "❌ Erreur",
+        description: error.message || "Impossible de supprimer les paiements",
+        variant: "destructive",
+      });
+    },
+  });
 
   const clearFinancialData = useMutation({
     mutationFn: async () => {
@@ -329,6 +393,7 @@ export default function Settings() {
   const canDelete = confirmText === "SUPPRIMER TOUT";
   const canDeleteClients = confirmClientText === "SUPPRIMER TOUS LES CLIENTS";
   const canDeleteAll = confirmAllText === "VIDER COMPLETEMENT LA BASE";
+  const canDeleteFinancialOnly = confirmFinancialOnlyText === "SUPPRIMER PAIEMENTS";
 
   return (
     <ProtectedAction permission="isAdmin" showMessage={true}>
@@ -711,8 +776,94 @@ export default function Settings() {
               </AlertDialog>
             </div>
 
+            {/* Nouvelle option : Supprimer uniquement les paiements */}
+            <div className="bg-orange-100 border border-orange-200 rounded-lg p-4 mb-4">
+              <h3 className="font-medium text-orange-800 mb-2">💰 Réinitialisation des paiements uniquement</h3>
+              <p className="text-sm text-orange-700 mb-3">
+                Cette action supprime <strong>uniquement les paiements</strong> pour remettre l'application à zéro financièrement :
+              </p>
+              <ul className="text-sm text-orange-700 space-y-1 mb-4 ml-4">
+                <li>• Tous les paiements de loyers</li>
+                <li>• Tous les paiements de souscriptions</li>
+                <li>• Tous les paiements de droits de terre</li>
+                <li>• Tous les paiements de factures</li>
+                <li>• Toutes les transactions de caisse</li>
+                <li>• Tous les reçus générés</li>
+                <li>• Toutes les ventes</li>
+              </ul>
+              <div className="bg-green-100 border border-green-200 rounded p-3 mb-4">
+                <p className="text-sm text-green-700 font-medium">
+                  ✅ <strong>Conservé :</strong> Clients, Propriétés, Fournisseurs, Agents, <strong>Contrats de Location, Souscriptions</strong>
+                </p>
+                <p className="text-xs text-green-600 mt-1">
+                  Les soldes seront réinitialisés pour permettre de nouveaux paiements
+                </p>
+              </div>
+              
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="default" className="w-full bg-orange-600 hover:bg-orange-700">
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Réinitialiser uniquement les paiements
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent className="max-w-lg">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle className="text-orange-600">
+                      💰 Réinitialisation des paiements
+                    </AlertDialogTitle>
+                    <AlertDialogDescription className="space-y-3">
+                      <div className="bg-orange-50 border border-orange-200 rounded p-3">
+                        <p className="text-sm font-medium mb-2">Cette action va :</p>
+                        <ul className="text-xs text-orange-700 space-y-1">
+                          <li>• Supprimer tous les paiements existants</li>
+                          <li>• Réinitialiser les soldes des souscriptions</li>
+                          <li>• Recalculer les dettes de location</li>
+                          <li>• Remettre la caisse à zéro</li>
+                        </ul>
+                      </div>
+                      <div className="bg-green-50 border border-green-200 rounded p-3">
+                        <p className="text-sm font-medium mb-2">Les contrats seront conservés :</p>
+                        <ul className="text-xs text-green-700 space-y-1">
+                          <li>✅ Tous les contrats de location</li>
+                          <li>✅ Toutes les souscriptions</li>
+                          <li>✅ Tous les clients et propriétés</li>
+                        </ul>
+                      </div>
+                      <p className="text-orange-600 font-medium text-center">
+                        Idéal pour remettre le logiciel au client !
+                      </p>
+                      <div>
+                        <p className="text-sm mb-2">
+                          Tapez <strong>"SUPPRIMER PAIEMENTS"</strong> pour confirmer :
+                        </p>
+                        <Input
+                          value={confirmFinancialOnlyText}
+                          onChange={(e) => setConfirmFinancialOnlyText(e.target.value)}
+                          placeholder="SUPPRIMER PAIEMENTS"
+                          className="font-mono text-sm"
+                        />
+                      </div>
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel onClick={() => setConfirmFinancialOnlyText("")}>
+                      Annuler
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => clearFinancialDataOnly.mutate()}
+                      disabled={!canDeleteFinancialOnly || isLoadingFinancialOnly}
+                      className="bg-orange-600 hover:bg-orange-700"
+                    >
+                      {isLoadingFinancialOnly ? "Suppression..." : "Confirmer la réinitialisation"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+
             <div className="bg-red-100 border border-red-200 rounded-lg p-4">
-              <h3 className="font-medium text-red-800 mb-2">⚠️ Suppression des données financières</h3>
+              <h3 className="font-medium text-red-800 mb-2">⚠️ Suppression des données financières ET contrats</h3>
               <p className="text-sm text-red-700 mb-3">
                 Cette action va supprimer <strong>toutes</strong> les données financières :
               </p>
