@@ -158,14 +158,28 @@ export default function Settings() {
         .update({ updated_at: new Date().toISOString() })
         .neq('id', '00000000-0000-0000-0000-000000000000');
 
-      // Réinitialiser complètement le solde caisse en supprimant et recréant
+      // CRITIQUE: Réinitialiser la caisse EN DERNIER après tous les recalculs
+      // 1. Supprimer tous les enregistrements de caisse_balance
       await supabase.from('caisse_balance').delete().neq('id', '00000000-0000-0000-0000-000000000000');
       
-      const { error: balanceError } = await supabase
+      // 2. Créer un nouvel enregistrement avec solde 0
+      const { error: balanceInsertError } = await supabase
         .from('caisse_balance')
         .insert({ solde_courant: 0, derniere_maj: new Date().toISOString() });
       
-      if (balanceError) throw balanceError;
+      if (balanceInsertError) throw balanceInsertError;
+
+      // 3. Forcer la mise à jour à 0 pour être absolument sûr
+      const { error: balanceUpdateError } = await supabase
+        .from('caisse_balance')
+        .update({ solde_courant: 0, derniere_maj: new Date().toISOString() })
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+      
+      if (balanceUpdateError) throw balanceUpdateError;
+
+      // Invalider le cache pour forcer le rechargement
+      queryClient.invalidateQueries({ queryKey: ["cash_balance"] });
+      queryClient.invalidateQueries({ queryKey: ["entreprise_balance"] });
     },
     onSuccess: () => {
       setConfirmFinancialOnlyText("");
