@@ -158,11 +158,12 @@ export default function Settings() {
         .update({ updated_at: new Date().toISOString() })
         .neq('id', '00000000-0000-0000-0000-000000000000');
 
-      // Réinitialiser le solde caisse
+      // Réinitialiser complètement le solde caisse en supprimant et recréant
+      await supabase.from('caisse_balance').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      
       const { error: balanceError } = await supabase
         .from('caisse_balance')
-        .update({ solde_courant: 0, derniere_maj: new Date().toISOString() })
-        .neq('id', '00000000-0000-0000-0000-000000000000');
+        .insert({ solde_courant: 0, derniere_maj: new Date().toISOString() });
       
       if (balanceError) throw balanceError;
     },
