@@ -33,6 +33,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
+import { useAuditLog } from "@/hooks/useAuditLog";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { AlertTriangle } from "lucide-react";
@@ -62,6 +63,7 @@ export function PaiementFactureDialog({
 }: PaiementFactureDialogProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { logCreate } = useAuditLog();
   
   const form = useForm<PaiementFormData>({
     resolver: zodResolver(paiementSchema),
@@ -106,12 +108,16 @@ export function PaiementFactureDialog({
       // Le reçu sera généré automatiquement par trigger
       return { paiementId };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["factures"] });
       queryClient.invalidateQueries({ queryKey: ["paiements"] });
       queryClient.invalidateQueries({ queryKey: ["recus"] });
       queryClient.invalidateQueries({ queryKey: ["cash_transactions"] });
       queryClient.invalidateQueries({ queryKey: ["cash_balance"] });
+
+      // Log audit event
+      const fournisseurName = facture?.fournisseur?.nom || 'Fournisseur inconnu';
+      logCreate('paiements_factures', result.paiementId, { montant: form.getValues('montant'), facture_id: facture.id }, `Paiement facture - Fournisseur: ${fournisseurName}, Numéro: ${facture.numero}, Montant: ${form.getValues('montant').toLocaleString()} FCFA`);
 
       form.reset();
       toast({

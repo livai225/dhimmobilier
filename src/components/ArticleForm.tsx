@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
+import { useAuditLog } from "@/hooks/useAuditLog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,6 +18,7 @@ interface ArticleFormProps {
 export function ArticleForm({ onArticleCreated }: ArticleFormProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { logCreate, logDelete } = useAuditLog();
   const [isOpen, setIsOpen] = useState(false);
   const [form, setForm] = useState({
     nom: "",
@@ -51,6 +53,8 @@ export function ArticleForm({ onArticleCreated }: ArticleFormProps) {
       return data;
     },
     onSuccess: (data) => {
+      logCreate('articles', data.id, data, `Création de l'article ${data.nom}`);
+      
       toast({
         title: "Article créé",
         description: `L'article "${form.nom}" a été ajouté avec succès.`,
@@ -71,13 +75,26 @@ export function ArticleForm({ onArticleCreated }: ArticleFormProps) {
 
   const deleteArticle = useMutation({
     mutationFn: async (articleId: string) => {
+      // Get article data before deletion
+      const { data: article } = await supabase
+        .from("articles")
+        .select("*")
+        .eq("id", articleId)
+        .single();
+      
       const { error } = await supabase
         .from("articles")
         .delete()
         .eq("id", articleId);
       if (error) throw error;
+      
+      return { article };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      if (result.article) {
+        logDelete('articles', result.article.id, result.article, `Suppression de l'article ${result.article.nom}`);
+      }
+      
       toast({
         title: "Article supprimé",
         description: "L'article a été supprimé avec succès.",

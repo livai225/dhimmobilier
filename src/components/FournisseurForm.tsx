@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuditLog } from "@/hooks/useAuditLog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -47,6 +48,7 @@ interface FournisseurFormProps {
 export function FournisseurForm({ fournisseur, onSuccess }: FournisseurFormProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { logCreate, logUpdate } = useAuditLog();
   const [isOtherSector, setIsOtherSector] = useState(false);
   
   const form = useForm<FournisseurFormData>({
@@ -117,16 +119,28 @@ export function FournisseurForm({ fournisseur, onSuccess }: FournisseurFormProps
           .update(cleanData)
           .eq("id", fournisseur.id);
         if (error) throw error;
+        return { isUpdate: true, data: cleanData, id: fournisseur.id };
       } else {
-        const { error } = await supabase
+        const { data: newFournisseur, error } = await supabase
           .from("fournisseurs")
-          .insert(cleanData);
+          .insert(cleanData)
+          .select()
+          .single();
         if (error) throw error;
+        return { isUpdate: false, data: newFournisseur, id: newFournisseur.id };
       }
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["fournisseurs"] });
-      queryClient.invalidateQueries({ queryKey: ["secteurs"] }); // Invalider aussi les secteurs
+      queryClient.invalidateQueries({ queryKey: ["secteurs"] });
+      
+      // Log audit event
+      if (result.isUpdate) {
+        logUpdate('fournisseurs', result.id, fournisseur, result.data, `Modification du fournisseur ${result.data.nom}`);
+      } else {
+        logCreate('fournisseurs', result.id, result.data, `Création du fournisseur ${result.data.nom}`);
+      }
+      
       toast({
         title: "Succès",
         description: fournisseur 

@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "@/hooks/use-toast";
+import { useAuditLog } from "@/hooks/useAuditLog";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { CreditCard, FileText, Calculator } from "lucide-react";
@@ -31,6 +32,7 @@ export function PaiementDroitTerreDialog({ open, onOpenChange, souscription, onS
     reference: ""
   });
   const queryClient = useQueryClient();
+  const { logCreate } = useAuditLog();
 
   const { data: paiements, refetch: refetchPaiements } = useQuery({
     queryKey: ["paiements_droit_terre", souscription?.id],
@@ -95,6 +97,11 @@ export function PaiementDroitTerreDialog({ open, onOpenChange, souscription, onS
       if (error) throw error;
 
       // Le reçu sera généré automatiquement par trigger
+      
+      // Log audit event
+      const clientName = `${souscription?.clients?.prenom || ''} ${souscription?.clients?.nom || ''}`.trim();
+      const propertyName = souscription?.proprietes?.nom || 'Propriété inconnue';
+      logCreate('paiements_droit_terre', paiementId, { montant: montantNum, souscription_id: souscription.id }, `Paiement droit de terre - Client: ${clientName}, Propriété: ${propertyName}, Montant: ${montantNum.toLocaleString()} FCFA`);
 
       toast({
         title: "Succès",
