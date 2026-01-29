@@ -29,6 +29,8 @@
     "nanoid": "^5.0.7"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.6",
     "tsx": "^4.7.0",
     "typescript": "^5.5.3",
     "prisma": "^5.11.0"

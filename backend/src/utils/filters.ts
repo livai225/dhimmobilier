@@ -1,11 +1,9 @@
-import { Prisma } from "@prisma/client";
-
 type Filter =
   | { op: "eq" | "ilike" | "gte" | "lte"; column: string; value: any }
   | { op: "in"; column: string; values: any[] };
 
-export function buildWhere(filters: Filter[] = []): Prisma.AnyObject {
-  const where: Prisma.AnyObject = {};
+export function buildWhere(filters: Filter[] = []): Record<string, any> {
+  const where: Record<string, any> = {};
   for (const f of filters) {
     if (f.op === "eq") {
       where[f.column] = f.value;
