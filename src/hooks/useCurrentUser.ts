@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { apiClient } from "@/integrations/api/client";
 
 export interface User {
   id: string;
@@ -17,6 +18,7 @@ export const useCurrentUser = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [retryCount, setRetryCount] = useState(0);
+  const useApi = import.meta.env.VITE_USE_API === 'true';
 
   useEffect(() => {
     // Load from localStorage on init
@@ -44,12 +46,28 @@ export const useCurrentUser = () => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
 
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', userId)
-        .eq('actif', true)
-        .single();
+      let data: any = null;
+      let error: any = null;
+
+      if (useApi) {
+        // Backend MySQL
+        try {
+          const res = await apiClient.currentUser();
+          data = res.user?.id === userId ? res.user : null;
+        } catch (e: any) {
+          error = e;
+        }
+      } else {
+        // Supabase legacy
+        const response = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', userId)
+          .eq('actif', true)
+          .single();
+        data = response.data;
+        error = response.error;
+      }
 
       clearTimeout(timeoutId);
 

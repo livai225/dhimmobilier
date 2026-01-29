@@ -5,6 +5,9 @@ import { componentTagger } from "lovable-tagger";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
+  // IMPORTANT: site servi sous le sous-chemin /dhimmobilier/ (Nginx alias)
+  // Garder cette base pour que les assets/routage fonctionnent en prod.
+  base: "/dhimmobilier/",
   server: {
     host: "::",
     port: 8080,

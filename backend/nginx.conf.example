@@ -1,0 +1,35 @@
+# Configuration Nginx pour DH Immobilier
+# À ajouter dans /etc/nginx/sites-available/dhimmobilier
+
+# Proxy pour l'API backend (Express/Fastify sur port 3001)
+location /dhimmobilier-api/ {
+    proxy_pass http://127.0.0.1:3001/;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection 'upgrade';
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_cache_bypass $http_upgrade;
+    
+    # WebSocket support pour Socket.IO
+    proxy_set_header Connection "upgrade";
+    
+    # Timeouts
+    proxy_connect_timeout 60s;
+    proxy_send_timeout 60s;
+    proxy_read_timeout 60s;
+}
+
+# Frontend Vite (fichiers statiques)
+location /dhimmobilier/ {
+    alias /var/www/dhimmobilier/dist/;
+    try_files $uri $uri/ /dhimmobilier/index.html;
+    
+    # Cache pour les assets statiques
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+}

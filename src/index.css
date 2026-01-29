@@ -1,3 +1,6 @@
+@import './styles/dashboard.css';
+@import './styles/recouvrement.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -318,7 +321,3 @@ All colors MUST be HSL.
     background-position: 1000px 0;
   }
 }
-
-/* Import des styles personnalisés du dashboard */
-@import './styles/dashboard.css';
-@import './styles/recouvrement.css';

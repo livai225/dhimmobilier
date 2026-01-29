@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { apiClient } from '@/integrations/api/client';
 import { useAuditLog } from '@/hooks/useAuditLog';
 import { Eye, EyeOff, LogIn, Building2 } from 'lucide-react';
 
@@ -35,25 +36,40 @@ export default function Login() {
     setError('');
 
     try {
-      // Find the user by username and verify password
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('id, nom, prenom, username, password_hash, role, actif')
-        .eq('username', username)
-        .eq('actif', true)
-        .single();
+      const useApi = import.meta.env.VITE_USE_API === 'true';
 
-      if (userError || !userData) {
-        setError('Nom d\'utilisateur ou mot de passe incorrect');
-        return;
-      }
+      if (useApi) {
+        // --- Nouveau mode API MySQL ---
+        const { user } = await apiClient.login({ username, password });
+        localStorage.setItem('current_user_id', user.id);
+        logLogin(`Connexion via API - ${user.prenom} ${user.nom} (${user.username})`);
+        toast({
+          title: 'Connexion réussie',
+          description: `Bienvenue ${user.prenom} ${user.nom}`,
+        });
+        const { getDefaultRouteForRole } = await import('@/utils/roleBasedRedirect');
+        navigate(getDefaultRouteForRole(user));
+      } else {
+        // --- Mode Supabase legacy ---
+        // Find the user by username and verify password
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('id, nom, prenom, username, password_hash, role, actif')
+          .eq('username', username)
+          .eq('actif', true)
+          .single();
 
-      // Decode the base64 password hash and compare with entered password
-      const decodedPassword = decodeBase64(userData.password_hash);
-      if (decodedPassword !== password) {
-        setError('Nom d\'utilisateur ou mot de passe incorrect');
-        return;
-      }
+        if (userError || !userData) {
+          setError('Nom d\'utilisateur ou mot de passe incorrect');
+          return;
+        }
+
+        // Decode the base64 password hash and compare with entered password
+        const decodedPassword = decodeBase64(userData.password_hash);
+        if (decodedPassword !== password) {
+          setError('Nom d\'utilisateur ou mot de passe incorrect');
+          return;
+        }
 
         // Set the user data for the application to use
         localStorage.setItem('current_user_id', userData.id);
@@ -66,13 +82,13 @@ export default function Login() {
           description: `Bienvenue ${userData.prenom} ${userData.nom}`,
         });
       
-      // Import role-based redirect utility
-      const { getDefaultRouteForRole } = await import('@/utils/roleBasedRedirect');
-      
-      // Redirect based on user role
-      const defaultRoute = getDefaultRouteForRole(userData);
-      navigate(defaultRoute);
-      
+        // Import role-based redirect utility
+        const { getDefaultRouteForRole } = await import('@/utils/roleBasedRedirect');
+        
+        // Redirect based on user role
+        const defaultRoute = getDefaultRouteForRole(userData);
+        navigate(defaultRoute);
+      }
     } catch (err) {
       setError('Une erreur inattendue s\'est produite');
       console.error('Login error:', err);

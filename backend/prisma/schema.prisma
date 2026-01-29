@@ -1,0 +1,409 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ============== USERS & PERMISSIONS ==============
+
+model users {
+  id             String   @id @default(uuid())
+  nom            String
+  prenom         String
+  email          String?
+  telephone      String?
+  role           String   // admin | comptable | secretaire
+  actif          Boolean  @default(true)
+  username       String   @unique
+  password_hash  String?
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  permissions    user_permissions[]
+  audit_logs     audit_logs[]
+}
+
+model user_permissions {
+  id              String  @id @default(uuid())
+  user_id         String
+  permission_name String
+  granted         Boolean @default(true)
+
+  user users @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+}
+
+// ============== CLIENTS ==============
+
+model clients {
+  id                        String   @id @default(uuid())
+  nom                       String
+  prenom                    String?
+  telephone_principal       String?
+  telephone_secondaire_1    String?
+  telephone_secondaire_2    String?
+  email                     String?
+  adresse                   String?
+  contact_urgence_nom       String?
+  contact_urgence_telephone String?
+  contact_urgence_relation  String?
+  created_at                DateTime @default(now())
+  updated_at                DateTime @updatedAt
+
+  souscriptions souscriptions[]
+  locations     locations[]
+  recus         recus[]
+}
+
+// ============== PROPRIETES ==============
+
+model types_proprietes {
+  id          String   @id @default(uuid())
+  nom         String   @unique
+  description String?  @db.Text
+  created_at  DateTime @default(now())
+
+  proprietes proprietes[]
+}
+
+model proprietes {
+  id          String   @id @default(uuid())
+  nom         String
+  adresse     String?
+  zone        String?
+  type_id     String?
+  surface     Float?
+  prix_achat  Float?
+  agent_id    String?
+  statut      String?  @default("disponible")
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  type_propriete types_proprietes? @relation(fields: [type_id], references: [id])
+  souscriptions  souscriptions[]
+  locations      locations[]
+  factures       factures_fournisseurs[]
+
+  @@index([type_id])
+}
+
+// ============== LOCATIONS ==============
+
+model locations {
+  id             String    @id @default(uuid())
+  client_id      String
+  propriete_id   String
+  loyer_mensuel  Float
+  caution        Float     @default(0)
+  date_debut     DateTime
+  date_fin       DateTime?
+  statut         String    @default("active")
+  dette_totale   Float     @default(0)
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+
+  client    clients    @relation(fields: [client_id], references: [id])
+  propriete proprietes @relation(fields: [propriete_id], references: [id])
+  paiements paiements_locations[]
+  cautions  paiements_cautions[]
+
+  @@index([client_id])
+  @@index([propriete_id])
+}
+
+model paiements_locations {
+  id             String   @id @default(uuid())
+  location_id    String
+  montant        Float
+  date_paiement  DateTime @default(now())
+  mode_paiement  String?
+  reference      String?
+  mois_concerne  String?
+  created_at     DateTime @default(now())
+
+  location locations @relation(fields: [location_id], references: [id], onDelete: Cascade)
+
+  @@index([location_id])
+}
+
+model paiements_cautions {
+  id            String   @id @default(uuid())
+  location_id   String
+  montant       Float
+  date_paiement DateTime @default(now())
+  mode_paiement String?
+  reference     String?
+  created_at    DateTime @default(now())
+
+  location locations @relation(fields: [location_id], references: [id], onDelete: Cascade)
+
+  @@index([location_id])
+}
+
+// ============== SOUSCRIPTIONS ==============
+
+model souscriptions {
+  id                         String    @id @default(uuid())
+  client_id                  String
+  propriete_id               String
+  prix_total                 Float
+  montant_souscris           Float?    @default(0)
+  apport_initial             Float     @default(0)
+  montant_mensuel            Float
+  nombre_mois                Int
+  date_debut                 DateTime
+  statut                     String    @default("active")
+  solde_restant              Float
+  type_souscription          String    @default("classique")
+  periode_finition_mois      Int?      @default(9)
+  date_fin_finition          DateTime?
+  date_debut_droit_terre     DateTime?
+  montant_droit_terre_mensuel Float?   @default(0)
+  phase_actuelle             String    @default("souscription")
+  type_bien                  String?
+  created_at                 DateTime  @default(now())
+  updated_at                 DateTime  @updatedAt
+
+  client              clients                   @relation(fields: [client_id], references: [id])
+  propriete           proprietes                @relation(fields: [propriete_id], references: [id])
+  paiements           paiements_souscriptions[]
+  paiements_droit     paiements_droit_terre[]
+  echeances_droit     echeances_droit_terre[]
+
+  @@index([client_id])
+  @@index([propriete_id])
+}
+
+model paiements_souscriptions {
+  id              String   @id @default(uuid())
+  souscription_id String
+  montant         Float
+  date_paiement   DateTime @default(now())
+  mode_paiement   String?
+  reference       String?
+  created_at      DateTime @default(now())
+
+  souscription souscriptions @relation(fields: [souscription_id], references: [id], onDelete: Cascade)
+
+  @@index([souscription_id])
+}
+
+model paiements_droit_terre {
+  id              String   @id @default(uuid())
+  souscription_id String
+  montant         Float
+  date_paiement   DateTime @default(now())
+  mode_paiement   String?
+  reference       String?
+  created_at      DateTime @default(now())
+
+  souscription souscriptions @relation(fields: [souscription_id], references: [id], onDelete: Cascade)
+
+  @@index([souscription_id])
+}
+
+model echeances_droit_terre {
+  id              String    @id @default(uuid())
+  souscription_id String
+  numero_echeance Int
+  date_echeance   DateTime
+  montant         Float
+  statut          String    @default("en_attente")
+  date_paiement   DateTime?
+  montant_paye    Float?    @default(0)
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  souscription souscriptions @relation(fields: [souscription_id], references: [id], onDelete: Cascade)
+
+  @@index([souscription_id])
+}
+
+model bareme_droits_terre {
+  id              String   @id @default(uuid())
+  type_bien       String   @unique
+  montant_mensuel Float
+  description     String?  @db.Text
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+}
+
+// ============== FOURNISSEURS & FACTURES ==============
+
+model fournisseurs {
+  id         String   @id @default(uuid())
+  nom        String
+  contact    String?
+  telephone  String?
+  email      String?
+  adresse    String?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  factures factures_fournisseurs[]
+}
+
+model factures_fournisseurs {
+  id             String    @id @default(uuid())
+  numero         String    @unique
+  fournisseur_id String
+  propriete_id   String?
+  montant_total  Float     @default(0)
+  montant_paye   Float     @default(0)
+  solde          Float     @default(0)
+  date_facture   DateTime
+  description    String?   @db.Text
+  statut         String?   @default("en_attente")
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+
+  fournisseur fournisseurs @relation(fields: [fournisseur_id], references: [id])
+  propriete   proprietes?  @relation(fields: [propriete_id], references: [id])
+  paiements   paiements_factures[]
+
+  @@index([fournisseur_id])
+  @@index([propriete_id])
+}
+
+model paiements_factures {
+  id            String   @id @default(uuid())
+  facture_id    String
+  montant       Float
+  date_paiement DateTime @default(now())
+  mode_paiement String?
+  reference     String?
+  created_at    DateTime @default(now())
+
+  facture factures_fournisseurs @relation(fields: [facture_id], references: [id], onDelete: Cascade)
+
+  @@index([facture_id])
+}
+
+// ============== AGENTS RECOUVREMENT ==============
+
+model agents_recouvrement {
+  id                     String   @id @default(uuid())
+  nom                    String
+  prenom                 String
+  code_agent             String   @unique
+  telephone              String?
+  email                  String?
+  adresse                String?
+  statut                 String   @default("actif")
+  date_embauche          DateTime @default(now())
+  salaire_base           Float?   @default(0)
+  commission_pourcentage Float?   @default(0)
+  created_at             DateTime @default(now())
+  updated_at             DateTime @updatedAt
+
+  transactions cash_transactions[]
+}
+
+// ============== CAISSE ==============
+
+model cash_transactions {
+  id                  String    @id @default(uuid())
+  type_transaction    String    // entree | sortie
+  montant             Float
+  date_transaction    DateTime  @default(now())
+  heure_transaction   String?
+  type_operation      String    // versement_agent | paiement_loyer | etc.
+  agent_id            String?
+  beneficiaire        String?
+  reference_operation String?
+  description         String?   @db.Text
+  piece_justificative String?
+  solde_avant         Float?
+  solde_apres         Float?
+  mode                String?
+  reference           String?
+  type                String?
+  created_by          String?
+  created_at          DateTime  @default(now())
+
+  agent agents_recouvrement? @relation(fields: [agent_id], references: [id])
+
+  @@index([agent_id])
+  @@index([type_operation])
+}
+
+model caisse_balance {
+  id            String   @id @default(uuid())
+  solde_courant Float    @default(0)
+  balance       Float?   @default(0)
+  derniere_maj  DateTime @default(now())
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+}
+
+// ============== RECUS ==============
+
+model recus {
+  id              String    @id @default(uuid())
+  numero          String    @unique
+  client_id       String
+  type_operation  String
+  reference_id    String
+  montant_total   Float
+  periode_debut   DateTime?
+  periode_fin     DateTime?
+  date_generation DateTime  @default(now())
+  created_at      DateTime  @default(now())
+
+  client clients @relation(fields: [client_id], references: [id])
+
+  @@index([client_id])
+}
+
+model receipt_counters {
+  id         String   @id @default(uuid())
+  type       String   @unique @default("general")
+  compteur   Int      @default(0)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+}
+
+// ============== AUDIT ==============
+
+model audit_logs {
+  id          String   @id @default(uuid())
+  user_id     String
+  action_type String
+  table_name  String
+  record_id   String?
+  description String?  @db.Text
+  created_at  DateTime @default(now())
+
+  user users @relation(fields: [user_id], references: [id])
+
+  @@index([user_id])
+}
+
+// ============== ARTICLES & VENTES ==============
+
+model articles {
+  id             String   @id @default(uuid())
+  nom            String
+  description    String?  @db.Text
+  prix_reference Float?
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  ventes ventes[]
+}
+
+model ventes {
+  id         String   @id @default(uuid())
+  article_id String
+  montant    Float
+  quantite   Int?     @default(1)
+  created_at DateTime @default(now())
+
+  article articles @relation(fields: [article_id], references: [id])
+
+  @@index([article_id])
+}

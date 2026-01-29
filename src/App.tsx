@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { setQueryClient } from "@/integrations/supabase/client";
+import { initRealtime } from "@/integrations/api/realtime";
 import { Layout } from "@/components/Layout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ThemeProvider } from "@/components/ThemeProvider";
@@ -37,6 +38,7 @@ const queryClient = new QueryClient({
 
 // Configure the queryClient for Realtime invalidations
 setQueryClient(queryClient);
+initRealtime(queryClient);
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
