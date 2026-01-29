@@ -1,9 +1,9 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import cookie from "@fastify/cookie";
-import { dbRoutes, authRoutes, cashRoutes, usersRoutes, rpcRoutes } from "./routes";
-import authPlugin from "./plugins/auth";
-import socketEvents from "./plugins/socket-events";
+import { dbRoutes, authRoutes, cashRoutes, usersRoutes, rpcRoutes } from "./routes/index.js";
+import authPlugin from "./plugins/auth.js";
+import socketEvents from "./plugins/socket-events.js";
 import fastifyIO from "fastify-socket.io";
 
 const app = Fastify({ logger: true });

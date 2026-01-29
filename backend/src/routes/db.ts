@@ -1,6 +1,6 @@
 import { FastifyInstance } from "fastify";
-import { prisma } from "../lib/prisma";
-import { buildWhere, buildOrder } from "../utils/filters";
+import { prisma } from "../lib/prisma.js";
+import { buildWhere, buildOrder } from "../utils/filters.js";
 
 type Action = "select" | "insert" | "update" | "delete" | "upsert";
 

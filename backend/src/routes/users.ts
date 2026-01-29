@@ -1,5 +1,5 @@
 import { FastifyInstance } from "fastify";
-import { prisma } from "../lib/prisma";
+import { prisma } from "../lib/prisma.js";
 
 export async function usersRoutes(app: FastifyInstance) {
   app.get("/users/:id/permissions", { preHandler: app.authenticate }, async (req, reply) => {

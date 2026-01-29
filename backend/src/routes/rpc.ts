@@ -1,5 +1,5 @@
 import { FastifyInstance } from "fastify";
-import { prisma } from "../lib/prisma";
+import { prisma } from "../lib/prisma.js";
 import { nanoid } from "nanoid";
 
 const receiptNumber = () => `R-${Date.now()}-${Math.floor(Math.random() * 1000)}`;

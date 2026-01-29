@@ -1,5 +1,5 @@
 import { FastifyInstance } from "fastify";
-import { prisma } from "../lib/prisma";
+import { prisma } from "../lib/prisma.js";
 
 export async function cashRoutes(app: FastifyInstance) {
   app.get("/cash/balance/versement", { preHandler: app.authenticate }, async () => {

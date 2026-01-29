@@ -1,5 +1,5 @@
-export { authRoutes } from "./auth";
-export { cashRoutes } from "./cash";
-export { dbRoutes } from "./db";
-export { rpcRoutes } from "./rpc";
-export { usersRoutes } from "./users";
+export { authRoutes } from "./auth.js";
+export { cashRoutes } from "./cash.js";
+export { dbRoutes } from "./db.js";
+export { rpcRoutes } from "./rpc.js";
+export { usersRoutes } from "./users.js";
