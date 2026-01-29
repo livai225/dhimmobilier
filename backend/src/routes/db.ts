@@ -4,6 +4,29 @@ import { buildWhere, buildOrder } from "../utils/filters.js";
 
 type Action = "select" | "insert" | "update" | "delete" | "upsert";
 
+// Champs sensibles à exclure par table
+const SENSITIVE_FIELDS: Record<string, string[]> = {
+  users: ["password_hash"],
+};
+
+// Supprimer les champs sensibles des résultats
+function sanitizeResult(table: string, data: any): any {
+  const sensitiveFields = SENSITIVE_FIELDS[table];
+  if (!sensitiveFields || !data) return data;
+
+  if (Array.isArray(data)) {
+    return data.map((item) => {
+      const sanitized = { ...item };
+      sensitiveFields.forEach((field) => delete sanitized[field]);
+      return sanitized;
+    });
+  }
+
+  const sanitized = { ...data };
+  sensitiveFields.forEach((field) => delete sanitized[field]);
+  return sanitized;
+}
+
 interface DbPayload {
   table: string;
   action: Action;
@@ -36,7 +59,8 @@ export async function dbRoutes(app: FastifyInstance) {
           orderBy,
           take: payload.limit,
         });
-        return payload.single ? data[0] ?? null : data;
+        const result = payload.single ? data[0] ?? null : data;
+        return sanitizeResult(table, result);
       }
 
       if (action === "insert") {

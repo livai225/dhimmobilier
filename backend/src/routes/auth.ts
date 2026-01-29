@@ -5,12 +5,20 @@ import jwt from "jsonwebtoken";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 const COOKIE_NAME = process.env.API_AUTH_COOKIE_NAME || "dhimmobilier_session";
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
 const COOKIE_OPTIONS = {
   httpOnly: true,
   sameSite: "lax" as const,
   path: "/",
-  secure: false,
+  secure: IS_PRODUCTION,
 };
+
+// Exclure le password_hash des réponses utilisateur
+function sanitizeUser(user: any) {
+  if (!user) return null;
+  const { password_hash, ...safeUser } = user;
+  return safeUser;
+}
 
 export async function authRoutes(app: FastifyInstance) {
   app.post("/auth/login", async (req, reply) => {
@@ -25,7 +33,7 @@ export async function authRoutes(app: FastifyInstance) {
 
     const token = jwt.sign({ sub: user.id, role: user.role }, JWT_SECRET, { expiresIn: "12h" });
     reply.setCookie(COOKIE_NAME, token, COOKIE_OPTIONS);
-    return { user };
+    return { user: sanitizeUser(user) };
   });
 
   app.get("/auth/me", async (req, reply) => {
@@ -35,7 +43,7 @@ export async function authRoutes(app: FastifyInstance) {
       const decoded = jwt.verify(token, JWT_SECRET) as any;
       const user = await prisma.users.findUnique({ where: { id: decoded.sub } });
       if (!user) { reply.code(401); return { error: "Not authenticated" }; }
-      return { user };
+      return { user: sanitizeUser(user) };
     } catch (err) {
       reply.code(401);
       return { error: "Not authenticated" };

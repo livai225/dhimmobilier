@@ -453,6 +453,74 @@ export async function rpcRoutes(app: FastifyInstance) {
           return factureNumber();
         }
 
+        // ============== STATISTICS ==============
+        case "getStats":
+        case "get_stats": {
+          const [
+            clientsCount,
+            proprietesCount,
+            locationsCount,
+            souscriptionsCount,
+            caisseBalance,
+          ] = await Promise.all([
+            prisma.clients.count(),
+            prisma.proprietes.count(),
+            prisma.locations.count({ where: { statut: "active" } }),
+            prisma.souscriptions.count({ where: { statut: "active" } }),
+            prisma.caisse_balance.findFirst({ orderBy: { updated_at: "desc" } }),
+          ]);
+
+          return {
+            clients: clientsCount,
+            proprietes: proprietesCount,
+            locations_actives: locationsCount,
+            souscriptions_actives: souscriptionsCount,
+            solde_caisse: Number(caisseBalance?.solde_courant || caisseBalance?.balance || 0),
+          };
+        }
+
+        case "get_dashboard_stats": {
+          const today = new Date();
+          const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+
+          const [
+            clientsCount,
+            locationsActives,
+            souscriptionsActives,
+            caisseBalance,
+            entreesMonth,
+            sortiesMonth,
+            impayesLocations,
+          ] = await Promise.all([
+            prisma.clients.count(),
+            prisma.locations.count({ where: { statut: "active" } }),
+            prisma.souscriptions.count({ where: { statut: "active" } }),
+            prisma.caisse_balance.findFirst({ orderBy: { updated_at: "desc" } }),
+            prisma.cash_transactions.aggregate({
+              _sum: { montant: true },
+              where: { type_transaction: "entree", date_transaction: { gte: startOfMonth } },
+            }),
+            prisma.cash_transactions.aggregate({
+              _sum: { montant: true },
+              where: { type_transaction: "sortie", date_transaction: { gte: startOfMonth } },
+            }),
+            prisma.locations.aggregate({
+              _sum: { dette_totale: true },
+              where: { statut: "active", dette_totale: { gt: 0 } },
+            }),
+          ]);
+
+          return {
+            clients_total: clientsCount,
+            locations_actives: locationsActives,
+            souscriptions_actives: souscriptionsActives,
+            solde_caisse: Number(caisseBalance?.solde_courant || caisseBalance?.balance || 0),
+            entrees_mois: Number(entreesMonth._sum.montant || 0),
+            sorties_mois: Number(sortiesMonth._sum.montant || 0),
+            impayes_locations: Number(impayesLocations._sum.dette_totale || 0),
+          };
+        }
+
         case "get_agent_statistics": {
           const agentId = params.agent_uuid || params.agent_id;
           const startDate = params.start_date ? new Date(params.start_date) : undefined;
