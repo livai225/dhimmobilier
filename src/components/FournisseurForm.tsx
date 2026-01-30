@@ -33,7 +33,7 @@ const fournisseurSchema = z.object({
   adresse: z.string().optional(),
   secteur_id: z.string().min(1, "Veuillez sélectionner un secteur"),
   secteur_custom: z.string().optional(),
-  site_web: z.string().url("URL invalide").optional().or(z.literal("")),
+  site_web: z.string().optional(),
   numero_tva: z.string().optional(),
   note_performance: z.number().min(1).max(5).optional(),
 });

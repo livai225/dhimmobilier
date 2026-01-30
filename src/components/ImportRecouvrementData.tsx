@@ -103,15 +103,19 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
   // Load agents on component mount
   useEffect(() => {
     const loadAgents = async () => {
-      const { data } = await supabase
-        .from('agents_recouvrement')
-        .select('*')
-        .eq('statut', 'actif')
-        .order('nom');
-      
-      setAgents(data || []);
+      try {
+        const data = await apiClient.select({
+          table: 'agents_recouvrement',
+          filters: [{ op: 'eq', column: 'statut', value: 'actif' }],
+          orderBy: { column: 'nom', ascending: true }
+        });
+        setAgents(data || []);
+      } catch (error) {
+        console.error('Erreur chargement agents:', error);
+        setAgents([]);
+      }
     };
-    
+
     loadAgents();
   }, []);
 
@@ -317,60 +321,81 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
 
   // Get selected agent
   const getSelectedAgent = async () => {
-    const { data: agent } = await supabase
-      .from('agents_recouvrement')
-      .select('*')
-      .eq('id', selectedAgent)
-      .single();
-    
-    return agent;
+    try {
+      const agents = await apiClient.select({
+        table: 'agents_recouvrement',
+        filters: [{ op: 'eq', column: 'id', value: selectedAgent }],
+        single: true
+      });
+      return agents;
+    } catch (error) {
+      console.error('Erreur récupération agent:', error);
+      return null;
+    }
   };
 
   // Create property by site
   const createPropertyForSite = async (site: string, typeHabitation: string, agent: any, simulate: boolean) => {
     // Mapper le type d'opération vers le champ usage
     const usage = operationType === 'loyer' ? 'Location' : 'Bail';
-    
+
     if (simulate) {
       // En simulation, retourner une propriété fictive avec un ID valide
-      return { 
-        property: { 
-          id: `simulated-property-${Date.now()}`, 
-          nom: site, 
-          zone: site, 
+      return {
+        property: {
+          id: `simulated-property-${Date.now()}`,
+          nom: site,
+          zone: site,
           usage: usage,
           statut: 'Occupé',
-          agent_id: agent?.id 
-        }, 
-        created: true 
+          agent_id: agent?.id
+        },
+        created: true
       };
     }
 
-    const { data: existingProperty } = await supabase
-      .from('proprietes')
-      .select('*')
-      .eq('nom', site)
-      .eq('agent_id', agent?.id)
-      .maybeSingle();
+    try {
+      // Chercher propriété existante
+      const existingProperties = await apiClient.select({
+        table: 'proprietes',
+        filters: [
+          { op: 'eq', column: 'nom', value: site },
+          { op: 'eq', column: 'agent_id', value: agent?.id }
+        ]
+      });
 
-    if (existingProperty) {
-      return { property: existingProperty, created: false };
+      if (existingProperties && existingProperties.length > 0) {
+        return { property: existingProperties[0], created: false };
+      }
+
+      // Créer nouvelle propriété
+      await apiClient.insert({
+        table: 'proprietes',
+        values: {
+          nom: site,
+          zone: site,
+          usage: usage,
+          statut: 'Occupé',
+          agent_id: agent?.id
+        }
+      });
+
+      // Récupérer la propriété créée
+      const newProperties = await apiClient.select({
+        table: 'proprietes',
+        filters: [
+          { op: 'eq', column: 'nom', value: site },
+          { op: 'eq', column: 'agent_id', value: agent?.id }
+        ],
+        orderBy: { column: 'created_at', ascending: false },
+        limit: 1
+      });
+
+      return { property: newProperties[0], created: true };
+    } catch (error) {
+      console.error('Erreur création propriété:', error);
+      throw error;
     }
-
-    const { data: newProperty, error } = await supabase
-      .from('proprietes')
-      .insert({
-        nom: site,
-        zone: site,
-        usage: usage,
-        statut: 'Occupé',
-        agent_id: agent?.id
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
-    return { property: newProperty, created: true };
   };
 
   // Generate monthly payments - simplified for automatic payment generation
@@ -396,47 +421,41 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
     }
 
     let paymentsCount = 0;
-    const monthNames = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 
+    const monthNames = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
                        'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
-    
+
     const currentYear = new Date().getFullYear();
-    
+
     // Process selected month or all months
     if (selectedMonth !== 'all') {
       const monthIndex = parseInt(selectedMonth);
       const montant = paiementsMensuels[monthIndex];
-      
+
       if (montant > 0) {
         const paymentDate = new Date(currentYear, monthIndex, 15).toISOString().split('T')[0];
-        
+
         try {
           if (contractType === 'location') {
-            await supabase.rpc('pay_location_with_cash', {
-              p_location_id: contractId,
-              p_montant: montant,
-              p_date_paiement: paymentDate,
-              p_mode_paiement: 'especes',
-              p_reference: `Import ${monthNames[monthIndex]} ${currentYear}`,
-              p_description: `Import données recouvrement - ${monthNames[monthIndex]}`
+            await apiClient.payLocationWithCash({
+              location_id: contractId,
+              montant: montant,
+              mode_paiement: 'especes',
+              reference: `Import ${monthNames[monthIndex]} ${currentYear}`
             });
           } else {
             if (operationType === 'droit_terre') {
-              await supabase.rpc('pay_droit_terre_with_cash', {
-                p_souscription_id: contractId,
-                p_montant: montant,
-                p_date_paiement: paymentDate,
-                p_mode_paiement: 'especes',
-                p_reference: `Import ${monthNames[monthIndex]} ${currentYear}`,
-                p_description: `Import données recouvrement - ${monthNames[monthIndex]}`
+              await apiClient.payDroitTerreWithCash({
+                souscription_id: contractId,
+                montant: montant,
+                mode_paiement: 'especes',
+                reference: `Import ${monthNames[monthIndex]} ${currentYear}`
               });
             } else {
-              await supabase.rpc('pay_souscription_with_cash', {
-                p_souscription_id: contractId,
-                p_montant: montant,
-                p_date_paiement: paymentDate,
-                p_mode_paiement: 'especes',
-                p_reference: `Import ${monthNames[monthIndex]} ${currentYear}`,
-                p_description: `Import données recouvrement - ${monthNames[monthIndex]}`
+              await apiClient.paySouscriptionWithCash({
+                souscription_id: contractId,
+                montant: montant,
+                mode_paiement: 'especes',
+                reference: `Import ${monthNames[monthIndex]} ${currentYear}`
               });
             }
           }
@@ -451,36 +470,28 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
         const montant = paiementsMensuels[i];
         if (montant <= 0) continue;
 
-        const paymentDate = new Date(currentYear, i, 15).toISOString().split('T')[0];
-        
         try {
           if (contractType === 'location') {
-            await supabase.rpc('pay_location_with_cash', {
-              p_location_id: contractId,
-              p_montant: montant,
-              p_date_paiement: paymentDate,
-              p_mode_paiement: 'especes',
-              p_reference: `Import ${monthNames[i]} ${currentYear}`,
-              p_description: 'Import données recouvrement'
+            await apiClient.payLocationWithCash({
+              location_id: contractId,
+              montant: montant,
+              mode_paiement: 'especes',
+              reference: `Import ${monthNames[i]} ${currentYear}`
             });
           } else {
             if (operationType === 'droit_terre') {
-              await supabase.rpc('pay_droit_terre_with_cash', {
-                p_souscription_id: contractId,
-                p_montant: montant,
-                p_date_paiement: paymentDate,
-                p_mode_paiement: 'especes',
-                p_reference: `Import ${monthNames[i]} ${currentYear}`,
-                p_description: 'Import données recouvrement'
+              await apiClient.payDroitTerreWithCash({
+                souscription_id: contractId,
+                montant: montant,
+                mode_paiement: 'especes',
+                reference: `Import ${monthNames[i]} ${currentYear}`
               });
             } else {
-              await supabase.rpc('pay_souscription_with_cash', {
-                p_souscription_id: contractId,
-                p_montant: montant,
-                p_date_paiement: paymentDate,
-                p_mode_paiement: 'especes',
-                p_reference: `Import ${monthNames[i]} ${currentYear}`,
-                p_description: 'Import données recouvrement'
+              await apiClient.paySouscriptionWithCash({
+                souscription_id: contractId,
+                montant: montant,
+                mode_paiement: 'especes',
+                reference: `Import ${monthNames[i]} ${currentYear}`
               });
             }
           }
@@ -561,15 +572,14 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
     }
 
     try {
-      // Chercher client existant
-      const { data: existingClient } = await supabase
-        .from('clients')
-        .select('*')
-        .ilike('nom', `%${row.nomEtPrenoms}%`)
-        .maybeSingle();
+      // Chercher client existant par nom
+      const existingClients = await apiClient.select({
+        table: 'clients',
+        filters: [{ op: 'ilike', column: 'nom', value: `%${row.nomEtPrenoms}%` }]
+      });
 
-      if (existingClient) {
-        return { ...existingClient, created: false };
+      if (existingClients && existingClients.length > 0) {
+        return { ...existingClients[0], created: false };
       }
 
       // Créer nouveau client
@@ -577,18 +587,27 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
       const nom = nameParts[nameParts.length - 1];
       const prenom = nameParts.slice(0, -1).join(' ');
 
-      const { data: newClient, error } = await supabase
-        .from('clients')
-        .insert({
+      await apiClient.insert({
+        table: 'clients',
+        values: {
           nom,
           prenom,
           telephone_principal: row.numeroTelephone
-        })
-        .select()
-        .single();
+        }
+      });
 
-      if (error) throw error;
-      return { ...newClient, created: true };
+      // Récupérer le client créé
+      const newClients = await apiClient.select({
+        table: 'clients',
+        filters: [
+          { op: 'eq', column: 'nom', value: nom },
+          { op: 'eq', column: 'prenom', value: prenom }
+        ],
+        orderBy: { column: 'created_at', ascending: false },
+        limit: 1
+      });
+
+      return { ...newClients[0], created: true };
     } catch (error) {
       console.error('Erreur création client:', error);
       throw new Error(`Impossible de créer le client ${row.nomEtPrenoms}`);
@@ -601,68 +620,103 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
       return { id: `sim-contract-${Date.now()}` };
     }
 
-    if (operationType === 'loyer') {
-      // Créer location
-      const { data: location } = await supabase
-        .from('locations')
-        .insert({
-          client_id: client.id,
-          propriete_id: property.id,
-          loyer_mensuel: row.loyer,
-          date_debut: new Date().toISOString().split('T')[0],
-          type_contrat: 'historique'
-        })
-        .select()
-        .single();
+    const currentDate = new Date().toISOString().split('T')[0];
 
-      return location;
-    } else if (operationType === 'droit_terre') {
-      // Créer souscription pour droits de terre
-      const currentDate = new Date().toISOString().split('T')[0];
-      const { data: souscription } = await supabase
-        .from('souscriptions')
-        .insert({
-          client_id: client.id,
-          propriete_id: property.id,
-          prix_total: row.loyer * 240, // 20 ans de droits de terre
-          montant_mensuel: row.loyer, // Utiliser le montant comme mensuel pour compatibilité
-          nombre_mois: 240, // 20 ans
-          date_debut: currentDate,
-          solde_restant: 0, // Pas de solde restant pour les droits de terre
-          type_souscription: 'historique',
-          phase_actuelle: 'droit_terre',
-          montant_droit_terre_mensuel: row.loyer, // Montant mensuel des droits de terre
-          date_debut_droit_terre: currentDate, // Date de début des droits de terre
-          type_bien: row.typeHabitation || 'terrain'
-        })
-        .select()
-        .single();
+    try {
+      if (operationType === 'loyer') {
+        // Créer location
+        await apiClient.insert({
+          table: 'locations',
+          values: {
+            client_id: client.id,
+            propriete_id: property.id,
+            loyer_mensuel: row.loyer,
+            date_debut: currentDate,
+            type_contrat: 'historique'
+          }
+        });
 
-      return souscription;
-    } else {
-      // Créer souscription classique avec droit de terre configuré
-      const currentDate = new Date().toISOString().split('T')[0];
-      const prixTotal = row.loyer * 100; // Prix total fictif basé sur le montant
-      const { data: souscription } = await supabase
-        .from('souscriptions')
-        .insert({
-          client_id: client.id,
-          propriete_id: property.id,
-          prix_total: prixTotal,
-          montant_mensuel: row.loyer / 10, // Montant mensuel de souscription
-          nombre_mois: 24, // 2 ans de souscription
-          date_debut: currentDate,
-          solde_restant: 0, // Payé complètement à l'importation
-          type_souscription: 'mise_en_garde',
-          phase_actuelle: 'souscription',
-          montant_droit_terre_mensuel: row.loyer, // Le montant Excel devient le droit de terre mensuel
-          periode_finition_mois: 9,
-          type_bien: row.typeHabitation || 'terrain'
-        })
-        .select()
-        .single();
+        // Récupérer la location créée
+        const locations = await apiClient.select({
+          table: 'locations',
+          filters: [
+            { op: 'eq', column: 'client_id', value: client.id },
+            { op: 'eq', column: 'propriete_id', value: property.id }
+          ],
+          orderBy: { column: 'created_at', ascending: false },
+          limit: 1
+        });
 
-      return souscription;
+        return locations[0];
+      } else if (operationType === 'droit_terre') {
+        // Créer souscription pour droits de terre
+        await apiClient.insert({
+          table: 'souscriptions',
+          values: {
+            client_id: client.id,
+            propriete_id: property.id,
+            prix_total: row.loyer * 240, // 20 ans de droits de terre
+            montant_mensuel: row.loyer,
+            nombre_mois: 240,
+            date_debut: currentDate,
+            solde_restant: 0,
+            type_souscription: 'historique',
+            phase_actuelle: 'droit_terre',
+            montant_droit_terre_mensuel: row.loyer,
+            date_debut_droit_terre: currentDate,
+            type_bien: row.typeHabitation || 'terrain'
+          }
+        });
+
+        // Récupérer la souscription créée
+        const souscriptions = await apiClient.select({
+          table: 'souscriptions',
+          filters: [
+            { op: 'eq', column: 'client_id', value: client.id },
+            { op: 'eq', column: 'propriete_id', value: property.id }
+          ],
+          orderBy: { column: 'created_at', ascending: false },
+          limit: 1
+        });
+
+        return souscriptions[0];
+      } else {
+        // Créer souscription classique
+        const prixTotal = row.loyer * 100;
+        await apiClient.insert({
+          table: 'souscriptions',
+          values: {
+            client_id: client.id,
+            propriete_id: property.id,
+            prix_total: prixTotal,
+            montant_mensuel: row.loyer / 10,
+            nombre_mois: 24,
+            date_debut: currentDate,
+            solde_restant: 0,
+            type_souscription: 'mise_en_garde',
+            phase_actuelle: 'souscription',
+            montant_droit_terre_mensuel: row.loyer,
+            periode_finition_mois: 9,
+            type_bien: row.typeHabitation || 'terrain'
+          }
+        });
+
+        // Récupérer la souscription créée
+        const souscriptions = await apiClient.select({
+          table: 'souscriptions',
+          filters: [
+            { op: 'eq', column: 'client_id', value: client.id },
+            { op: 'eq', column: 'propriete_id', value: property.id }
+          ],
+          orderBy: { column: 'created_at', ascending: false },
+          limit: 1
+        });
+
+        return souscriptions[0];
+      }
+    } catch (error) {
+      console.error('Erreur création contrat:', error);
+      throw error;
     }
   };
 
@@ -670,11 +724,11 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
   const createPaymentsFromExcel = async (contract: any, operationType: 'loyer' | 'droit_terre' | 'souscription', paiementsMensuels: number[]) => {
     let paymentsCreated = 0;
     const currentYear = new Date().getFullYear();
-    const monthNames = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 
+    const monthNames = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
                        'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 
     // Traiter les mois sélectionnés ou tous les mois
-    const monthsToProcess = selectedMonth === 'all' 
+    const monthsToProcess = selectedMonth === 'all'
       ? Array.from({ length: 12 }, (_, i) => i)
       : [parseInt(selectedMonth)];
 
@@ -683,41 +737,44 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
       if (montant <= 0) continue;
 
       const paymentDate = new Date(currentYear, monthIndex, 15).toISOString().split('T')[0];
-      
+
       try {
         if (operationType === 'loyer') {
-          // Créer paiement location directement (trigger créera le reçu)
-          await supabase
-            .from('paiements_locations')
-            .insert({
+          // Créer paiement location
+          await apiClient.insert({
+            table: 'paiements_locations',
+            values: {
               location_id: contract.id,
               montant,
               date_paiement: paymentDate,
               mode_paiement: 'especes',
               reference: `Import ${monthNames[monthIndex]} ${currentYear}`
-            });
+            }
+          });
         } else if (operationType === 'droit_terre') {
-          // Créer paiement droit de terre directement (trigger créera le reçu)
-          await supabase
-            .from('paiements_droit_terre')
-            .insert({
+          // Créer paiement droit de terre
+          await apiClient.insert({
+            table: 'paiements_droit_terre',
+            values: {
               souscription_id: contract.id,
               montant,
               date_paiement: paymentDate,
               mode_paiement: 'especes',
               reference: `Import ${monthNames[monthIndex]} ${currentYear}`
-            });
+            }
+          });
         } else {
-          // Créer paiement souscription directement (trigger créera le reçu)
-          await supabase
-            .from('paiements_souscriptions')
-            .insert({
+          // Créer paiement souscription
+          await apiClient.insert({
+            table: 'paiements_souscriptions',
+            values: {
               souscription_id: contract.id,
               montant,
               date_paiement: paymentDate,
               mode_paiement: 'especes',
               reference: `Import ${monthNames[monthIndex]} ${currentYear}`
-            });
+            }
+          });
         }
         paymentsCreated++;
       } catch (error) {
@@ -779,15 +836,14 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
       // En mode réel, attendre que les triggers de reçus s'exécutent
       if (!simulate) {
         await new Promise(resolve => setTimeout(resolve, 3000));
-        
+
         // Compter les reçus générés récemment
         try {
-          const { count: receiptsCount } = await supabase
-            .from('recus')
-            .select('*', { count: 'exact', head: true })
-            .gte('created_at', new Date(Date.now() - 10 * 60 * 1000).toISOString());
-          
-          results.receiptsGenerated = receiptsCount || 0;
+          const recentRecus = await apiClient.select({
+            table: 'recus',
+            filters: [{ op: 'gte', column: 'created_at', value: new Date(Date.now() - 10 * 60 * 1000).toISOString() }]
+          });
+          results.receiptsGenerated = recentRecus?.length || 0;
         } catch (error) {
           console.log("Impossible de compter les reçus");
         }

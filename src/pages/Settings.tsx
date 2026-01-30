@@ -49,56 +49,33 @@ export default function Settings() {
   const { data: companySettings } = useQuery({
     queryKey: ['company_settings'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('company_settings')
-        .select('*')
-        .single();
-      
-      if (error) throw error;
+      const data = await apiClient.select({
+        table: 'company_settings',
+        single: true
+      });
       return data;
     }
   });
 
-  // Upload logo mutation
+  // Upload logo mutation (storage non supporté pour l'instant)
   const uploadLogoMutation = useMutation({
     mutationFn: async (file: File) => {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `logo-${Date.now()}.${fileExt}`;
-      
-      // Upload to Supabase Storage (you'll need to create this bucket)
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('company-assets')
-        .upload(fileName, file, { upsert: true });
-      
-      if (uploadError) throw uploadError;
-      
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('company-assets')
-        .getPublicUrl(fileName);
-      
-      // Update company settings
-      const { error: updateError } = await supabase
-        .from('company_settings')
-        .update({ logo_url: publicUrl })
-        .eq('id', '00000000-0000-0000-0000-000000000001');
-      
-      if (updateError) throw updateError;
-      
-      return publicUrl;
+      // Pour l'instant, on ne supporte pas l'upload de fichiers
+      // TODO: Ajouter une route /upload pour le logo
+      throw new Error("L'upload de logo n'est pas encore supporté avec l'API MySQL");
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['company_settings'] });
       setLogoFile(null);
       setLogoPreview(null);
       toast({
-        title: "✅ Logo mis à jour",
+        title: "Logo mis à jour",
         description: "Le logo de l'entreprise a été mis à jour avec succès",
       });
     },
     onError: (error: any) => {
       toast({
-        title: "❌ Erreur",
+        title: "Erreur",
         description: error.message || "Impossible de télécharger le logo",
         variant: "destructive",
       });
@@ -126,56 +103,58 @@ export default function Settings() {
   const clearFinancialDataOnly = useMutation({
     mutationFn: async () => {
       setIsLoadingFinancialOnly(true);
-      
+
+      const deleteFilter = [{ op: 'neq', column: 'id', value: '00000000-0000-0000-0000-000000000000' }];
+
       // Supprimer uniquement les paiements et transactions (SANS toucher aux contrats)
-      await supabase.from('paiements_factures').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('paiements_locations').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('paiements_souscriptions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('paiements_droit_terre').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('echeances_droit_terre').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('cash_transactions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('recus').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('factures_fournisseurs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('ventes').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await apiClient.delete({ table: 'paiements_factures', filters: deleteFilter });
+      await apiClient.delete({ table: 'paiements_locations', filters: deleteFilter });
+      await apiClient.delete({ table: 'paiements_souscriptions', filters: deleteFilter });
+      await apiClient.delete({ table: 'paiements_droit_terre', filters: deleteFilter });
+      await apiClient.delete({ table: 'echeances_droit_terre', filters: deleteFilter });
+      await apiClient.delete({ table: 'cash_transactions', filters: deleteFilter });
+      await apiClient.delete({ table: 'recus', filters: deleteFilter });
+      await apiClient.delete({ table: 'factures_fournisseurs', filters: deleteFilter });
+      await apiClient.delete({ table: 'ventes', filters: deleteFilter });
 
       // Réinitialiser les soldes des souscriptions au prix total
-      const { data: souscriptions } = await supabase
-        .from('souscriptions')
-        .select('id, prix_total');
-      
-      if (souscriptions) {
+      const souscriptions = await apiClient.select({
+        table: 'souscriptions'
+      }) as Array<{ id: string; prix_total: number }>;
+
+      if (souscriptions && Array.isArray(souscriptions)) {
         for (const sub of souscriptions) {
-          await supabase
-            .from('souscriptions')
-            .update({ solde_restant: sub.prix_total, updated_at: new Date().toISOString() })
-            .eq('id', sub.id);
+          await apiClient.update({
+            table: 'souscriptions',
+            filters: [{ op: 'eq', column: 'id', value: sub.id }],
+            values: { solde_restant: sub.prix_total, updated_at: new Date().toISOString() }
+          });
         }
       }
 
       // Déclencher le recalcul des dettes de location
-      await supabase
-        .from('locations')
-        .update({ updated_at: new Date().toISOString() })
-        .neq('id', '00000000-0000-0000-0000-000000000000');
+      await apiClient.update({
+        table: 'locations',
+        filters: deleteFilter,
+        values: { updated_at: new Date().toISOString() }
+      });
 
       // CRITIQUE: Réinitialiser la caisse EN DERNIER après tous les recalculs
       // 1. Supprimer tous les enregistrements de caisse_balance
-      await supabase.from('caisse_balance').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      
+      await apiClient.delete({ table: 'caisse_balance', filters: deleteFilter });
+
       // 2. Créer un nouvel enregistrement avec solde 0
-      const { error: balanceInsertError } = await supabase
-        .from('caisse_balance')
-        .insert({ solde_courant: 0, derniere_maj: new Date().toISOString() });
-      
-      if (balanceInsertError) throw balanceInsertError;
+      await apiClient.insert({
+        table: 'caisse_balance',
+        values: { solde_courant: 0, derniere_maj: new Date().toISOString() }
+      });
 
       // 3. Forcer la mise à jour à 0 pour être absolument sûr
-      const { error: balanceUpdateError } = await supabase
-        .from('caisse_balance')
-        .update({ solde_courant: 0, derniere_maj: new Date().toISOString() })
-        .neq('id', '00000000-0000-0000-0000-000000000000');
-      
-      if (balanceUpdateError) throw balanceUpdateError;
+      await apiClient.update({
+        table: 'caisse_balance',
+        filters: deleteFilter,
+        values: { solde_courant: 0, derniere_maj: new Date().toISOString() }
+      });
 
       // Invalider le cache pour forcer le rechargement
       queryClient.invalidateQueries({ queryKey: ["cash_balance"] });
@@ -186,14 +165,14 @@ export default function Settings() {
       setIsLoadingFinancialOnly(false);
       queryClient.invalidateQueries();
       toast({
-        title: "✅ Paiements supprimés",
+        title: "Paiements supprimés",
         description: "Tous les paiements ont été supprimés. Les contrats (locations et souscriptions) sont conservés.",
       });
     },
     onError: (error: any) => {
       setIsLoadingFinancialOnly(false);
       toast({
-        title: "❌ Erreur",
+        title: "Erreur",
         description: error.message || "Impossible de supprimer les paiements",
         variant: "destructive",
       });
@@ -203,40 +182,41 @@ export default function Settings() {
   const clearFinancialData = useMutation({
     mutationFn: async () => {
       setIsLoading(true);
-      
+
+      const deleteFilter = [{ op: 'neq', column: 'id', value: '00000000-0000-0000-0000-000000000000' }];
+
       // Supprimer toutes les données financières dans l'ordre correct
-      await supabase.from('paiements_factures').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('paiements_locations').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('paiements_souscriptions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('paiements_droit_terre').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('echeances_droit_terre').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('cash_transactions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('recus').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('factures_fournisseurs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('locations').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('souscriptions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await apiClient.delete({ table: 'paiements_factures', filters: deleteFilter });
+      await apiClient.delete({ table: 'paiements_locations', filters: deleteFilter });
+      await apiClient.delete({ table: 'paiements_souscriptions', filters: deleteFilter });
+      await apiClient.delete({ table: 'paiements_droit_terre', filters: deleteFilter });
+      await apiClient.delete({ table: 'echeances_droit_terre', filters: deleteFilter });
+      await apiClient.delete({ table: 'cash_transactions', filters: deleteFilter });
+      await apiClient.delete({ table: 'recus', filters: deleteFilter });
+      await apiClient.delete({ table: 'factures_fournisseurs', filters: deleteFilter });
+      await apiClient.delete({ table: 'locations', filters: deleteFilter });
+      await apiClient.delete({ table: 'souscriptions', filters: deleteFilter });
 
       // Réinitialiser le solde caisse
-      const { error: balanceError } = await supabase
-        .from('caisse_balance')
-        .update({ solde_courant: 0, derniere_maj: new Date().toISOString() })
-        .neq('id', '00000000-0000-0000-0000-000000000000');
-      
-      if (balanceError) throw balanceError;
+      await apiClient.update({
+        table: 'caisse_balance',
+        filters: deleteFilter,
+        values: { solde_courant: 0, derniere_maj: new Date().toISOString() }
+      });
     },
     onSuccess: () => {
       setConfirmText("");
       setIsLoading(false);
       queryClient.invalidateQueries();
       toast({
-        title: "✅ Données supprimées",
+        title: "Données supprimées",
         description: "Toutes les données financières ont été supprimées. Les clients et propriétés sont conservés.",
       });
     },
     onError: (error: any) => {
       setIsLoading(false);
       toast({
-        title: "❌ Erreur",
+        title: "Erreur",
         description: error.message || "Impossible de supprimer les données",
         variant: "destructive",
       });
@@ -246,50 +226,51 @@ export default function Settings() {
   const clearAllData = useMutation({
     mutationFn: async () => {
       setIsLoadingAll(true);
-      
+
+      const deleteFilter = [{ op: 'neq', column: 'id', value: '00000000-0000-0000-0000-000000000000' }];
+
       // Supprimer TOUTES les données dans l'ordre correct (dépendances)
-      await supabase.from('ventes').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('recus').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('paiements_factures').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('paiements_locations').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('paiements_souscriptions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('paiements_droit_terre').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('echeances_droit_terre').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('cash_transactions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('factures_fournisseurs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('locations').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('souscriptions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('clients').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('proprietes').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('fournisseurs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('agents_recouvrement').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('articles').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('types_proprietes').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('secteurs_activite').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('bareme_droits_terre').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('receipt_counters').delete().neq('date_key', '1900-01-01');
+      await apiClient.delete({ table: 'ventes', filters: deleteFilter });
+      await apiClient.delete({ table: 'recus', filters: deleteFilter });
+      await apiClient.delete({ table: 'paiements_factures', filters: deleteFilter });
+      await apiClient.delete({ table: 'paiements_locations', filters: deleteFilter });
+      await apiClient.delete({ table: 'paiements_souscriptions', filters: deleteFilter });
+      await apiClient.delete({ table: 'paiements_droit_terre', filters: deleteFilter });
+      await apiClient.delete({ table: 'echeances_droit_terre', filters: deleteFilter });
+      await apiClient.delete({ table: 'cash_transactions', filters: deleteFilter });
+      await apiClient.delete({ table: 'factures_fournisseurs', filters: deleteFilter });
+      await apiClient.delete({ table: 'locations', filters: deleteFilter });
+      await apiClient.delete({ table: 'souscriptions', filters: deleteFilter });
+      await apiClient.delete({ table: 'clients', filters: deleteFilter });
+      await apiClient.delete({ table: 'proprietes', filters: deleteFilter });
+      await apiClient.delete({ table: 'fournisseurs', filters: deleteFilter });
+      await apiClient.delete({ table: 'agents_recouvrement', filters: deleteFilter });
+      await apiClient.delete({ table: 'articles', filters: deleteFilter });
+      await apiClient.delete({ table: 'types_proprietes', filters: deleteFilter });
+      await apiClient.delete({ table: 'secteurs_activite', filters: deleteFilter });
+      await apiClient.delete({ table: 'bareme_droits_terre', filters: deleteFilter });
+      await apiClient.delete({ table: 'receipt_counters', filters: [{ op: 'neq', column: 'date_key', value: '1900-01-01' }] });
 
       // Réinitialiser le solde caisse à zéro
-      const { error: balanceError } = await supabase
-        .from('caisse_balance')
-        .update({ solde_courant: 0, derniere_maj: new Date().toISOString() })
-        .neq('id', '00000000-0000-0000-0000-000000000000');
-      
-      if (balanceError) throw balanceError;
+      await apiClient.update({
+        table: 'caisse_balance',
+        filters: deleteFilter,
+        values: { solde_courant: 0, derniere_maj: new Date().toISOString() }
+      });
     },
     onSuccess: () => {
       setConfirmAllText("");
       setIsLoadingAll(false);
       queryClient.invalidateQueries();
       toast({
-        title: "✅ Base de données vidée",
+        title: "Base de données vidée",
         description: "Toutes les données ont été supprimées. Seuls les utilisateurs sont conservés.",
       });
     },
     onError: (error: any) => {
       setIsLoadingAll(false);
       toast({
-        title: "❌ Erreur",
+        title: "Erreur",
         description: error.message || "Impossible de vider la base de données",
         variant: "destructive",
       });
@@ -299,20 +280,17 @@ export default function Settings() {
   const clearAllClients = useMutation({
     mutationFn: async () => {
       setIsLoadingClients(true);
-      
-      // Supprimer tous les clients - vérifier d'abord s'il y a des relations
-      const { count } = await supabase
-        .from('clients')
-        .select('*', { count: 'exact', head: true });
-      
+
+      // Compter les clients avant suppression
+      const clients = await apiClient.select({ table: 'clients' }) as Array<{ id: string }>;
+      const count = clients?.length || 0;
+
       // Supprimer tous les clients
-      const { error } = await supabase
-        .from('clients')
-        .delete()
-        .neq('id', '00000000-0000-0000-0000-000000000000');
-      
-      if (error) throw error;
-      
+      await apiClient.delete({
+        table: 'clients',
+        filters: [{ op: 'neq', column: 'id', value: '00000000-0000-0000-0000-000000000000' }]
+      });
+
       return count;
     },
     onSuccess: (deletedCount) => {
@@ -320,14 +298,14 @@ export default function Settings() {
       setIsLoadingClients(false);
       queryClient.invalidateQueries({ queryKey: ['clients'] });
       toast({
-        title: "✅ Clients supprimés",
+        title: "Clients supprimés",
         description: `Tous les clients (${deletedCount}) ont été supprimés avec succès.`,
       });
     },
     onError: (error: any) => {
       setIsLoadingClients(false);
       toast({
-        title: "❌ Erreur",
+        title: "Erreur",
         description: error.message || "Impossible de supprimer les clients",
         variant: "destructive",
       });
@@ -337,31 +315,37 @@ export default function Settings() {
   const analyzeHistoricalSubscriptions = useMutation({
     mutationFn: async () => {
       setIsAnalyzing(true);
-      const { data, error } = await supabase
-        .from('souscriptions')
-        .select('id, prix_total, solde_restant, type_souscription')
-        .in('type_souscription', ['historique', 'mise_en_garde'])
-        .gt('solde_restant', 0);
-      
-      if (error) throw error;
-      
-      const count = data?.length || 0;
-      const totalAmount = data?.reduce((sum, sub) => sum + (sub.solde_restant || 0), 0) || 0;
-      
+
+      // Récupérer les souscriptions historiques avec solde > 0
+      const allSouscriptions = await apiClient.select({
+        table: 'souscriptions',
+        filters: [
+          { op: 'gt', column: 'solde_restant', value: 0 }
+        ]
+      }) as Array<{ id: string; prix_total: number; solde_restant: number; type_souscription: string }>;
+
+      // Filtrer par type_souscription
+      const data = allSouscriptions?.filter(
+        s => ['historique', 'mise_en_garde'].includes(s.type_souscription)
+      ) || [];
+
+      const count = data.length;
+      const totalAmount = data.reduce((sum, sub) => sum + (sub.solde_restant || 0), 0);
+
       return { count, totalAmount };
     },
     onSuccess: (stats) => {
       setHistoricalStats(stats);
       setIsAnalyzing(false);
       toast({
-        title: "📊 Analyse terminée",
+        title: "Analyse terminée",
         description: `${stats.count} souscriptions historiques trouvées avec un solde de ${stats.totalAmount.toLocaleString()} FCFA`,
       });
     },
     onError: (error: any) => {
       setIsAnalyzing(false);
       toast({
-        title: "❌ Erreur d'analyse",
+        title: "Erreur d'analyse",
         description: error.message,
         variant: "destructive",
       });
@@ -371,19 +355,13 @@ export default function Settings() {
   const settleHistoricalSubscriptions = useMutation({
     mutationFn: async () => {
       setIsSettling(true);
-      
-      // Générer les paiements manquants
-      const { data: paymentsData, error: paymentsError } = await supabase
-        .rpc('generate_missing_historical_payments');
-      
-      if (paymentsError) throw paymentsError;
-      
-      // Corriger les soldes
-      const { data: balancesData, error: balancesError } = await supabase
-        .rpc('fix_historical_subscription_balances');
-      
-      if (balancesError) throw balancesError;
-      
+
+      // Générer les paiements manquants via RPC
+      const paymentsData = await apiClient.rpc('generate_missing_historical_payments');
+
+      // Corriger les soldes via RPC
+      const balancesData = await apiClient.rpc('fix_historical_subscription_balances');
+
       return { paymentsData, balancesData };
     },
     onSuccess: () => {
@@ -391,14 +369,14 @@ export default function Settings() {
       setHistoricalStats(null);
       queryClient.invalidateQueries({ queryKey: ['souscriptions'] });
       toast({
-        title: "✅ Souscriptions soldées",
+        title: "Souscriptions soldées",
         description: "Toutes les souscriptions historiques ont été soldées avec succès",
       });
     },
     onError: (error: any) => {
       setIsSettling(false);
       toast({
-        title: "❌ Erreur de solde",
+        title: "Erreur de solde",
         description: error.message,
         variant: "destructive",
       });

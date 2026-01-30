@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "@/integrations/api/client";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -101,69 +102,57 @@ export function AgentRecoveryDashboard({ agentId, onBack, initialMonth }: Props)
       const endDate = `${selectedMonth}-31`;
 
       // Get agent's properties
-      const { data: properties } = await supabase
-        .from('proprietes')
-        .select('id')
-        .eq('agent_id', agentId)
-        .limit(999999);
+      const properties = await apiClient.select({
+        table: 'proprietes',
+        filters: [{ op: 'eq', column: 'agent_id', value: agentId }]
+      });
 
       if (!properties || properties.length === 0) {
         return { totalVerse: 0, details: [] };
       }
 
-      const propertyIds = properties.map(p => p.id);
+      const propertyIds = properties.map((p: any) => p.id);
 
       // Get locations for these properties
-      const { data: locations } = await supabase
-        .from('locations')
-        .select('id')
-        .in('propriete_id', propertyIds)
-        .limit(999999);
+      const locations = await apiClient.select({
+        table: 'locations',
+        filters: [{ op: 'in', column: 'propriete_id', values: propertyIds }]
+      });
 
-      const locationIds = locations?.map(l => l.id) || [];
+      const locationIds = locations?.map((l: any) => l.id) || [];
 
       // Get souscriptions for these properties
-      const { data: souscriptions } = await supabase
-        .from('souscriptions')
-        .select('id')
-        .in('propriete_id', propertyIds)
-        .limit(999999);
+      const souscriptions = await apiClient.select({
+        table: 'souscriptions',
+        filters: [{ op: 'in', column: 'propriete_id', values: propertyIds }]
+      });
 
-      const souscriptionIds = souscriptions?.map(s => s.id) || [];
+      const souscriptionIds = souscriptions?.map((s: any) => s.id) || [];
 
       // Get payments for locations
-      const { data: paiementsLoc } = await supabase
-        .from('paiements_locations')
-        .select('montant, date_paiement, location_id')
-        .in('location_id', locationIds)
-        .gte('date_paiement', startDate)
-        .lte('date_paiement', endDate)
-        .limit(999999);
+      const allPaiementsLoc = locationIds.length > 0 ? await apiClient.select({
+        table: 'paiements_locations',
+        filters: [{ op: 'in', column: 'location_id', values: locationIds }]
+      }) : [];
+
+      // Filter by date in JS
+      const paiementsLoc = allPaiementsLoc.filter((p: any) =>
+        p.date_paiement >= startDate && p.date_paiement <= endDate
+      );
 
       // Get payments for souscriptions
-      const { data: paiementsDT } = await supabase
-        .from('paiements_droit_terre')
-        .select('montant, date_paiement, souscription_id')
-        .in('souscription_id', souscriptionIds)
-        .gte('date_paiement', startDate)
-        .lte('date_paiement', endDate)
-        .limit(999999);
+      const allPaiementsDT = souscriptionIds.length > 0 ? await apiClient.select({
+        table: 'paiements_droit_terre',
+        filters: [{ op: 'in', column: 'souscription_id', values: souscriptionIds }]
+      }) : [];
 
-      const totalVerse = 
-        (paiementsLoc?.reduce((sum, p) => sum + (p.montant || 0), 0) || 0) +
-        (paiementsDT?.reduce((sum, p) => sum + (p.montant || 0), 0) || 0);
+      const paiementsDT = allPaiementsDT.filter((p: any) =>
+        p.date_paiement >= startDate && p.date_paiement <= endDate
+      );
 
-      console.log(`Debug Agent Payments ${selectedMonth}:`, {
-        agentId,
-        propertyIds: propertyIds.length,
-        locationIds: locationIds.length,
-        souscriptionIds: souscriptionIds.length,
-        paiementsLoc: paiementsLoc?.length || 0,
-        paiementsDT: paiementsDT?.length || 0,
-        totalVerse,
-        paiementsLocDetails: paiementsLoc?.map(p => ({ montant: p.montant, date: p.date_paiement })),
-        paiementsDTDetails: paiementsDT?.map(p => ({ montant: p.montant, date: p.date_paiement }))
-      });
+      const totalVerse =
+        (paiementsLoc?.reduce((sum: number, p: any) => sum + (p.montant || 0), 0) || 0) +
+        (paiementsDT?.reduce((sum: number, p: any) => sum + (p.montant || 0), 0) || 0);
 
       return {
         totalVerse,
@@ -179,13 +168,11 @@ export function AgentRecoveryDashboard({ agentId, onBack, initialMonth }: Props)
   const { data: agent } = useQuery({
     queryKey: ['agent-details', agentId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('agents_recouvrement')
-        .select('*')
-        .eq('id', agentId)
-        .single();
-      
-      if (error) throw error;
+      const data = await apiClient.select({
+        table: 'agents_recouvrement',
+        filters: [{ op: 'eq', column: 'id', value: agentId }],
+        single: true
+      });
       return data as AgentDetails;
     },
   });
@@ -195,102 +182,64 @@ export function AgentRecoveryDashboard({ agentId, onBack, initialMonth }: Props)
     queryKey: ['agent-performance', agentId],
     queryFn: async () => {
       const results: AgentPerformance[] = [];
-      
+
+      // Fetch all data once
+      const [allProperties, allLocations, allSouscriptions, allPaiementsLoc, allPaiementsDT] = await Promise.all([
+        apiClient.select({ table: 'proprietes', filters: [{ op: 'eq', column: 'agent_id', value: agentId }] }),
+        apiClient.select({ table: 'locations' }),
+        apiClient.select({ table: 'souscriptions' }),
+        apiClient.select({ table: 'paiements_locations' }),
+        apiClient.select({ table: 'paiements_droit_terre' })
+      ]);
+
+      const propertyIds = allProperties?.map((p: any) => p.id) || [];
+
       for (let i = 0; i < 6; i++) {
         const targetDate = subMonths(new Date(), i);
         const monthKey = format(targetDate, 'yyyy-MM');
         const startDate = format(startOfMonth(targetDate), 'yyyy-MM-dd');
         const endDate = format(new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0), 'yyyy-MM-dd');
 
-        // Get agent's properties and their dues for this month
-        const { data: properties } = await supabase
-          .from('proprietes')
-          .select(`
-            id, loyer_mensuel, droit_terre,
-            locations:locations!propriete_id (loyer_mensuel),
-            souscriptions:souscriptions!propriete_id (montant_droit_terre_mensuel, type_souscription, phase_actuelle, statut)
-          `)
-          .eq('agent_id', agentId)
-          .limit(999999);
-
         let du_loyers = 0;
         let du_droits_terre = 0;
 
-        properties?.forEach(prop => {
-          // Calculate rental dues
-          prop.locations?.forEach(loc => {
-            du_loyers += loc.loyer_mensuel || prop.loyer_mensuel || 0;
-          });
+        // Filter locations and souscriptions for this agent's properties
+        const agentLocations = allLocations.filter((l: any) => propertyIds.includes(l.propriete_id));
+        const agentSouscriptions = allSouscriptions.filter((s: any) => propertyIds.includes(s.propriete_id));
 
-          // Calculate land rights dues
-          prop.souscriptions?.forEach(sub => {
-            // Comptabiliser toutes les souscriptions en phase de paiement des droits de terre
-            if (sub.phase_actuelle === 'droit_terre' && sub.statut === 'active') {
-              du_droits_terre += sub.montant_droit_terre_mensuel || prop.droit_terre || 0;
-            }
-          });
+        // Calculate dues
+        agentLocations.forEach((loc: any) => {
+          const prop = allProperties.find((p: any) => p.id === loc.propriete_id);
+          du_loyers += loc.loyer_mensuel || prop?.loyer_mensuel || 0;
         });
 
-        // Get property IDs for this agent
-        const propertyIds = properties?.map(p => p.id) || [];
-        
-        console.log(`[${monthKey}] PropertyIds for agent:`, propertyIds.length);
+        agentSouscriptions.forEach((sub: any) => {
+          if (sub.phase_actuelle === 'droit_terre' && sub.statut === 'active') {
+            const prop = allProperties.find((p: any) => p.id === sub.propriete_id);
+            du_droits_terre += sub.montant_droit_terre_mensuel || prop?.droit_terre || 0;
+          }
+        });
 
-        // Étape 1: Récupérer les IDs des locations liées aux propriétés de l'agent
-        const { data: agentLocations } = await supabase
-          .from('locations')
-          .select('id')
-          .in('propriete_id', propertyIds)
-          .eq('statut', 'active')
-          .limit(999999);
+        const locationIds = agentLocations.filter((l: any) => l.statut === 'active').map((l: any) => l.id);
+        const souscriptionIds = agentSouscriptions.filter((s: any) => s.statut === 'active').map((s: any) => s.id);
 
-        const locationIds = agentLocations?.map(l => l.id) || [];
-        console.log(`[${monthKey}] LocationIds found:`, locationIds.length);
+        // Filter payments for this month
+        const paiementsLocations = allPaiementsLoc.filter((p: any) =>
+          locationIds.includes(p.location_id) &&
+          p.date_paiement >= startDate &&
+          p.date_paiement <= endDate
+        );
 
-        // Étape 2: Récupérer les IDs des souscriptions liées aux propriétés de l'agent
-        const { data: agentSouscriptions } = await supabase
-          .from('souscriptions')
-          .select('id')
-          .in('propriete_id', propertyIds)
-          .eq('statut', 'active')
-          .limit(999999);
+        const paiementsDroitTerre = allPaiementsDT.filter((p: any) =>
+          souscriptionIds.includes(p.souscription_id) &&
+          p.date_paiement >= startDate &&
+          p.date_paiement <= endDate
+        );
 
-        const souscriptionIds = agentSouscriptions?.map(s => s.id) || [];
-        console.log(`[${monthKey}] SouscriptionIds found:`, souscriptionIds.length);
-
-        // Étape 3: Récupérer les paiements de locations pour ce mois
-        let totalPaiementsLocations = 0;
-        if (locationIds.length > 0) {
-          const { data: paiementsLocations } = await supabase
-            .from('paiements_locations')
-            .select('montant')
-            .in('location_id', locationIds)
-            .gte('date_paiement', startDate)
-            .lte('date_paiement', endDate)
-            .limit(999999);
-
-          totalPaiementsLocations = paiementsLocations?.reduce((sum, p) => sum + (p.montant || 0), 0) || 0;
-          console.log(`[${monthKey}] Paiements locations:`, paiementsLocations?.length || 0, 'Total:', totalPaiementsLocations);
-        }
-
-        // Étape 4: Récupérer les paiements de droits de terre pour ce mois
-        let totalPaiementsDroitTerre = 0;
-        if (souscriptionIds.length > 0) {
-          const { data: paiementsDroitTerre } = await supabase
-            .from('paiements_droit_terre')
-            .select('montant')
-            .in('souscription_id', souscriptionIds)
-            .gte('date_paiement', startDate)
-            .lte('date_paiement', endDate)
-            .limit(999999);
-
-          totalPaiementsDroitTerre = paiementsDroitTerre?.reduce((sum, p) => sum + (p.montant || 0), 0) || 0;
-          console.log(`[${monthKey}] Paiements droit terre:`, paiementsDroitTerre?.length || 0, 'Total:', totalPaiementsDroitTerre);
-        }
+        const totalPaiementsLocations = paiementsLocations.reduce((sum: number, p: any) => sum + (p.montant || 0), 0);
+        const totalPaiementsDroitTerre = paiementsDroitTerre.reduce((sum: number, p: any) => sum + (p.montant || 0), 0);
 
         const verse = totalPaiementsLocations + totalPaiementsDroitTerre;
-
-        console.log(`[${monthKey}] FINAL - Versé:`, verse, 'Dû loyers:', du_loyers, 'Dû droits:', du_droits_terre);
         const total_du = du_loyers + du_droits_terre;
         const taux_recouvrement = total_du > 0 ? (verse / total_du) * 100 : 0;
         const ecart = verse - total_du;
@@ -314,32 +263,23 @@ export function AgentRecoveryDashboard({ agentId, onBack, initialMonth }: Props)
   const { data: properties = [] } = useQuery({
     queryKey: ['agent-properties', agentId],
     queryFn: async () => {
-      const { data: props, error } = await supabase
-        .from('proprietes')
-        .select(`
-          id, nom, adresse, zone,
-          locations:locations!propriete_id (
-            id, client_id, loyer_mensuel, statut,
-            clients:clients!client_id (nom, prenom)
-          ),
-          souscriptions:souscriptions!propriete_id (
-            id, client_id, montant_droit_terre_mensuel, type_souscription, phase_actuelle, statut,
-            clients:clients!client_id (nom, prenom)
-          )
-        `)
-        .eq('agent_id', agentId)
-        .limit(999999);
+      const [props, allLocations, allSouscriptions] = await Promise.all([
+        apiClient.select({ table: 'proprietes', filters: [{ op: 'eq', column: 'agent_id', value: agentId }] }),
+        apiClient.select({ table: 'locations' }),
+        apiClient.select({ table: 'souscriptions' })
+      ]);
 
-      if (error) throw error;
+      return props?.map((prop: any) => {
+        const propLocations = allLocations.filter((l: any) => l.propriete_id === prop.id);
+        const propSouscriptions = allSouscriptions.filter((s: any) => s.propriete_id === prop.id);
 
-      return props?.map(prop => {
-        const locations_count = prop.locations?.length || 0;
-        const souscriptions_count = prop.souscriptions?.filter(s => s.phase_actuelle === 'droit_terre' && s.statut === 'active').length || 0;
-        
-        const monthly_rent_due = prop.locations?.reduce((sum, loc) => sum + (loc.loyer_mensuel || 0), 0) || 0;
-        const monthly_droit_terre_due = prop.souscriptions
-          ?.filter(s => s.phase_actuelle === 'droit_terre' && s.statut === 'active')
-          .reduce((sum, sub) => sum + (sub.montant_droit_terre_mensuel || 0), 0) || 0;
+        const locations_count = propLocations.length;
+        const souscriptions_count = propSouscriptions.filter((s: any) => s.phase_actuelle === 'droit_terre' && s.statut === 'active').length;
+
+        const monthly_rent_due = propLocations.reduce((sum: number, loc: any) => sum + (loc.loyer_mensuel || 0), 0);
+        const monthly_droit_terre_due = propSouscriptions
+          .filter((s: any) => s.phase_actuelle === 'droit_terre' && s.statut === 'active')
+          .reduce((sum: number, sub: any) => sum + (sub.montant_droit_terre_mensuel || 0), 0);
 
         // Determine status based on activity
         let status: 'active' | 'suspended' | 'warning' = 'active';
@@ -365,53 +305,41 @@ export function AgentRecoveryDashboard({ agentId, onBack, initialMonth }: Props)
   const { data: clientsStatus = [] } = useQuery({
     queryKey: ['agent-clients-status', agentId, selectedMonth],
     queryFn: async () => {
-      const startOfMonth = `${selectedMonth}-01`;
-      // Calculate the last day of the month dynamically
+      const startOfMonthDate = `${selectedMonth}-01`;
       const date = new Date(`${selectedMonth}-01`);
       const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-      const endOfMonth = `${selectedMonth}-${String(lastDay).padStart(2, '0')}`;
+      const endOfMonthDate = `${selectedMonth}-${String(lastDay).padStart(2, '0')}`;
 
-      // Récupérer toutes les propriétés de l'agent avec clients
-      const { data: props } = await supabase
-        .from('proprietes')
-        .select(`
-          id, nom,
-          locations:locations!propriete_id (
-            id, client_id, loyer_mensuel, statut,
-            clients:clients!client_id (id, nom, prenom, telephone_principal)
-          ),
-          souscriptions:souscriptions!propriete_id (
-            id, client_id, montant_droit_terre_mensuel, type_souscription, phase_actuelle, statut,
-            clients:clients!client_id (id, nom, prenom, telephone_principal)
-          )
-        `)
-        .eq('agent_id', agentId)
-        .limit(999999);
+      // Fetch all data in parallel
+      const [props, allLocations, allSouscriptions, allClients, allPaiementsLoc, allPaiementsDT] = await Promise.all([
+        apiClient.select({ table: 'proprietes', filters: [{ op: 'eq', column: 'agent_id', value: agentId }] }),
+        apiClient.select({ table: 'locations' }),
+        apiClient.select({ table: 'souscriptions' }),
+        apiClient.select({ table: 'clients' }),
+        apiClient.select({ table: 'paiements_locations' }),
+        apiClient.select({ table: 'paiements_droit_terre' })
+      ]);
 
-      // Récupérer tous les paiements du mois
-      const { data: paiementsLocations } = await supabase
-        .from('paiements_locations')
-        .select('location_id, montant')
-        .gte('date_paiement', startOfMonth)
-        .lte('date_paiement', endOfMonth)
-        .limit(999999);
+      const propertyIds = props.map((p: any) => p.id);
 
-      const { data: paiementsDroitTerre } = await supabase
-        .from('paiements_droit_terre')
-        .select('souscription_id, montant')
-        .gte('date_paiement', startOfMonth)
-        .lte('date_paiement', endOfMonth)
-        .limit(999999);
+      // Filter payments for the month
+      const paiementsLocations = allPaiementsLoc.filter((p: any) =>
+        p.date_paiement >= startOfMonthDate && p.date_paiement <= endOfMonthDate
+      );
+      const paiementsDroitTerre = allPaiementsDT.filter((p: any) =>
+        p.date_paiement >= startOfMonthDate && p.date_paiement <= endOfMonthDate
+      );
 
       // Grouper par client
       const clientsMap = new Map<string, ClientRecoveryStatus>();
 
-      props?.forEach(prop => {
+      props.forEach((prop: any) => {
         // Traiter les locations
-        prop.locations?.forEach((loc: any) => {
+        const propLocations = allLocations.filter((l: any) => l.propriete_id === prop.id);
+        propLocations.forEach((loc: any) => {
           if (loc.statut !== 'active') return;
-          
-          const client = loc.clients;
+
+          const client = allClients.find((c: any) => c.id === loc.client_id);
           if (!client) return;
 
           const clientKey = client.id;
@@ -446,18 +374,17 @@ export function AgentRecoveryDashboard({ agentId, onBack, initialMonth }: Props)
             loyer_mensuel: loc.loyer_mensuel || 0,
           });
 
-          // Vérifier paiements - SOMME de tous les paiements du mois
-          const paiements = paiementsLocations?.filter((p: any) => p.location_id === loc.id) || [];
-          const totalPaiements = paiements.reduce((sum, p) => sum + (p.montant || 0), 0);
+          const paiements = paiementsLocations.filter((p: any) => p.location_id === loc.id);
+          const totalPaiements = paiements.reduce((sum: number, p: any) => sum + (p.montant || 0), 0);
           clientData.montant_paye_locations += totalPaiements;
         });
 
         // Traiter les souscriptions
-        prop.souscriptions?.forEach((sub: any) => {
-          // Ne comptabiliser que les souscriptions actives en phase de droits de terre
+        const propSouscriptions = allSouscriptions.filter((s: any) => s.propriete_id === prop.id);
+        propSouscriptions.forEach((sub: any) => {
           if (sub.phase_actuelle !== 'droit_terre' || sub.statut !== 'active') return;
-          
-          const client = sub.clients;
+
+          const client = allClients.find((c: any) => c.id === sub.client_id);
           if (!client) return;
 
           const clientKey = client.id;
@@ -492,9 +419,8 @@ export function AgentRecoveryDashboard({ agentId, onBack, initialMonth }: Props)
             montant_mensuel: sub.montant_droit_terre_mensuel || 0,
           });
 
-          // Vérifier paiements - SOMME de tous les paiements du mois
-          const paiements = paiementsDroitTerre?.filter((p: any) => p.souscription_id === sub.id) || [];
-          const totalPaiements = paiements.reduce((sum, p) => sum + (p.montant || 0), 0);
+          const paiements = paiementsDroitTerre.filter((p: any) => p.souscription_id === sub.id);
+          const totalPaiements = paiements.reduce((sum: number, p: any) => sum + (p.montant || 0), 0);
           clientData.montant_paye_droits_terre += totalPaiements;
         });
       });

@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "@/integrations/api/client";
 
 import { ProtectedAction } from "./ProtectedAction";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -37,13 +38,12 @@ export function SouscriptionDetailsDialog({
     queryKey: ["client", souscription?.client_id],
     queryFn: async () => {
       if (!souscription?.client_id) return null;
-      const { data, error } = await supabase
-        .from("clients")
-        .select("*")
-        .eq("id", souscription.client_id)
-        .single();
-      if (error) throw error;
-      return data;
+      const data = await apiClient.select({
+        table: 'clients',
+        filters: [{ column: 'id', type: 'eq', value: souscription.client_id }],
+        limit: 1
+      });
+      return data[0] || null;
     },
     enabled: !!souscription?.client_id,
   });
@@ -52,13 +52,12 @@ export function SouscriptionDetailsDialog({
     queryKey: ["propriete", souscription?.propriete_id],
     queryFn: async () => {
       if (!souscription?.propriete_id) return null;
-      const { data, error } = await supabase
-        .from("proprietes")
-        .select("*")
-        .eq("id", souscription.propriete_id)
-        .single();
-      if (error) throw error;
-      return data;
+      const data = await apiClient.select({
+        table: 'proprietes',
+        filters: [{ column: 'id', type: 'eq', value: souscription.propriete_id }],
+        limit: 1
+      });
+      return data[0] || null;
     },
     enabled: !!souscription?.propriete_id,
   });
@@ -68,26 +67,17 @@ export function SouscriptionDetailsDialog({
     queryFn: async () => {
       if (!souscription?.id) return [];
       console.log("Récupération des paiements pour souscription:", souscription.id);
-      const { data, error } = await supabase
-        .from("paiements_souscriptions")
-        .select(`
-          *,
-          recus!reference_id (
-            numero,
-            periode_debut,
-            periode_fin,
-            date_generation
-          )
-        `)
-        .eq("souscription_id", souscription.id)
-        .order("date_paiement", { ascending: false });
-      if (error) throw error;
+      const data = await apiClient.select({
+        table: 'paiements_souscriptions',
+        filters: [{ column: 'souscription_id', type: 'eq', value: souscription.id }],
+        order: { column: 'date_paiement', ascending: false }
+      });
       console.log("Paiements récupérés:", data?.length || 0);
       return data;
     },
     enabled: !!souscription?.id,
     refetchOnWindowFocus: true,
-    staleTime: 0, // Force fresh data
+    staleTime: 0,
   });
 
   // Fetch receipts for payments
@@ -95,17 +85,15 @@ export function SouscriptionDetailsDialog({
     queryKey: ["recus_subscription_payments", souscription?.id],
     queryFn: async () => {
       if (!paiements || paiements.length === 0) return [];
-      
       const paymentIds = paiements.map(p => p.id);
-      const { data, error } = await supabase
-        .from("recus")
-        .select("*")
-        .in("reference_id", paymentIds)
-        .eq("type_operation", "apport_souscription")
-        .order("date_generation", { ascending: false });
-
-      if (error) throw error;
-      return data;
+      return await apiClient.select({
+        table: 'recus',
+        filters: [
+          { column: 'reference_id', type: 'in', value: paymentIds },
+          { column: 'type_operation', type: 'eq', value: 'apport_souscription' }
+        ],
+        order: { column: 'date_generation', ascending: false }
+      });
     },
     enabled: !!paiements && paiements.length > 0,
   });
@@ -156,14 +144,17 @@ export function SouscriptionDetailsDialog({
 
   const handleViewReceipt = async (paiementId: string) => {
     try {
-      const { data: receipt, error } = await supabase
-        .from("recus")
-        .select("*")
-        .eq("reference_id", paiementId)
-        .eq("type_operation", "apport_souscription")
-        .single();
+      const receipts = await apiClient.select({
+        table: 'recus',
+        filters: [
+          { column: 'reference_id', type: 'eq', value: paiementId },
+          { column: 'type_operation', type: 'eq', value: 'apport_souscription' }
+        ],
+        limit: 1
+      });
+      const receipt = receipts[0];
 
-      if (error || !receipt) {
+      if (!receipt) {
         console.error("Reçu non trouvé pour le paiement:", paiementId);
         return;
       }

@@ -7,6 +7,33 @@ import { Badge } from '@/components/ui/badge';
 import { Search, Users, Building, Home, FileText, Calendar } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
+interface Client {
+  id: string;
+  nom: string;
+  prenom: string;
+  telephone_principal?: string;
+}
+
+interface Property {
+  id: string;
+  nom: string;
+  adresse?: string;
+  zone?: string;
+}
+
+interface Location {
+  id: string;
+  clients?: { nom: string; prenom: string; telephone_principal?: string };
+  proprietes?: { nom: string; adresse?: string; zone?: string };
+}
+
+interface Subscription {
+  id: string;
+  clients?: { nom: string; prenom: string };
+  proprietes?: { nom: string; adresse?: string; zone?: string };
+  phase_actuelle?: string;
+}
+
 interface SearchResult {
   id: string;
   type: 'client' | 'property' | 'location' | 'subscription';
@@ -39,59 +66,46 @@ export function GlobalSearch() {
   };
 
   // Récupérer toutes les données nécessaires pour la recherche
-  const { data: clients = [] } = useQuery({
+  const { data: clients = [] } = useQuery<Client[]>({
     queryKey: ['clients-search'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('clients')
-        .select('id, nom, prenom, telephone_principal')
-        .order('nom');
-      if (error) throw error;
+      const data = await apiClient.select({
+        table: 'clients',
+        orderBy: { column: 'nom', ascending: true }
+      });
       return data || [];
     },
   });
 
-  const { data: properties = [] } = useQuery({
+  const { data: properties = [] } = useQuery<Property[]>({
     queryKey: ['properties-search'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('proprietes')
-        .select('id, nom, adresse, zone')
-        .order('nom');
-      if (error) throw error;
+      const data = await apiClient.select({
+        table: 'proprietes',
+        orderBy: { column: 'nom', ascending: true }
+      });
       return data || [];
     },
   });
 
-  const { data: locations = [] } = useQuery({
+  const { data: locations = [] } = useQuery<Location[]>({
     queryKey: ['locations-search'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('locations')
-        .select(`
-          id,
-          clients(nom, prenom, telephone_principal),
-          proprietes(nom, adresse, zone)
-        `)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
+      const data = await apiClient.select({
+        table: 'locations',
+        orderBy: { column: 'created_at', ascending: false }
+      });
       return data || [];
     },
   });
 
-  const { data: subscriptions = [] } = useQuery({
+  const { data: subscriptions = [] } = useQuery<Subscription[]>({
     queryKey: ['subscriptions-search'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('souscriptions')
-        .select(`
-          id,
-          clients(nom, prenom),
-          proprietes(nom, adresse, zone),
-          phase_actuelle
-        `)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
+      const data = await apiClient.select({
+        table: 'souscriptions',
+        orderBy: { column: 'created_at', ascending: false }
+      });
       return data || [];
     },
   });

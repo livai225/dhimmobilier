@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
+import { apiClient } from "@/integrations/api/client";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
@@ -133,17 +134,12 @@ export function ClientDetailsDialog({ client, open, onOpenChange }: ClientDetail
     queryKey: ['client-locations', client?.id],
     queryFn: async () => {
       if (!client?.id) return [];
-      const { data, error } = await supabase
-        .from('locations')
-        .select(`
-          *,
-          proprietes(nom, adresse, loyer_mensuel)
-        `)
-        .eq('client_id', client.id)
-        .order('created_at', { ascending: false });
-      
-      if (error) throw error;
-      return data || [];
+      return await apiClient.select({
+        table: 'locations',
+        columns: '*, proprietes(nom, adresse, loyer_mensuel)',
+        filters: [{ column: 'client_id', type: 'eq', value: client.id }],
+        order: { column: 'created_at', ascending: false }
+      });
     },
     enabled: !!client?.id,
   });
@@ -153,17 +149,12 @@ export function ClientDetailsDialog({ client, open, onOpenChange }: ClientDetail
     queryKey: ['client-souscriptions', client?.id],
     queryFn: async () => {
       if (!client?.id) return [];
-      const { data, error } = await supabase
-        .from('souscriptions')
-        .select(`
-          *,
-          proprietes(nom, adresse)
-        `)
-        .eq('client_id', client.id)
-        .order('created_at', { ascending: false });
-      
-      if (error) throw error;
-      return data || [];
+      return await apiClient.select({
+        table: 'souscriptions',
+        columns: '*, proprietes(nom, adresse)',
+        filters: [{ column: 'client_id', type: 'eq', value: client.id }],
+        order: { column: 'created_at', ascending: false }
+      });
     },
     enabled: !!client?.id,
   });
@@ -173,19 +164,27 @@ export function ClientDetailsDialog({ client, open, onOpenChange }: ClientDetail
     queryKey: ['client-location-payments', client?.id],
     queryFn: async () => {
       if (!client?.id) return [];
-      const { data, error } = await supabase
-        .from('paiements_locations')
-        .select(`
-          *,
-          locations!inner(
-            proprietes(nom)
-          )
-        `)
-        .eq('locations.client_id', client.id)
-        .order('date_paiement', { ascending: false });
-      
-      if (error) throw error;
-      return data || [];
+      // First get locations for this client
+      const clientLocations = await apiClient.select({
+        table: 'locations',
+        columns: 'id, proprietes(nom)',
+        filters: [{ column: 'client_id', type: 'eq', value: client.id }]
+      });
+      if (!clientLocations.length) return [];
+      const locationIds = clientLocations.map(l => l.id);
+      // Then get payments for those locations
+      const payments = await apiClient.select({
+        table: 'paiements_locations',
+        columns: '*',
+        filters: [{ column: 'location_id', type: 'in', value: locationIds }],
+        order: { column: 'date_paiement', ascending: false }
+      });
+      // Map property names
+      const locationMap = new Map(clientLocations.map(l => [l.id, l.proprietes]));
+      return payments.map(p => ({
+        ...p,
+        locations: { proprietes: locationMap.get(p.location_id) }
+      }));
     },
     enabled: !!client?.id,
   });
@@ -195,19 +194,27 @@ export function ClientDetailsDialog({ client, open, onOpenChange }: ClientDetail
     queryKey: ['client-subscription-payments', client?.id],
     queryFn: async () => {
       if (!client?.id) return [];
-      const { data, error } = await supabase
-        .from('paiements_souscriptions')
-        .select(`
-          *,
-          souscriptions!inner(
-            proprietes(nom)
-          )
-        `)
-        .eq('souscriptions.client_id', client.id)
-        .order('date_paiement', { ascending: false });
-      
-      if (error) throw error;
-      return data || [];
+      // First get souscriptions for this client
+      const clientSouscriptions = await apiClient.select({
+        table: 'souscriptions',
+        columns: 'id, proprietes(nom)',
+        filters: [{ column: 'client_id', type: 'eq', value: client.id }]
+      });
+      if (!clientSouscriptions.length) return [];
+      const souscriptionIds = clientSouscriptions.map(s => s.id);
+      // Then get payments for those souscriptions
+      const payments = await apiClient.select({
+        table: 'paiements_souscriptions',
+        columns: '*',
+        filters: [{ column: 'souscription_id', type: 'in', value: souscriptionIds }],
+        order: { column: 'date_paiement', ascending: false }
+      });
+      // Map property names
+      const souscriptionMap = new Map(clientSouscriptions.map(s => [s.id, s.proprietes]));
+      return payments.map(p => ({
+        ...p,
+        souscriptions: { proprietes: souscriptionMap.get(p.souscription_id) }
+      }));
     },
     enabled: !!client?.id,
   });
@@ -217,47 +224,36 @@ export function ClientDetailsDialog({ client, open, onOpenChange }: ClientDetail
     queryKey: ['client-land-rights-payments', client?.id],
     queryFn: async () => {
       if (!client?.id) return [];
-      
-      // Get payments with their related subscription data
-      const { data, error } = await supabase
-        .from('paiements_droit_terre')
-        .select(`
-          id,
-          montant,
-          date_paiement,
-          mode_paiement,
-          reference,
-          souscription_id,
-          created_at
-        `)
-        .order('date_paiement', { ascending: false });
-      
-      if (error) throw error;
-      
-      // Filter by client through souscriptions
-      const { data: clientSouscriptions, error: souscriptionsError } = await supabase
-        .from('souscriptions')
-        .select('id, propriete_id, proprietes(nom)')
-        .eq('client_id', client.id);
-      
-      if (souscriptionsError) throw souscriptionsError;
-      
-      const souscriptionIds = new Set(clientSouscriptions?.map(s => s.id) || []);
-      
+
+      // Get client souscriptions first
+      const clientSouscriptions = await apiClient.select({
+        table: 'souscriptions',
+        columns: 'id, propriete_id, proprietes(nom)',
+        filters: [{ column: 'client_id', type: 'eq', value: client.id }]
+      });
+
+      if (!clientSouscriptions.length) return [];
+
+      const souscriptionIds = clientSouscriptions.map(s => s.id);
+
+      // Get payments for those souscriptions
+      const payments = await apiClient.select({
+        table: 'paiements_droit_terre',
+        columns: 'id, montant, date_paiement, mode_paiement, reference, souscription_id, created_at',
+        filters: [{ column: 'souscription_id', type: 'in', value: souscriptionIds }],
+        order: { column: 'date_paiement', ascending: false }
+      });
+
       // Create a map for property names
       const propertyMap = new Map(
-        clientSouscriptions?.map(s => [s.id, s.proprietes?.nom]) || []
+        clientSouscriptions.map(s => [s.id, s.proprietes?.nom])
       );
-      
-      // Filter and enrich payments
-      const filteredPayments = data?.filter(payment => 
-        souscriptionIds.has(payment.souscription_id)
-      ).map(payment => ({
+
+      // Enrich payments with property names
+      return payments.map(payment => ({
         ...payment,
         propriete_nom: propertyMap.get(payment.souscription_id) || 'Propriété inconnue'
-      })) || [];
-      
-      return filteredPayments;
+      }));
     },
     enabled: !!client?.id,
   });
@@ -267,14 +263,11 @@ export function ClientDetailsDialog({ client, open, onOpenChange }: ClientDetail
     queryKey: ['client-receipts', client?.id],
     queryFn: async () => {
       if (!client?.id) return [];
-      const { data, error } = await supabase
-        .from('recus')
-        .select('*')
-        .eq('client_id', client.id)
-        .order('date_generation', { ascending: false });
-      
-      if (error) throw error;
-      return data || [];
+      return await apiClient.select({
+        table: 'recus',
+        filters: [{ column: 'client_id', type: 'eq', value: client.id }],
+        order: { column: 'date_generation', ascending: false }
+      });
     },
     enabled: !!client?.id,
   });

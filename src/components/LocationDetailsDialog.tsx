@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiClient } from "@/integrations/api/client";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -41,14 +42,11 @@ export function LocationDetailsDialog({ location, onClose, onUpdate }: LocationD
   const { data: paiements } = useQuery({
     queryKey: ["paiements_locations", location.id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("paiements_locations")
-        .select("*")
-        .eq("location_id", location.id)
-        .order("date_paiement", { ascending: false });
-
-      if (error) throw error;
-      return data;
+      return await apiClient.select({
+        table: 'paiements_locations',
+        filters: [{ column: 'location_id', type: 'eq', value: location.id }],
+        order: { column: 'date_paiement', ascending: false }
+      });
     },
   });
 
@@ -57,16 +55,15 @@ export function LocationDetailsDialog({ location, onClose, onUpdate }: LocationD
     queryKey: ["recus_locations", location.id],
     queryFn: async () => {
       if (!paiements || paiements.length === 0) return [];
-      
       const paymentIds = paiements.map(p => p.id);
-      const { data, error } = await supabase
-        .from("recus")
-        .select("numero, periode_debut, periode_fin, date_generation, reference_id")
-        .eq("type_operation", "location")
-        .in("reference_id", paymentIds);
-
-      if (error) throw error;
-      return data;
+      return await apiClient.select({
+        table: 'recus',
+        columns: 'numero, periode_debut, periode_fin, date_generation, reference_id',
+        filters: [
+          { column: 'type_operation', type: 'eq', value: 'location' },
+          { column: 'reference_id', type: 'in', value: paymentIds }
+        ]
+      });
     },
     enabled: !!paiements && paiements.length > 0,
   });
@@ -74,20 +71,17 @@ export function LocationDetailsDialog({ location, onClose, onUpdate }: LocationD
   const terminateLocationMutation = useMutation({
     mutationFn: async () => {
       // Update location status
-      const { error: locationError } = await supabase
-        .from("locations")
-        .update({ statut: "termine" })
-        .eq("id", location.id);
-
-      if (locationError) throw locationError;
-
+      await apiClient.update({
+        table: 'locations',
+        data: { statut: 'termine' },
+        filters: [{ column: 'id', type: 'eq', value: location.id }]
+      });
       // Update property status back to 'Libre'
-      const { error: propertyError } = await supabase
-        .from("proprietes")
-        .update({ statut: "Libre" })
-        .eq("id", location.propriete_id);
-
-      if (propertyError) throw propertyError;
+      await apiClient.update({
+        table: 'proprietes',
+        data: { statut: 'Libre' },
+        filters: [{ column: 'id', type: 'eq', value: location.propriete_id }]
+      });
     },
     onSuccess: () => {
       toast({

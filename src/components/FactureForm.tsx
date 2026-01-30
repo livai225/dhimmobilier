@@ -16,6 +16,13 @@ import {
 } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { Combobox } from "@/components/ui/combobox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const factureSchema = z.object({
   numero: z.string().min(1, "Le numéro de facture est requis"),
@@ -23,6 +30,7 @@ const factureSchema = z.object({
   propriete_id: z.string().optional(),
   date_facture: z.string().min(1, "La date est requise"),
   montant_total: z.number().min(0.01, "Le montant doit être supérieur à 0"),
+  priorite: z.string().optional(),
   description: z.string().optional(),
 });
 
@@ -46,6 +54,7 @@ export function FactureForm({ facture, onSuccess }: FactureFormProps) {
       propriete_id: facture?.propriete_id || "",
       date_facture: facture?.date_facture || new Date().toISOString().split('T')[0],
       montant_total: facture?.montant_total || 0,
+      priorite: facture?.priorite || "normale",
       description: facture?.description || "",
     },
   });
@@ -91,6 +100,7 @@ export function FactureForm({ facture, onSuccess }: FactureFormProps) {
         propriete_id: data.propriete_id === "none" ? null : data.propriete_id || null,
         date_facture: data.date_facture,
         montant_total: data.montant_total,
+        priorite: data.priorite || "normale",
         description: data.description || null,
         montant_paye: 0,
         solde: data.montant_total,
@@ -104,6 +114,7 @@ export function FactureForm({ facture, onSuccess }: FactureFormProps) {
           propriete_id: data.propriete_id === "none" ? null : data.propriete_id || null,
           date_facture: cleanData.date_facture,
           montant_total: cleanData.montant_total,
+          priorite: cleanData.priorite,
           description: cleanData.description,
         };
 
@@ -242,25 +253,51 @@ export function FactureForm({ facture, onSuccess }: FactureFormProps) {
             />
           </div>
 
-          <FormField
-            control={form.control}
-            name="montant_total"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Montant total (FCFA) *</FormLabel>
-                <FormControl>
-                  <Input 
-                    type="number" 
-                    min="0" 
-                    step="1"
-                    {...field}
-                    onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="montant_total"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Montant total (FCFA) *</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="1"
+                      {...field}
+                      onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="priorite"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Priorité</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value || "normale"}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sélectionnez la priorité" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="basse">Basse</SelectItem>
+                      <SelectItem value="normale">Normale</SelectItem>
+                      <SelectItem value="haute">Haute</SelectItem>
+                      <SelectItem value="urgente">Urgente</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
 
           <FormField
             control={form.control}

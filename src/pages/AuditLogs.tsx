@@ -12,6 +12,24 @@ import { AlertCircle, Eye, Plus, Edit, Trash2, LogIn, LogOut, Search, Download, 
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
+interface User {
+  id: string;
+  nom: string;
+  prenom: string;
+}
+
+interface AuditLog {
+  id: string;
+  user_id: string;
+  action_type: string;
+  table_name: string;
+  description?: string;
+  old_values?: any;
+  new_values?: any;
+  timestamp: string;
+  users?: { nom: string; prenom: string };
+}
+
 export default function AuditLogs() {
   const { currentUser } = useCurrentUser();
   const [searchTerm, setSearchTerm] = useState('');
@@ -24,63 +42,57 @@ export default function AuditLogs() {
   const isAdmin = currentUser?.role === 'admin';
 
   // IMPORTANT: Always call hooks, even if we'll conditionally render
-  const { data: users = [] } = useQuery({
+  const { data: users = [] } = useQuery<User[]>({
     queryKey: ['users-for-audit'],
     queryFn: async () => {
-      if (!isAdmin) return []; // Don't fetch if not admin
-      
-      const { data, error } = await supabase
-        .from('users')
-        .select('id, nom, prenom')
-        .eq('actif', true);
-      
-      if (error) throw error;
-      return data;
+      if (!isAdmin) return [];
+
+      const data = await apiClient.select({
+        table: 'users',
+        filters: [{ op: 'eq', column: 'actif', value: true }]
+      });
+      return data || [];
     },
-    enabled: isAdmin // Only run query if admin
+    enabled: isAdmin
   });
 
-  const { data: auditLogs = [], isLoading, refetch } = useQuery({
+  const { data: auditLogs = [], isLoading, refetch } = useQuery<AuditLog[]>({
     queryKey: ['audit-logs', selectedUser, selectedAction, selectedTable, dateRange, searchTerm],
     queryFn: async () => {
-      if (!isAdmin) return []; // Don't fetch if not admin
-      
-      let query = supabase
-        .from('audit_logs')
-        .select(`
-          *,
-          users:user_id (nom, prenom)
-        `)
-        .order('timestamp', { ascending: false })
-        .limit(1000);
+      if (!isAdmin) return [];
 
-      // Apply filters
+      const filters: Array<{ op: string; column: string; value: any }> = [];
+
       if (selectedUser !== 'all') {
-        query = query.eq('user_id', selectedUser);
+        filters.push({ op: 'eq', column: 'user_id', value: selectedUser });
       }
 
       if (selectedAction !== 'all') {
-        query = query.eq('action_type', selectedAction);
+        filters.push({ op: 'eq', column: 'action_type', value: selectedAction });
       }
 
       if (selectedTable !== 'all') {
-        query = query.eq('table_name', selectedTable);
+        filters.push({ op: 'eq', column: 'table_name', value: selectedTable });
       }
 
       if (dateRange !== 'all') {
         const days = parseInt(dateRange);
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - days);
-        query = query.gte('timestamp', startDate.toISOString());
+        filters.push({ op: 'gte', column: 'timestamp', value: startDate.toISOString() });
       }
 
-      const { data, error } = await query;
-      
-      if (error) throw error;
+      const data = await apiClient.select({
+        table: 'audit_logs',
+        filters: filters.length > 0 ? filters : undefined,
+        orderBy: { column: 'timestamp', ascending: false },
+        limit: 1000
+      });
+
       return data || [];
     },
-    enabled: isAdmin, // Only run query if admin
-    refetchInterval: isAdmin ? 30000 : false // Auto refresh only if admin
+    enabled: isAdmin,
+    refetchInterval: isAdmin ? 30000 : false
   });
 
   // NOW we can do conditional rendering after all hooks are called

@@ -5,7 +5,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
+import { apiClient } from "@/integrations/api/client";
 import { useToast } from "@/hooks/use-toast";
 import { AlertTriangle, CheckCircle, Loader2, Home, FileText, Calendar } from "lucide-react";
 
@@ -67,20 +67,16 @@ export const MissingReceiptsRecovery = () => {
     setIsAnalyzing(true);
     try {
       console.log("Analyse des paiements de locations manquants...");
-      
-      // Récupérer les locations créées récemment sans paiements
-      const { data: locationsData, error: locationsError } = await supabase
-        .from('locations')
-        .select(`
-          id,
-          loyer_mensuel,
-          created_at,
-          clients!inner(nom, prenom)
-        `)
-        .gte('created_at', new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()) // 6 heures
-        .order('created_at', { ascending: false });
 
-      if (locationsError) throw locationsError;
+      // Récupérer les locations créées récemment sans paiements
+      const locationsData = await apiClient.select({
+        table: 'locations',
+        columns: 'id, loyer_mensuel, created_at, clients!inner(nom, prenom)',
+        filters: [
+          { column: 'created_at', type: 'gte', value: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString() }
+        ],
+        order: { column: 'created_at', ascending: false }
+      });
 
       console.log(`${locationsData?.length || 0} locations trouvées`);
 
@@ -94,12 +90,11 @@ export const MissingReceiptsRecovery = () => {
 
       // Vérifier quelles locations n'ont pas de paiements
       const locationIds = locationsData.map(l => l.id);
-      const { data: existingPayments, error: paymentsError } = await supabase
-        .from('paiements_locations')
-        .select('location_id')
-        .in('location_id', locationIds);
-
-      if (paymentsError) throw paymentsError;
+      const existingPayments = await apiClient.select({
+        table: 'paiements_locations',
+        columns: 'location_id',
+        filters: [{ column: 'location_id', type: 'in', value: locationIds }]
+      });
 
       const paidLocationIds = new Set(existingPayments?.map(p => p.location_id) || []);
       
@@ -136,24 +131,18 @@ export const MissingReceiptsRecovery = () => {
     setIsAnalyzing(true);
     try {
       console.log("Analyse des droits de terre manquants...");
-      
-      // Récupérer les souscriptions en phase droit_terre avec dates valides
-      const { data: souscriptionsData, error: souscriptionsError } = await supabase
-        .from('souscriptions')
-        .select(`
-          id,
-          montant_droit_terre_mensuel,
-          date_debut_droit_terre,
-          created_at,
-          clients!inner(nom, prenom),
-          proprietes!inner(nom)
-        `)
-        .eq('phase_actuelle', 'droit_terre')
-        .not('date_debut_droit_terre', 'is', null)
-        .not('montant_droit_terre_mensuel', 'is', null)
-        .gt('montant_droit_terre_mensuel', 0);
 
-      if (souscriptionsError) throw souscriptionsError;
+      // Récupérer les souscriptions en phase droit_terre avec dates valides
+      const souscriptionsData = await apiClient.select({
+        table: 'souscriptions',
+        columns: 'id, montant_droit_terre_mensuel, date_debut_droit_terre, created_at, clients!inner(nom, prenom), proprietes!inner(nom)',
+        filters: [
+          { column: 'phase_actuelle', type: 'eq', value: 'droit_terre' },
+          { column: 'date_debut_droit_terre', type: 'not', value: null },
+          { column: 'montant_droit_terre_mensuel', type: 'not', value: null },
+          { column: 'montant_droit_terre_mensuel', type: 'gt', value: 0 }
+        ]
+      });
 
       console.log(`${souscriptionsData?.length || 0} souscriptions en droit de terre trouvées`);
 
@@ -181,12 +170,14 @@ export const MissingReceiptsRecovery = () => {
         if (moisEcoules === 0) continue; // Pas encore de paiement dû
 
         // Vérifier les paiements existants
-        const { data: paiements, error: paiementsError } = await supabase
-          .from('paiements_droit_terre')
-          .select('montant')
-          .eq('souscription_id', souscription.id);
-
-        if (paiementsError) {
+        let paiements: any[] = [];
+        try {
+          paiements = await apiClient.select({
+            table: 'paiements_droit_terre',
+            columns: 'montant',
+            filters: [{ column: 'souscription_id', type: 'eq', value: souscription.id }]
+          });
+        } catch (paiementsError) {
           console.error(`Erreur paiements pour ${souscription.id}:`, paiementsError);
           continue;
         }
@@ -244,31 +235,22 @@ export const MissingReceiptsRecovery = () => {
 
         try {
           console.log(`Génération paiement pour location ${payment.locationId} - ${payment.clientName}`);
-          
+
           // Utiliser la fonction RPC pour créer le paiement avec la caisse
-          const { data, error } = await supabase.rpc('pay_location_with_cash', {
-            p_location_id: payment.locationId,
-            p_montant: payment.montant,
-            p_date_paiement: new Date().toISOString().split('T')[0],
-            p_mode_paiement: 'Espèces',
-            p_reference: `RECUP-AOUT-${Date.now()}`,
-            p_description: 'Récupération paiement août - Import recouvrement'
+          await apiClient.payLocationWithCash({
+            locationId: payment.locationId,
+            montant: payment.montant,
+            datePaiement: new Date().toISOString().split('T')[0],
+            modePaiement: 'Espèces',
+            reference: `RECUP-AOUT-${Date.now()}`,
+            description: 'Récupération paiement août - Import recouvrement'
           });
 
-          if (error) {
-            console.error(`Erreur RPC pour ${payment.locationId}:`, error);
-            result.errors.push({
-              id: payment.locationId,
-              error: error.message,
-              clientName: payment.clientName
-            });
-          } else {
-            console.log(`Paiement créé avec succès pour ${payment.clientName}`);
-            result.success++;
-          }
+          console.log(`Paiement créé avec succès pour ${payment.clientName}`);
+          result.success++;
 
         } catch (error: any) {
-          console.error(`Erreur génération pour ${payment.locationId}:`, error);
+          console.error(`Erreur RPC pour ${payment.locationId}:`, error);
           result.errors.push({
             id: payment.locationId,
             error: error.message || 'Erreur inconnue',
@@ -320,27 +302,26 @@ export const MissingReceiptsRecovery = () => {
 
         try {
           console.log(`Génération ${droitTerre.moisManquants} paiements pour ${droitTerre.clientName}`);
-          
+
           // Générer un paiement pour chaque mois manquant
           for (let j = 0; j < droitTerre.moisManquants; j++) {
-            const { data, error } = await supabase.rpc('pay_droit_terre_with_cash', {
-              p_souscription_id: droitTerre.souscriptionId,
-              p_montant: droitTerre.montantMensuel,
-              p_date_paiement: new Date().toISOString().split('T')[0],
-              p_mode_paiement: 'Espèces',
-              p_reference: `RECUP-DT-${Date.now()}-${j}`,
-              p_description: `Récupération droit de terre mois ${j + 1} - Import recouvrement`
-            });
-
-            if (error) {
+            try {
+              await apiClient.payDroitTerreWithCash({
+                souscriptionId: droitTerre.souscriptionId,
+                montant: droitTerre.montantMensuel,
+                datePaiement: new Date().toISOString().split('T')[0],
+                modePaiement: 'Espèces',
+                reference: `RECUP-DT-${Date.now()}-${j}`,
+                description: `Récupération droit de terre mois ${j + 1} - Import recouvrement`
+              });
+              result.success++;
+            } catch (error: any) {
               console.error(`Erreur RPC pour ${droitTerre.souscriptionId} mois ${j + 1}:`, error);
               result.errors.push({
                 id: droitTerre.souscriptionId,
-                error: `Mois ${j + 1}: ${error.message}`,
+                error: `Mois ${j + 1}: ${error.message || 'Erreur inconnue'}`,
                 clientName: droitTerre.clientName
               });
-            } else {
-              result.success++;
             }
 
             // Pause entre les paiements
@@ -394,23 +375,18 @@ export const MissingReceiptsRecovery = () => {
     setIsAnalyzing(true);
     try {
       console.log(`Analyse des droits de terre manquants pour ${selectedMonth}...`);
-      
-      // Récupérer toutes les souscriptions en phase droit_terre
-      const { data: souscriptionsData, error: souscriptionsError } = await supabase
-        .from('souscriptions')
-        .select(`
-          id,
-          montant_droit_terre_mensuel,
-          date_debut_droit_terre,
-          clients!inner(nom, prenom),
-          proprietes!inner(nom)
-        `)
-        .eq('phase_actuelle', 'droit_terre')
-        .not('date_debut_droit_terre', 'is', null)
-        .not('montant_droit_terre_mensuel', 'is', null)
-        .gt('montant_droit_terre_mensuel', 0);
 
-      if (souscriptionsError) throw souscriptionsError;
+      // Récupérer toutes les souscriptions en phase droit_terre
+      const souscriptionsData = await apiClient.select({
+        table: 'souscriptions',
+        columns: 'id, montant_droit_terre_mensuel, date_debut_droit_terre, clients!inner(nom, prenom), proprietes!inner(nom)',
+        filters: [
+          { column: 'phase_actuelle', type: 'eq', value: 'droit_terre' },
+          { column: 'date_debut_droit_terre', type: 'not', value: null },
+          { column: 'montant_droit_terre_mensuel', type: 'not', value: null },
+          { column: 'montant_droit_terre_mensuel', type: 'gt', value: 0 }
+        ]
+      });
 
       if (!souscriptionsData?.length) {
         toast({
@@ -437,17 +413,21 @@ export const MissingReceiptsRecovery = () => {
         // Vérifier s'il existe déjà un paiement pour ce mois
         const startOfMonth = new Date(parseInt(year), parseInt(month) - 1, 1);
         const endOfMonth = new Date(parseInt(year), parseInt(month), 0); // Dernier jour du mois
-        
-        console.log(`Période recherchée: ${startOfMonth.toISOString()} à ${endOfMonth.toISOString()}`);
-        
-        const { data: paiements, error: paiementsError } = await supabase
-          .from('paiements_droit_terre')
-          .select('id')
-          .eq('souscription_id', souscription.id)
-          .gte('date_paiement', startOfMonth.toISOString().split('T')[0])
-          .lte('date_paiement', endOfMonth.toISOString().split('T')[0]);
 
-        if (paiementsError) {
+        console.log(`Période recherchée: ${startOfMonth.toISOString()} à ${endOfMonth.toISOString()}`);
+
+        let paiements: any[] = [];
+        try {
+          paiements = await apiClient.select({
+            table: 'paiements_droit_terre',
+            columns: 'id',
+            filters: [
+              { column: 'souscription_id', type: 'eq', value: souscription.id },
+              { column: 'date_paiement', type: 'gte', value: startOfMonth.toISOString().split('T')[0] },
+              { column: 'date_paiement', type: 'lte', value: endOfMonth.toISOString().split('T')[0] }
+            ]
+          });
+        } catch (paiementsError) {
           console.error(`Erreur paiements pour ${souscription.id}:`, paiementsError);
           continue;
         }
@@ -506,29 +486,20 @@ export const MissingReceiptsRecovery = () => {
 
         try {
           console.log(`Génération paiement pour ${droitTerre.clientName} - ${selectedMonth}`);
-          
-          const { data, error } = await supabase.rpc('pay_droit_terre_with_cash', {
-            p_souscription_id: droitTerre.souscriptionId,
-            p_montant: droitTerre.montantMensuel,
-            p_date_paiement: paymentDate.toISOString().split('T')[0],
-            p_mode_paiement: 'Espèces',
-            p_reference: `DT-${selectedMonth}-${Date.now()}`,
-            p_description: `Paiement droit de terre ${getMonthName(selectedMonth)}`
+
+          await apiClient.payDroitTerreWithCash({
+            souscriptionId: droitTerre.souscriptionId,
+            montant: droitTerre.montantMensuel,
+            datePaiement: paymentDate.toISOString().split('T')[0],
+            modePaiement: 'Espèces',
+            reference: `DT-${selectedMonth}-${Date.now()}`,
+            description: `Paiement droit de terre ${getMonthName(selectedMonth)}`
           });
 
-          if (error) {
-            console.error(`Erreur RPC pour ${droitTerre.souscriptionId}:`, error);
-            result.errors.push({
-              id: droitTerre.souscriptionId,
-              error: error.message,
-              clientName: droitTerre.clientName
-            });
-          } else {
-            result.success++;
-          }
+          result.success++;
 
         } catch (error: any) {
-          console.error(`Erreur génération pour ${droitTerre.souscriptionId}:`, error);
+          console.error(`Erreur RPC pour ${droitTerre.souscriptionId}:`, error);
           result.errors.push({
             id: droitTerre.souscriptionId,
             error: error.message || 'Erreur inconnue',

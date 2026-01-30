@@ -273,14 +273,17 @@ export function ImportHistoricalRentals() {
 
       // Step 1: Clear existing clients if requested
       if (clearExistingClients && !simulate) {
-        await supabase.from('clients').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        await apiClient.delete({
+          table: 'clients',
+          filters: [{ column: 'id', type: 'neq', value: '00000000-0000-0000-0000-000000000000' }]
+        });
         toast.info('Clients existants supprimés');
       }
 
       // Step 2: Fetch existing clients and properties
       setProgress(10);
-      const { data: existingClients } = await supabase.from('clients').select('*');
-      const { data: existingProperties } = await supabase.from('proprietes').select('*');
+      const existingClients = await apiClient.select({ table: 'clients' });
+      const existingProperties = await apiClient.select({ table: 'proprietes' });
 
       if (!existingClients || !existingProperties) {
         throw new Error('Erreur lors de la récupération des données existantes');
@@ -303,46 +306,54 @@ export function ImportHistoricalRentals() {
             const nom = nameParts.length > 1 ? nameParts.slice(1).join(' ') : nameParts[0];
 
             if (!simulate) {
-              const { data: newClient, error } = await supabase
-                .from('clients')
-                .insert({
+              await apiClient.insert({
+                table: 'clients',
+                data: {
                   nom,
                   prenom,
                   telephone_principal: null, // Allow null for historical clients
-                })
-                .select()
-                .single();
-
-              if (error) throw error;
-              client = newClient;
-              existingClients.push(newClient);
+                }
+              });
+              // Fetch the created client
+              const newClients = await apiClient.select({
+                table: 'clients',
+                filters: [{ column: 'nom', type: 'eq', value: nom }],
+                order: { column: 'created_at', ascending: false },
+                limit: 1
+              });
+              client = newClients[0];
+              existingClients.push(client);
             }
-            
+
             result.clientsCreated++;
             result.details.clients.push({ nom: row.clientL, action: 'created', id: client?.id });
           } else {
             // Try to match existing client
             client = findBestClientMatch(row.clientL, existingClients);
-            
+
             if (!client) {
               const nameParts = row.clientL.split(' ');
               const prenom = nameParts.length > 1 ? nameParts[0] : '';
               const nom = nameParts.length > 1 ? nameParts.slice(1).join(' ') : nameParts[0];
-              
+
               if (!simulate) {
-                const { data: newClient, error } = await supabase
-                  .from('clients')
-                  .insert({
+                await apiClient.insert({
+                  table: 'clients',
+                  data: {
                     nom,
                     prenom,
                     telephone_principal: null, // Allow null for historical clients
-                  })
-                  .select()
-                  .single();
-
-                if (error) throw error;
-                client = newClient;
-                existingClients.push(newClient);
+                  }
+                });
+                // Fetch the created client
+                const newClients = await apiClient.select({
+                  table: 'clients',
+                  filters: [{ column: 'nom', type: 'eq', value: nom }],
+                  order: { column: 'created_at', ascending: false },
+                  limit: 1
+                });
+                client = newClients[0];
+                existingClients.push(client);
               }
               
               result.clientsCreated++;
@@ -354,27 +365,31 @@ export function ImportHistoricalRentals() {
           }
 
           // Match or create property
-          let property = existingProperties.find(p => 
+          let property = existingProperties.find(p =>
             normalizeString(p.nom || '').includes(normalizeString(row.sites)) ||
             normalizeString(row.sites).includes(normalizeString(p.nom || ''))
           );
 
           if (!property) {
             if (!simulate) {
-              const { data: newProperty, error } = await supabase
-                .from('proprietes')
-                .insert({
+              await apiClient.insert({
+                table: 'proprietes',
+                data: {
                   nom: row.sites,
                   loyer_mensuel: row.prixLoyer,
                   statut: 'Occupé',
                   usage: 'Location'
-                })
-                .select()
-                .single();
-
-              if (error) throw error;
-              property = newProperty;
-              existingProperties.push(newProperty);
+                }
+              });
+              // Fetch the created property
+              const newProperties = await apiClient.select({
+                table: 'proprietes',
+                filters: [{ column: 'nom', type: 'eq', value: row.sites }],
+                order: { column: 'created_at', ascending: false },
+                limit: 1
+              });
+              property = newProperties[0];
+              existingProperties.push(property);
             }
             
             result.propertiesCreated++;
@@ -383,18 +398,21 @@ export function ImportHistoricalRentals() {
 
           // Create location if not exists
           if (!simulate && client && property) {
-            const { data: existingLocation } = await supabase
-              .from('locations')
-              .select('id')
-              .eq('client_id', client.id)
-              .eq('propriete_id', property.id)
-              .single();
+            const existingLocations = await apiClient.select({
+              table: 'locations',
+              columns: 'id',
+              filters: [
+                { column: 'client_id', type: 'eq', value: client.id },
+                { column: 'propriete_id', type: 'eq', value: property.id }
+              ],
+              limit: 1
+            });
 
-            if (!existingLocation) {
+            if (!existingLocations || existingLocations.length === 0) {
               // Historical clients don't have caution - they already paid it long ago
-              const { error: locationError } = await supabase
-                .from('locations')
-                .insert({
+              await apiClient.insert({
+                table: 'locations',
+                data: {
                   client_id: client.id,
                   propriete_id: property.id,
                   loyer_mensuel: row.prixLoyer,
@@ -402,9 +420,9 @@ export function ImportHistoricalRentals() {
                   type_contrat: 'historique', // Mark as historical contract
                   date_debut: new Date().toISOString().split('T')[0],
                   statut: row.resteAPayer > 0 ? 'en_retard' : 'active'
-                });
+                }
+              });
 
-              if (locationError) throw locationError;
               result.locationsCreated++;
               result.details.locations.push({
                 client: row.clientL,
@@ -417,32 +435,39 @@ export function ImportHistoricalRentals() {
           // Import payment if amount > 0
           if (row.montantVerse > 0) {
             if (!simulate && client && property) {
-              // Create payment record
-              const { error: paymentError } = await supabase
-                .from('paiements_locations')
-                .insert({
-                  location_id: (await supabase
-                    .from('locations')
-                    .select('id')
-                    .eq('client_id', client.id)
-                    .eq('propriete_id', property.id)
-                    .single()).data?.id,
-                  montant: row.montantVerse,
-                  date_paiement: new Date().toISOString().split('T')[0],
-                  mode_paiement: 'cash',
-                  reference: 'Import historique'
+              // Get location ID
+              const locations = await apiClient.select({
+                table: 'locations',
+                columns: 'id',
+                filters: [
+                  { column: 'client_id', type: 'eq', value: client.id },
+                  { column: 'propriete_id', type: 'eq', value: property.id }
+                ],
+                limit: 1
+              });
+
+              if (locations && locations.length > 0) {
+                // Create payment record
+                await apiClient.insert({
+                  table: 'paiements_locations',
+                  data: {
+                    location_id: locations[0].id,
+                    montant: row.montantVerse,
+                    date_paiement: new Date().toISOString().split('T')[0],
+                    mode_paiement: 'cash',
+                    reference: 'Import historique'
+                  }
                 });
 
-              if (paymentError) throw paymentError;
-
-              // Record cash transaction
-              await supabase.rpc('record_cash_transaction', {
-                p_type_transaction: 'sortie',
-                p_montant: row.montantVerse,
-                p_type_operation: 'paiement_loyer',
-                p_beneficiaire: row.clientL,
-                p_description: `Paiement historique - ${row.sites}`
-              });
+                // Record cash transaction
+                await apiClient.rpc('record_cash_transaction', {
+                  p_type_transaction: 'sortie',
+                  p_montant: row.montantVerse,
+                  p_type_operation: 'paiement_loyer',
+                  p_beneficiaire: row.clientL,
+                  p_description: `Paiement historique - ${row.sites}`
+                });
+              }
             }
 
             result.paymentsImported++;

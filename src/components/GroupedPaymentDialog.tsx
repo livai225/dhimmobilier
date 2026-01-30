@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiClient } from "@/integrations/api/client";
 
 import {
   Dialog,
@@ -259,49 +260,46 @@ export function GroupedPaymentDialog({
             
             if (contract.type === 'location') {
               // Vérifier s'il existe déjà un paiement pour ce mois
-              const { data: existingPayment } = await supabase
-                .from('paiements_locations')
-                .select('id')
-                .eq('location_id', contract.id)
-                .eq('periode_paiement', `${periodePaiement}-01`)
-                .maybeSingle();
+              const existingPayments = await apiClient.select({
+                table: 'paiements_locations',
+                filters: [
+                  { op: 'eq', column: 'location_id', value: contract.id },
+                  { op: 'eq', column: 'periode_paiement', value: `${periodePaiement}-01` }
+                ]
+              });
 
-              if (existingPayment) {
+              if (existingPayments && existingPayments.length > 0) {
                 results.errors.push(`${client.client_prenom} ${client.client_nom} (Location ${contract.propriete_nom}): Paiement déjà effectué pour ${format(new Date(`${periodePaiement}-01`), 'MMMM yyyy', { locale: fr })}`);
                 continue;
               }
 
-              await supabase.rpc("pay_location_with_cash", {
-                p_location_id: contract.id,
-                p_montant: contract.montant,
-                p_date_paiement: datePaiement,
-                p_mode_paiement: modePaiement,
-                p_reference: reference || null,
-                p_description: description,
-                p_periode_paiement: `${periodePaiement}-01`
+              await apiClient.payLocationWithCash({
+                location_id: contract.id,
+                montant: contract.montant,
+                mode_paiement: modePaiement,
+                reference: reference || undefined,
+                mois_concerne: `${periodePaiement}-01`
               });
             } else if (contract.type === 'souscription') {
               // Vérifier s'il existe déjà un paiement pour ce mois
-              const { data: existingPayment } = await supabase
-                .from('paiements_droit_terre')
-                .select('id')
-                .eq('souscription_id', contract.id)
-                .eq('periode_paiement', `${periodePaiement}-01`)
-                .maybeSingle();
+              const existingPayments = await apiClient.select({
+                table: 'paiements_droit_terre',
+                filters: [
+                  { op: 'eq', column: 'souscription_id', value: contract.id },
+                  { op: 'eq', column: 'periode_paiement', value: `${periodePaiement}-01` }
+                ]
+              });
 
-              if (existingPayment) {
+              if (existingPayments && existingPayments.length > 0) {
                 results.errors.push(`${client.client_prenom} ${client.client_nom} (Droit de terre ${contract.propriete_nom}): Paiement déjà effectué pour ${format(new Date(`${periodePaiement}-01`), 'MMMM yyyy', { locale: fr })}`);
                 continue;
               }
 
-              await supabase.rpc("pay_droit_terre_with_cash", {
-                p_souscription_id: contract.id,
-                p_montant: contract.montant,
-                p_date_paiement: datePaiement,
-                p_mode_paiement: modePaiement,
-                p_reference: reference || null,
-                p_description: description,
-                p_periode_paiement: `${periodePaiement}-01`
+              await apiClient.payDroitTerreWithCash({
+                souscription_id: contract.id,
+                montant: contract.montant,
+                mode_paiement: modePaiement,
+                reference: reference || undefined
               });
             }
           }

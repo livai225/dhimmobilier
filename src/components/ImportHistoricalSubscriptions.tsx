@@ -245,8 +245,8 @@ export function ImportHistoricalSubscriptions({ inline = false }: { inline?: boo
       };
 
       // Get existing data
-      const { data: existingClients } = await supabase.from('clients').select('*');
-      const { data: existingProperties } = await supabase.from('proprietes').select('*');
+      const existingClients = await apiClient.select({ table: 'clients' });
+      const existingProperties = await apiClient.select({ table: 'proprietes' });
 
       if (!existingClients || !existingProperties) {
         throw new Error('Erreur lors de la récupération des données existantes');
@@ -265,38 +265,46 @@ export function ImportHistoricalSubscriptions({ inline = false }: { inline?: boo
           );
 
           if (!client && !simulate) {
-            const { data: newClient, error: clientError } = await supabase
-              .from('clients')
-              .insert({ nom: row.clientName })
-              .select()
-              .single();
-
-            if (clientError) throw clientError;
-            client = newClient;
+            await apiClient.insert({
+              table: 'clients',
+              data: { nom: row.clientName }
+            });
+            // Fetch the created client
+            const newClients = await apiClient.select({
+              table: 'clients',
+              filters: [{ column: 'nom', type: 'eq', value: row.clientName }],
+              order: { column: 'created_at', ascending: false },
+              limit: 1
+            });
+            client = newClients[0];
             result.clientsCreated++;
           } else if (client) {
             result.clientsMatched++;
           }
 
           // Find or create property
-          let property = existingProperties.find(p => 
+          let property = existingProperties.find(p =>
             normalizeString(p.nom) === normalizeString(row.site)
           );
 
           if (!property && !simulate) {
-            const { data: newProperty, error: propertyError } = await supabase
-              .from('proprietes')
-              .insert({
+            await apiClient.insert({
+              table: 'proprietes',
+              data: {
                 nom: row.site,
                 type: 'terrain',
                 statut: 'disponible',
                 prix: row.prixAcquisition
-              })
-              .select()
-              .single();
-
-            if (propertyError) throw propertyError;
-            property = newProperty;
+              }
+            });
+            // Fetch the created property
+            const newProperties = await apiClient.select({
+              table: 'proprietes',
+              filters: [{ column: 'nom', type: 'eq', value: row.site }],
+              order: { column: 'created_at', ascending: false },
+              limit: 1
+            });
+            property = newProperties[0];
             result.propertiesCreated++;
           } else if (property) {
             result.propertiesMatched++;
@@ -304,9 +312,9 @@ export function ImportHistoricalSubscriptions({ inline = false }: { inline?: boo
 
           // Create subscription and payments
           if (!simulate && client && property) {
-            const { data: newSouscription, error: souscriptionError } = await supabase
-              .from('souscriptions')
-              .insert({
+            await apiClient.insert({
+              table: 'souscriptions',
+              data: {
                 client_id: client.id,
                 propriete_id: property.id,
                 prix_total: row.prixAcquisition,
@@ -317,34 +325,42 @@ export function ImportHistoricalSubscriptions({ inline = false }: { inline?: boo
                 solde_restant: row.resteAPayer,
                 type_souscription: 'historique',
                 statut: 'active'
-              })
-              .select()
-              .single();
-
-            if (souscriptionError) throw souscriptionError;
+              }
+            });
+            // Fetch the created souscription
+            const newSouscriptions = await apiClient.select({
+              table: 'souscriptions',
+              filters: [
+                { column: 'client_id', type: 'eq', value: client.id },
+                { column: 'propriete_id', type: 'eq', value: property.id }
+              ],
+              order: { column: 'created_at', ascending: false },
+              limit: 1
+            });
+            const newSouscription = newSouscriptions[0];
 
             // Create payments using RPC
             if (row.soldeAnterieur > 0) {
-              await supabase.rpc('pay_souscription_with_cash', {
-                p_souscription_id: newSouscription.id,
-                p_montant: row.soldeAnterieur,
-                p_date_paiement: new Date().toISOString().split('T')[0],
-                p_mode_paiement: 'espece',
-                p_reference: `Solde antérieur - Import ligne ${row.rowIndex}`,
-                p_description: 'Import historique souscriptions'
+              await apiClient.paySouscriptionWithCash({
+                souscriptionId: newSouscription.id,
+                montant: row.soldeAnterieur,
+                datePaiement: new Date().toISOString().split('T')[0],
+                modePaiement: 'espece',
+                reference: `Solde antérieur - Import ligne ${row.rowIndex}`,
+                description: 'Import historique souscriptions'
               });
               result.paymentsImported++;
               result.receiptsGenerated++;
             }
 
             if (row.montantVerse > 0) {
-              await supabase.rpc('pay_souscription_with_cash', {
-                p_souscription_id: newSouscription.id,
-                p_montant: row.montantVerse,
-                p_date_paiement: new Date().toISOString().split('T')[0],
-                p_mode_paiement: 'espece',
-                p_reference: `Montant versé - Import ligne ${row.rowIndex}`,
-                p_description: 'Import historique souscriptions'
+              await apiClient.paySouscriptionWithCash({
+                souscriptionId: newSouscription.id,
+                montant: row.montantVerse,
+                datePaiement: new Date().toISOString().split('T')[0],
+                modePaiement: 'espece',
+                reference: `Montant versé - Import ligne ${row.rowIndex}`,
+                description: 'Import historique souscriptions'
               });
               result.paymentsImported++;
               result.receiptsGenerated++;
