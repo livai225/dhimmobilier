@@ -1,7 +1,7 @@
 import { ButtonHTMLAttributes, useState } from "react";
 import { Download } from "lucide-react";
 import * as XLSX from "xlsx";
-import { supabase } from "@/integrations/api/client";
+
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 

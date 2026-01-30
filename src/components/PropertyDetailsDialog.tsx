@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Eye, User, CreditCard, Receipt, Home, Calendar } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/api/client";
+
 import {
   Dialog,
   DialogContent,

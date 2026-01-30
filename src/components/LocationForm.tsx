@@ -104,14 +104,14 @@ export function LocationForm({ onClose, onSuccess }: LocationFormProps) {
       // Create the location
       const locationId = await apiClient.insert({
         table: 'locations',
-        data: locationData
+        values: locationData
       });
       const location = { id: locationId, ...locationData };
 
       // Update property status to 'Occupé'
       await apiClient.update({
         table: 'proprietes',
-        data: { statut: 'Occupé' },
+        values: { statut: 'Occupé' },
         filters: [{ op: 'eq', column: 'id', value: locationData.propriete_id }]
       });
 
@@ -183,10 +183,6 @@ export function LocationForm({ onClose, onSuccess }: LocationFormProps) {
       date_debut: dateDebut.toISOString().split('T')[0],
       date_fin: dateFin ? dateFin.toISOString().split('T')[0] : null,
       caution: cautionBreakdown.cautionTotale,
-      garantie_2_mois: cautionBreakdown.garantie2Mois,
-      loyer_avance_2_mois: cautionBreakdown.loyerAvance2Mois,
-      frais_agence_1_mois: cautionBreakdown.fraisAgence1Mois,
-      caution_totale: cautionBreakdown.cautionTotale,
       statut: 'active',
     };
 

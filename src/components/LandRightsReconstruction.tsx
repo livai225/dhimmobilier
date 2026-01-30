@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { supabase } from "@/integrations/api/client";
+
 import { useToast } from "@/hooks/use-toast";
 import { AlertTriangle, CheckCircle, Settings, FileText } from "lucide-react";
 

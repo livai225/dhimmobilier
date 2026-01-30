@@ -184,7 +184,7 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
       if (!souscription && data.propriete_id) {
         await apiClient.update({
           table: 'proprietes',
-          data: { statut: 'Occupé' },
+          values: { statut: 'Occupé' },
           filters: [{ op: 'eq', column: 'id', value: data.propriete_id }]
         });
       }
@@ -195,14 +195,14 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
       if (souscription) {
         await apiClient.update({
           table: 'souscriptions',
-          data: processedData,
+          values: processedData,
           filters: [{ op: 'eq', column: 'id', value: souscription.id }]
         });
         resultData = { id: souscription.id };
       } else {
         const insertedId = await apiClient.insert({
           table: 'souscriptions',
-          data: processedData
+          values: processedData
         });
         resultData = { id: insertedId };
 
