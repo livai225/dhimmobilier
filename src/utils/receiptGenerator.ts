@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient } from "@/integrations/api/client";
 
 export interface ReceiptData {
   clientId: string;
@@ -34,25 +34,24 @@ export class ReceiptGenerator {
   static async createReceipt(data: ReceiptData) {
     try {
       const receiptNumber = this.generateReceiptNumber(data.typeOperation);
-      
-      const { data: receipt, error } = await supabase
-        .from("recus")
-        .insert({
-          numero: receiptNumber,
-          client_id: data.clientId,
-          reference_id: data.referenceId,
-          type_operation: data.typeOperation,
-          montant_total: data.montantTotal,
-          periode_debut: data.periodeDebut || null,
-          periode_fin: data.periodeFin || null,
-          date_generation: data.datePaiement || new Date().toISOString().split('T')[0],
-        })
-        .select()
-        .single();
 
-      if (error) throw error;
-      
-      return receipt;
+      const receiptData = {
+        numero: receiptNumber,
+        client_id: data.clientId,
+        reference_id: data.referenceId,
+        type_operation: data.typeOperation,
+        montant_total: data.montantTotal,
+        periode_debut: data.periodeDebut || null,
+        periode_fin: data.periodeFin || null,
+        date_generation: data.datePaiement || new Date().toISOString().split('T')[0],
+      };
+
+      await apiClient.insert({
+        table: "recus",
+        values: receiptData
+      });
+
+      return receiptData;
     } catch (error) {
       console.error("Error creating receipt:", error);
       throw error;

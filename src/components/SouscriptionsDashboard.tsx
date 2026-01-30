@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-
+import { apiClient } from "@/integrations/api/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { 
@@ -32,16 +32,11 @@ export function SouscriptionsDashboard() {
     queryKey: ["souscriptions-dashboard"],
     queryFn: async () => {
       // Get all subscriptions with related data
-      const { data: souscriptions, error } = await supabase
-        .from("souscriptions")
-        .select(`
-          *,
-          clients(nom, prenom),
-          proprietes(nom),
-          paiements_souscriptions(montant, date_paiement)
-        `);
+      const souscriptions = await apiClient.select<any[]>({
+        table: "souscriptions"
+      });
 
-      if (error) throw error;
+      if (!souscriptions) throw new Error("Failed to fetch souscriptions");
 
       // Calculate statistics
       const totalSouscriptions = souscriptions.length;
@@ -59,10 +54,10 @@ export function SouscriptionsDashboard() {
       const sixMonthsAgo = new Date();
       sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
-      const { data: recentPayments } = await supabase
-        .from("paiements_droit_terre")
-        .select("montant, date_paiement")
-        .gte("date_paiement", sixMonthsAgo.toISOString().split('T')[0]);
+      const recentPayments = await apiClient.select<any[]>({
+        table: "paiements_droit_terre",
+        filters: [{ op: "gte", column: "date_paiement", value: sixMonthsAgo.toISOString().split('T')[0] }]
+      });
 
       // Group payments by month
       const paymentsByMonth = (recentPayments || []).reduce((acc, payment) => {

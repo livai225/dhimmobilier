@@ -185,10 +185,10 @@ export function AgentPaymentFixDemo() {
   queryKey: ['agent-payments', agentId, selectedMonth],
   queryFn: async () => {
     // Get agent's properties
-    const { data: properties } = await supabase
-      .from('proprietes')
-      .select('id')
-      .eq('agent_id', agentId);
+    const properties = await apiClient.select({
+      table: 'proprietes',
+      filters: [{ op: 'eq', column: 'agent_id', value: agentId }]
+    });
 
     // Get locations and souscriptions
     const locationIds = await getLocationIds(properties);
@@ -200,7 +200,7 @@ export function AgentPaymentFixDemo() {
 
     // Calculate total
     const totalVerse = paiementsLoc + paiementsDT;
-    
+
     return { totalVerse, details: [...] };
   }
 });`}

@@ -5,7 +5,7 @@ import { Download, Eye, Printer } from "lucide-react";
 import { ReceiptWithDetails } from "@/hooks/useReceipts";
 import { downloadReceiptPDF, printReceiptPDF } from "@/utils/pdfGenerator";
 import { useQuery } from "@tanstack/react-query";
-
+import { apiClient } from "@/integrations/api/client";
 import { useCompanyLogo } from "@/hooks/useCompanyLogo";
 
 interface ReceiptDetailsDialogProps {
@@ -26,27 +26,22 @@ export function ReceiptDetailsDialog({
     queryKey: ["agent-for-receipt", receipt?.reference_id],
     queryFn: async () => {
       if (!receipt || receipt.type_operation !== "versement_agent") return null;
-      
-      const { data: transaction, error } = await supabase
-        .from("cash_transactions")
-        .select(`
-          agent_id,
-          description,
-          piece_justificative,
-          date_transaction,
-          heure_transaction,
-          agents_recouvrement (
-            nom,
-            prenom,
-            code_agent,
-            telephone,
-            email
-          )
-        `)
-        .eq("id", receipt.reference_id)
-        .single();
-      
-      if (error) throw error;
+
+      const transaction = await apiClient.select<any>({
+        table: "cash_transactions",
+        filters: [{ op: "eq", column: "id", value: receipt.reference_id }],
+        single: true
+      });
+
+      if (transaction?.agent_id) {
+        const agent = await apiClient.select<any>({
+          table: "agents_recouvrement",
+          filters: [{ op: "eq", column: "id", value: transaction.agent_id }],
+          single: true
+        });
+        return { ...transaction, agents_recouvrement: agent };
+      }
+
       return transaction;
     },
     enabled: !!receipt && receipt.type_operation === "versement_agent"

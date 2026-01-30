@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-
+import { apiClient } from "@/integrations/api/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,13 +17,12 @@ export function FactureDetailsDialog({ facture, open, onOpenChange }: FactureDet
     queryKey: ["paiements_facture_details", facture?.id],
     queryFn: async () => {
       if (!facture?.id) return [];
-      const { data, error } = await supabase
-        .from("paiements_factures")
-        .select("*")
-        .eq("facture_id", facture.id)
-        .order("date_paiement", { ascending: false });
-      if (error) throw error;
-      return data;
+      const data = await apiClient.select<any[]>({
+        table: "paiements_factures",
+        filters: [{ op: "eq", column: "facture_id", value: facture.id }],
+        orderBy: { column: "date_paiement", ascending: false }
+      });
+      return data || [];
     },
     enabled: !!facture?.id && open,
   });

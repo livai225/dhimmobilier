@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
-
+import { apiClient } from "@/integrations/api/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
 import { useAuditLog } from "@/hooks/useAuditLog";
 import { Button } from "@/components/ui/button";
@@ -28,29 +28,27 @@ export function ArticleForm({ onArticleCreated }: ArticleFormProps) {
   const { data: articles, isLoading } = useQuery({
     queryKey: ["articles"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("articles")
-        .select("*")
-        .order("nom");
-      if (error) throw error;
+      const data = await apiClient.select<any[]>({
+        table: "articles",
+        orderBy: { column: "nom", ascending: true }
+      });
       return data;
     },
   });
 
   const createArticle = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase
-        .from("articles")
-        .insert({
-          nom: form.nom,
-          prix_reference: 0,
-          description: null,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
+      const articleData = {
+        nom: form.nom,
+        prix_reference: 0,
+        description: null,
+      };
+      await apiClient.insert({
+        table: "articles",
+        values: articleData
+      });
+      // Return the data for logging purposes
+      return { ...articleData, id: 'new' };
     },
     onSuccess: (data) => {
       logCreate('articles', data.id, data, `Création de l'article ${data.nom}`);
@@ -76,18 +74,17 @@ export function ArticleForm({ onArticleCreated }: ArticleFormProps) {
   const deleteArticle = useMutation({
     mutationFn: async (articleId: string) => {
       // Get article data before deletion
-      const { data: article } = await supabase
-        .from("articles")
-        .select("*")
-        .eq("id", articleId)
-        .single();
-      
-      const { error } = await supabase
-        .from("articles")
-        .delete()
-        .eq("id", articleId);
-      if (error) throw error;
-      
+      const article = await apiClient.select<any>({
+        table: "articles",
+        filters: [{ op: "eq", column: "id", value: articleId }],
+        single: true
+      });
+
+      await apiClient.delete({
+        table: "articles",
+        filters: [{ op: "eq", column: "id", value: articleId }]
+      });
+
       return { article };
     },
     onSuccess: (result) => {

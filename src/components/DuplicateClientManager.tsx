@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-
+import { apiClient } from "@/integrations/api/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -58,19 +58,19 @@ export function DuplicateClientManager() {
   // Fonction pour analyser les doublons
   const analyzeDuplicates = async (): Promise<DuplicateGroup[]> => {
     setIsAnalyzing(true);
-    
+
     try {
       // 1. Récupérer tous les clients
-      const { data: clients, error: clientsError } = await supabase
-        .from('clients')
-        .select('id, nom, prenom, created_at');
+      const clients = await apiClient.select<any[]>({
+        table: 'clients'
+      });
 
-      if (clientsError) throw clientsError;
+      if (!clients) return [];
 
       // 2. Grouper par nom normalisé
       const groups = new Map<string, typeof clients>();
-      
-      clients?.forEach(client => {
+
+      clients.forEach(client => {
         const fullName = `${normalizeName(client.nom || '')} ${normalizeName(client.prenom || '')}`.trim();
         if (fullName && fullName !== ' ') {
           if (!groups.has(fullName)) {
@@ -82,11 +82,11 @@ export function DuplicateClientManager() {
 
       // 3. Filtrer seulement les groupes avec doublons (2+ clients)
       const duplicateGroups: DuplicateGroup[] = [];
-      
+
       for (const [key, groupClients] of groups.entries()) {
         if (groupClients.length > 1) {
           // Trier par date de création (plus ancien en premier)
-          const sortedClients = groupClients.sort((a, b) => 
+          const sortedClients = groupClients.sort((a, b) =>
             new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
           );
 
@@ -94,18 +94,31 @@ export function DuplicateClientManager() {
           const clientsWithRelations = await Promise.all(
             sortedClients.map(async (client) => {
               const [locations, souscriptions, receipts] = await Promise.all([
-                supabase.from('locations').select('id', { count: 'exact' }).eq('client_id', client.id),
-                supabase.from('souscriptions').select('id', { count: 'exact' }).eq('client_id', client.id),
-                supabase.from('recus').select('id', { count: 'exact' }).eq('client_id', client.id)
+                apiClient.select<any[]>({
+                  table: 'locations',
+                  filters: [{ op: 'eq', column: 'client_id', value: client.id }]
+                }),
+                apiClient.select<any[]>({
+                  table: 'souscriptions',
+                  filters: [{ op: 'eq', column: 'client_id', value: client.id }]
+                }),
+                apiClient.select<any[]>({
+                  table: 'recus',
+                  filters: [{ op: 'eq', column: 'client_id', value: client.id }]
+                })
               ]);
+
+              const locationsCount = locations?.length || 0;
+              const souscriptionsCount = souscriptions?.length || 0;
+              const receiptsCount = receipts?.length || 0;
 
               return {
                 ...client,
-                hasRelations: (locations.count || 0) > 0 || (souscriptions.count || 0) > 0 || (receipts.count || 0) > 0,
+                hasRelations: locationsCount > 0 || souscriptionsCount > 0 || receiptsCount > 0,
                 relatedData: {
-                  locations: locations.count || 0,
-                  souscriptions: souscriptions.count || 0,
-                  receipts: receipts.count || 0
+                  locations: locationsCount,
+                  souscriptions: souscriptionsCount,
+                  receipts: receiptsCount
                 }
               };
             })
@@ -114,7 +127,7 @@ export function DuplicateClientManager() {
           // Le premier client (plus ancien) est conservé, les autres supprimés
           // SAUF si un client plus récent a des relations et pas l'ancien
           let keepClient = clientsWithRelations[0];
-          
+
           // Si le plus ancien n'a pas de relations mais qu'un plus récent en a, garder celui avec relations
           const clientWithRelations = clientsWithRelations.find(c => c.hasRelations);
           if (!keepClient.hasRelations && clientWithRelations) {
@@ -164,13 +177,13 @@ export function DuplicateClientManager() {
         }
       }
 
-      // Supprimer les clients
-      const { error } = await supabase
-        .from('clients')
-        .delete()
-        .in('id', clientIdsToDelete);
-
-      if (error) throw error;
+      // Supprimer les clients un par un (l'API ne supporte pas .in() pour delete)
+      for (const clientId of clientIdsToDelete) {
+        await apiClient.delete({
+          table: 'clients',
+          filters: [{ op: 'eq', column: 'id', value: clientId }]
+        });
+      }
 
       return { deleted: clientIdsToDelete.length, groups: selectedDuplicates.length };
     },

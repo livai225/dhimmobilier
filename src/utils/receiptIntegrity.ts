@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient } from "@/integrations/api/client";
 import { ReceiptGenerator } from "./receiptGenerator";
 
 export interface MissingReceipt {
@@ -21,31 +21,36 @@ export class ReceiptIntegrityChecker {
 
     try {
       // 1. Vérifier les paiements de location
-      const { data: locationPayments } = await supabase
-        .from("paiements_locations")
-        .select(`
-          *,
-          location:locations(id, client_id)
-        `);
+      const locationPayments = await apiClient.select<any[]>({
+        table: "paiements_locations"
+      });
 
       if (locationPayments) {
         for (const payment of locationPayments) {
-          const { data: existingReceipt } = await supabase
-            .from("recus")
-            .select("id")
-            .eq("reference_id", payment.location_id)
-            .eq("type_operation", "location")
-            .eq("montant_total", payment.montant)
-            .eq("date_generation", payment.date_paiement)
-            .maybeSingle();
+          // Récupérer la location séparément
+          const location = await apiClient.select<any>({
+            table: "locations",
+            filters: [{ op: "eq", column: "id", value: payment.location_id }],
+            single: true
+          });
 
-          if (!existingReceipt && payment.location) {
+          const existingReceipts = await apiClient.select<any[]>({
+            table: "recus",
+            filters: [
+              { op: "eq", column: "reference_id", value: payment.location_id },
+              { op: "eq", column: "type_operation", value: "location" },
+              { op: "eq", column: "montant_total", value: payment.montant },
+              { op: "eq", column: "date_generation", value: payment.date_paiement }
+            ]
+          });
+
+          if ((!existingReceipts || existingReceipts.length === 0) && location) {
             missingReceipts.push({
               id: payment.id,
               type: 'location',
               amount: payment.montant,
               date: payment.date_paiement,
-              clientId: payment.location.client_id,
+              clientId: location.client_id,
               referenceId: payment.location_id,
               details: payment
             });
@@ -54,31 +59,36 @@ export class ReceiptIntegrityChecker {
       }
 
       // 2. Vérifier les paiements de souscription
-      const { data: subscriptionPayments } = await supabase
-        .from("paiements_souscriptions")
-        .select(`
-          *,
-          souscription:souscriptions(id, client_id)
-        `);
+      const subscriptionPayments = await apiClient.select<any[]>({
+        table: "paiements_souscriptions"
+      });
 
       if (subscriptionPayments) {
         for (const payment of subscriptionPayments) {
-          const { data: existingReceipt } = await supabase
-            .from("recus")
-            .select("id")
-            .eq("reference_id", payment.souscription_id)
-            .eq("type_operation", "apport_souscription")
-            .eq("montant_total", payment.montant)
-            .eq("date_generation", payment.date_paiement)
-            .maybeSingle();
+          // Récupérer la souscription séparément
+          const souscription = await apiClient.select<any>({
+            table: "souscriptions",
+            filters: [{ op: "eq", column: "id", value: payment.souscription_id }],
+            single: true
+          });
 
-          if (!existingReceipt && payment.souscription) {
+          const existingReceipts = await apiClient.select<any[]>({
+            table: "recus",
+            filters: [
+              { op: "eq", column: "reference_id", value: payment.souscription_id },
+              { op: "eq", column: "type_operation", value: "apport_souscription" },
+              { op: "eq", column: "montant_total", value: payment.montant },
+              { op: "eq", column: "date_generation", value: payment.date_paiement }
+            ]
+          });
+
+          if ((!existingReceipts || existingReceipts.length === 0) && souscription) {
             missingReceipts.push({
               id: payment.id,
               type: 'souscription',
               amount: payment.montant,
               date: payment.date_paiement,
-              clientId: payment.souscription.client_id,
+              clientId: souscription.client_id,
               referenceId: payment.souscription_id,
               details: payment
             });
@@ -87,28 +97,23 @@ export class ReceiptIntegrityChecker {
       }
 
       // 3. Vérifier les paiements de factures
-      const { data: invoicePayments } = await supabase
-        .from("paiements_factures")
-        .select(`
-          *,
-          facture:factures_fournisseurs(
-            id,
-            fournisseur:fournisseurs(nom)
-          )
-        `);
+      const invoicePayments = await apiClient.select<any[]>({
+        table: "paiements_factures"
+      });
 
       if (invoicePayments) {
         for (const payment of invoicePayments) {
-          const { data: existingReceipt } = await supabase
-            .from("recus")
-            .select("id")
-            .eq("reference_id", payment.id)
-            .eq("type_operation", "paiement_facture")
-            .eq("montant_total", payment.montant)
-            .eq("date_generation", payment.date_paiement)
-            .maybeSingle();
+          const existingReceipts = await apiClient.select<any[]>({
+            table: "recus",
+            filters: [
+              { op: "eq", column: "reference_id", value: payment.id },
+              { op: "eq", column: "type_operation", value: "paiement_facture" },
+              { op: "eq", column: "montant_total", value: payment.montant },
+              { op: "eq", column: "date_generation", value: payment.date_paiement }
+            ]
+          });
 
-          if (!existingReceipt) {
+          if (!existingReceipts || existingReceipts.length === 0) {
             missingReceipts.push({
               id: payment.id,
               type: 'facture',
@@ -123,31 +128,32 @@ export class ReceiptIntegrityChecker {
       }
 
       // 4. Vérifier les paiements de droit de terre
-      const { data: landRightsPayments } = await supabase
-        .from("echeances_droit_terre")
-        .select("*")
-        .eq("statut", "paye");
+      const landRightsPayments = await apiClient.select<any[]>({
+        table: "echeances_droit_terre",
+        filters: [{ op: "eq", column: "statut", value: "paye" }]
+      });
 
       if (landRightsPayments) {
         for (const payment of landRightsPayments) {
           if (payment.date_paiement && payment.montant_paye) {
             // Récupérer les informations de souscription séparément
-            const { data: souscription } = await supabase
-              .from("souscriptions")
-              .select("id, client_id")
-              .eq("id", payment.souscription_id)
-              .single();
+            const souscription = await apiClient.select<any>({
+              table: "souscriptions",
+              filters: [{ op: "eq", column: "id", value: payment.souscription_id }],
+              single: true
+            });
 
-            const { data: existingReceipt } = await supabase
-              .from("recus")
-              .select("id")
-              .eq("reference_id", payment.souscription_id)
-              .eq("type_operation", "droit_terre")
-              .eq("montant_total", payment.montant_paye)
-              .eq("date_generation", payment.date_paiement)
-              .maybeSingle();
+            const existingReceipts = await apiClient.select<any[]>({
+              table: "recus",
+              filters: [
+                { op: "eq", column: "reference_id", value: payment.souscription_id },
+                { op: "eq", column: "type_operation", value: "droit_terre" },
+                { op: "eq", column: "montant_total", value: payment.montant_paye },
+                { op: "eq", column: "date_generation", value: payment.date_paiement }
+              ]
+            });
 
-            if (!existingReceipt && souscription) {
+            if ((!existingReceipts || existingReceipts.length === 0) && souscription) {
               missingReceipts.push({
                 id: payment.id,
                 type: 'droit_terre',
@@ -194,12 +200,12 @@ export class ReceiptIntegrityChecker {
           case 'facture':
             typeOperation = 'paiement_facture';
             // Pour les factures, nous devons trouver le client via la facture
-            const { data: factureData } = await supabase
-              .from("factures_fournisseurs")
-              .select("id")
-              .eq("id", missing.details.facture_id)
-              .single();
-            
+            const factureData = await apiClient.select<any>({
+              table: "factures_fournisseurs",
+              filters: [{ op: "eq", column: "id", value: missing.details.facture_id }],
+              single: true
+            });
+
             if (factureData) {
               // Utiliser un client par défaut ou créer une logique pour associer les factures aux clients
               clientId = "00000000-0000-0000-0000-000000000000"; // UUID par défaut
@@ -243,17 +249,11 @@ export class ReceiptIntegrityChecker {
    */
   static async generateInvoiceReceipt(paymentId: string, clientId: string): Promise<void> {
     try {
-      const { data: payment } = await supabase
-        .from("paiements_factures")
-        .select(`
-          *,
-          facture:factures_fournisseurs(
-            numero,
-            fournisseur:fournisseurs(nom)
-          )
-        `)
-        .eq("id", paymentId)
-        .single();
+      const payment = await apiClient.select<any>({
+        table: "paiements_factures",
+        filters: [{ op: "eq", column: "id", value: paymentId }],
+        single: true
+      });
 
       if (!payment) {
         throw new Error("Paiement de facture non trouvé");

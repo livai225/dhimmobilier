@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-
+import { apiClient } from "@/integrations/api/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from "recharts";
@@ -16,14 +16,9 @@ export function LocationsDashboard() {
   const { data: locations = [] } = useQuery({
     queryKey: ["locations_dashboard"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("locations")
-        .select(`
-          *,
-          clients(nom, prenom),
-          proprietes(nom, loyer_mensuel)
-        `);
-      if (error) throw error;
+      const data = await apiClient.select<any[]>({
+        table: "locations"
+      });
       return data || [];
     },
     enabled: canAccessDashboard, // Only run query if user has permission
@@ -32,16 +27,10 @@ export function LocationsDashboard() {
   const { data: payments = [] } = useQuery({
     queryKey: ["location_payments_dashboard"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("paiements_locations")
-        .select(`
-          *,
-          locations!inner(
-            proprietes(nom)
-          )
-        `)
-        .order("date_paiement", { ascending: false });
-      if (error) throw error;
+      const data = await apiClient.select<any[]>({
+        table: "paiements_locations",
+        orderBy: { column: "date_paiement", ascending: false }
+      });
       return data || [];
     },
     enabled: canAccessDashboard, // Only run query if user has permission

@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "@/integrations/api/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Building, TrendingUp, MapPin, DollarSign, BarChart3, PieChart as PieChartIcon, AlertCircle } from "lucide-react";
@@ -30,31 +31,24 @@ export function PropertiesDashboard() {
       }
       
       // Fetch properties with related data
-      const { data: properties, error: propError } = await supabase
-        .from('proprietes')
-        .select(`
-          *,
-          types_proprietes(nom)
-        `);
-
-      if (propError) throw propError;
+      const properties = await apiClient.select<any[]>({
+        table: 'proprietes'
+      });
 
       // Fetch active locations
-      const { data: activeLocations, error: locError } = await supabase
-        .from('locations')
-        .select('propriete_id, loyer_mensuel')
-        .eq('statut', 'active');
-
-      if (locError) throw locError;
+      const activeLocations = await apiClient.select<any[]>({
+        table: 'locations',
+        filters: [{ op: 'eq', column: 'statut', value: 'active' }]
+      });
 
       // Fetch active subscriptions with land rights
-      const { data: activeSubscriptions, error: subError } = await supabase
-        .from('souscriptions')
-        .select('propriete_id, montant_droit_terre_mensuel')
-        .eq('statut', 'active')
-        .eq('phase_actuelle', 'droit_terre');
-
-      if (subError) throw subError;
+      const activeSubscriptions = await apiClient.select<any[]>({
+        table: 'souscriptions',
+        filters: [
+          { op: 'eq', column: 'statut', value: 'active' },
+          { op: 'eq', column: 'phase_actuelle', value: 'droit_terre' }
+        ]
+      });
 
       // Calculate metrics
       const totalProperties = properties?.length || 0;

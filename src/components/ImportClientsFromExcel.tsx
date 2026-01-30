@@ -213,9 +213,9 @@ export const ImportClientsFromExcel = () => {
         .filter(name => name && typeof name === 'string' && name.trim().length > 0);
 
       // Récupérer tous les clients existants
-      const { data: existingClients } = await supabase
-        .from('clients')
-        .select('nom, prenom');
+      const existingClients = await apiClient.select<any[]>({
+        table: 'clients'
+      });
 
       const verificationResults: ClientVerification[] = [];
       
@@ -304,20 +304,16 @@ export const ImportClientsFromExcel = () => {
         const client = selectedClients[i];
         
         try {
-          const { error } = await supabase
-            .from('clients')
-            .insert({
+          await apiClient.insert({
+            table: 'clients',
+            values: {
               nom: client.nom,
               prenom: client.prenom || null
-            });
-
-          if (error) {
-            errors.push(`${client.original}: ${error.message}`);
-          } else {
-            successCount++;
-          }
-        } catch (error) {
-          errors.push(`${client.original}: Erreur inconnue`);
+            }
+          });
+          successCount++;
+        } catch (error: any) {
+          errors.push(`${client.original}: ${error.message || 'Erreur inconnue'}`);
         }
 
         setProgress(Math.round(((i + 1) / selectedClients.length) * 100));

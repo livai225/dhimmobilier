@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useCurrentUser, User } from "@/hooks/useCurrentUser";
-
+import { apiClient } from "@/integrations/api/client";
 import {
   Select,
   SelectContent,
@@ -22,24 +22,28 @@ export function UserSelector() {
   }, []);
 
   const fetchUsers = async () => {
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('actif', true)
-      .order('nom');
+    try {
+      const data = await apiClient.select<User[]>({
+        table: 'users',
+        filters: [{ op: 'eq', column: 'actif', value: true }],
+        orderBy: { column: 'nom', ascending: true }
+      });
 
-    if (!error && data) {
-      setUsers(data);
-      
-      // Auto-select only on first load if no user in localStorage
-      const storedUserId = localStorage.getItem('current_user_id');
-      if (!currentUser && !storedUserId && !hasInitialized && data.length > 0) {
-        const adminUser = data.find(u => u.role === 'admin') || data[0];
-        setUser(adminUser.id);
-        setHasInitialized(true);
-      } else if (!hasInitialized) {
-        setHasInitialized(true);
+      if (data) {
+        setUsers(data);
+
+        // Auto-select only on first load if no user in localStorage
+        const storedUserId = localStorage.getItem('current_user_id');
+        if (!currentUser && !storedUserId && !hasInitialized && data.length > 0) {
+          const adminUser = data.find(u => u.role === 'admin') || data[0];
+          setUser(adminUser.id);
+          setHasInitialized(true);
+        } else if (!hasInitialized) {
+          setHasInitialized(true);
+        }
       }
+    } catch (error) {
+      console.error('Error fetching users:', error);
     }
   };
 

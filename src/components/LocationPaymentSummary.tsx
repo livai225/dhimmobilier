@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-
+import { apiClient } from "@/integrations/api/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TrendingUp, DollarSign, Target, Percent, Calendar } from "lucide-react";
@@ -44,10 +44,9 @@ export function LocationPaymentSummary({ locations }: PaymentSummaryProps) {
   const { data: payments = [] } = useQuery({
     queryKey: ["location_payments_summary"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("paiements_locations")
-        .select("*");
-      if (error) throw error;
+      const data = await apiClient.select<any[]>({
+        table: "paiements_locations"
+      });
       return data || [];
     },
   });

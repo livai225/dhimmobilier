@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-
+import { apiClient } from "@/integrations/api/client";
 import {
   Dialog,
   DialogContent,
@@ -49,17 +49,12 @@ export function FournisseurDetailsDialog({
   const { data: factures = [] } = useQuery({
     queryKey: ["fournisseur-factures", fournisseur?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("factures_fournisseurs")
-        .select(`
-          *,
-          propriete:proprietes(nom)
-        `)
-        .eq("fournisseur_id", fournisseur.id)
-        .order("date_facture", { ascending: false });
-      
-      if (error) throw error;
-      return data;
+      const data = await apiClient.select<any[]>({
+        table: "factures_fournisseurs",
+        filters: [{ op: "eq", column: "fournisseur_id", value: fournisseur.id }],
+        orderBy: { column: "date_facture", ascending: false }
+      });
+      return data || [];
     },
     enabled: !!fournisseur?.id,
   });
@@ -68,19 +63,19 @@ export function FournisseurDetailsDialog({
   const { data: paiements = [] } = useQuery({
     queryKey: ["fournisseur-paiements", fournisseur?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("paiements_factures")
-        .select(`
-          *,
-          facture:factures_fournisseurs(numero, propriete:proprietes(nom))
-        `)
-        .eq("facture.fournisseur_id", fournisseur.id)
-        .order("date_paiement", { ascending: false });
-      
-      if (error) throw error;
-      return data;
+      // First get all factures for this fournisseur
+      const facturesIds = factures.map(f => f.id);
+      if (facturesIds.length === 0) return [];
+
+      const data = await apiClient.select<any[]>({
+        table: "paiements_factures",
+        orderBy: { column: "date_paiement", ascending: false }
+      });
+
+      // Filter payments for this fournisseur's factures
+      return (data || []).filter(p => facturesIds.includes(p.facture_id));
     },
-    enabled: !!fournisseur?.id,
+    enabled: !!fournisseur?.id && factures.length > 0,
   });
 
   // Calculate statistics

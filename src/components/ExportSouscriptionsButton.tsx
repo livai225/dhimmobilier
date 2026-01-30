@@ -1,7 +1,7 @@
 import { ButtonHTMLAttributes, useState } from "react";
 import { Download } from "lucide-react";
 import * as XLSX from "xlsx";
-
+import { apiClient } from "@/integrations/api/client";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 
@@ -17,18 +17,13 @@ export function ExportSouscriptionsButton({ label = "Exporter toutes les souscri
     
     try {
       console.log("Début de l'export des souscriptions...");
-      
-      // Récupérer toutes les souscriptions d'abord
-      const { data: souscriptions, error: souscriptionsError } = await supabase
-        .from("souscriptions")
-        .select("*")
-        .order("created_at", { ascending: false });
 
-      if (souscriptionsError) {
-        console.error("Erreur lors de la récupération des souscriptions:", souscriptionsError);
-        throw souscriptionsError;
-      }
-      
+      // Récupérer toutes les souscriptions d'abord
+      const souscriptions = await apiClient.select<any[]>({
+        table: "souscriptions",
+        orderBy: { column: "created_at", ascending: false }
+      });
+
       console.log(`${souscriptions?.length || 0} souscriptions trouvées`);
 
       if (!souscriptions || souscriptions.length === 0) {
@@ -41,34 +36,19 @@ export function ExportSouscriptionsButton({ label = "Exporter toutes les souscri
       }
 
       // Récupérer tous les clients
-      const { data: clients, error: clientsError } = await supabase
-        .from("clients")
-        .select("id, nom, prenom, email, telephone_principal, adresse");
-
-      if (clientsError) {
-        console.error("Erreur lors de la récupération des clients:", clientsError);
-        throw clientsError;
-      }
+      const clients = await apiClient.select<any[]>({
+        table: "clients"
+      });
 
       // Récupérer toutes les propriétés
-      const { data: proprietes, error: propriétesError } = await supabase
-        .from("proprietes")
-        .select("id, nom, adresse, zone, usage, surface, loyer_mensuel, prix_achat, agent_id");
-
-      if (propriétesError) {
-        console.error("Erreur lors de la récupération des propriétés:", propriétesError);
-        throw propriétesError;
-      }
+      const proprietes = await apiClient.select<any[]>({
+        table: "proprietes"
+      });
 
       // Récupérer tous les agents
-      const { data: agents, error: agentsError } = await supabase
-        .from("agents_recouvrement")
-        .select("id, nom, prenom, code_agent");
-
-      if (agentsError) {
-        console.error("Erreur lors de la récupération des agents:", agentsError);
-        throw agentsError;
-      }
+      const agents = await apiClient.select<any[]>({
+        table: "agents_recouvrement"
+      });
 
       console.log(`${clients?.length || 0} clients, ${proprietes?.length || 0} propriétés, ${agents?.length || 0} agents récupérés`);
 

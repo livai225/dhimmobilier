@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-
+import { apiClient } from "@/integrations/api/client";
 import { useToast } from "@/hooks/use-toast";
 import { AlertTriangle, CheckCircle, Settings, FileText } from "lucide-react";
 
@@ -34,19 +34,17 @@ export function LandRightsReconstruction() {
   const handleReconstruction = async () => {
     setIsReconstructing(true);
     setStep('config');
-    
+
     try {
-      const { data, error } = await supabase.rpc('reconstruct_land_rights_config');
-      
-      if (error) throw error;
-      
+      const data = await apiClient.rpc<ReconstructionResult[]>('reconstruct_land_rights_config');
+
       setReconstructionResults(data || []);
-      
+
       toast({
         title: "Configuration reconstituée",
         description: `${data?.length || 0} souscriptions mises à jour avec succès.`,
       });
-      
+
       setStep('payments');
     } catch (error) {
       console.error('Erreur lors de la reconstruction:', error);
@@ -63,19 +61,17 @@ export function LandRightsReconstruction() {
 
   const handleCreateAugustPayments = async () => {
     setIsCreatingPayments(true);
-    
+
     try {
-      const { data, error } = await supabase.rpc('create_missing_august_payments');
-      
-      if (error) throw error;
-      
+      const data = await apiClient.rpc<AugustPaymentResult[]>('create_missing_august_payments');
+
       setPaymentResults(data || []);
-      
+
       toast({
         title: "Paiements d'août créés",
         description: `${data?.length || 0} paiements manquants créés avec succès.`,
       });
-      
+
       setStep('complete');
     } catch (error) {
       console.error('Erreur lors de la création des paiements:', error);

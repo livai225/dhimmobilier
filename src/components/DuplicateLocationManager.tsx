@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-
+import { apiClient } from "@/integrations/api/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,27 +24,17 @@ export function DuplicateLocationManager() {
   const { data: locations, isLoading } = useQuery({
     queryKey: ["all-locations-duplicates"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("locations")
-        .select(`
-          *,
-          clients(nom, prenom),
-          proprietes(nom),
-          paiements_locations(montant)
-        `)
-        .order("created_at", { ascending: true });
-
-      if (error) throw error;
+      const data = await apiClient.select<any[]>({
+        table: "locations",
+        orderBy: { column: "created_at", ascending: true }
+      });
       return data;
     },
   });
 
   const deleteLocationMutation = useMutation({
     mutationFn: async (locationId: string) => {
-      const { data, error } = await supabase
-        .rpc("delete_location_safely", { p_location_id: locationId });
-
-      if (error) throw error;
+      const data = await apiClient.rpc("delete_location_safely", { p_location_id: locationId });
       return data;
     },
     onSuccess: (report: any) => {

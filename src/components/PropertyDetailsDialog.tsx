@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Eye, User, CreditCard, Receipt, Home, Calendar } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-
+import { apiClient } from "@/integrations/api/client";
 import {
   Dialog,
   DialogContent,
@@ -56,62 +56,68 @@ export function PropertyDetailsDialog({ propriete }: PropertyDetailsDialogProps)
 
       if (propriete.usage === "Location") {
         // Location active
-        const { data } = await supabase
-          .from("locations")
-          .select(`
-            *,
-            client:clients(*)
-          `)
-          .eq("propriete_id", propriete.id)
-          .eq("statut", "active")
-          .single();
-        activeLocation = data;
+        const locations = await apiClient.select<any[]>({
+          table: "locations",
+          filters: [
+            { op: "eq", column: "propriete_id", value: propriete.id },
+            { op: "eq", column: "statut", value: "active" }
+          ]
+        });
+        activeLocation = locations?.[0] || null;
 
-        // Paiements de location
         if (activeLocation) {
-          const { data: payments } = await supabase
-            .from("paiements_locations")
-            .select("*")
-            .eq("location_id", activeLocation.id)
-            .order("date_paiement", { ascending: false });
-          locationPayments = payments || [];
+          // Récupérer le client
+          const client = await apiClient.select<any>({
+            table: "clients",
+            filters: [{ op: "eq", column: "id", value: activeLocation.client_id }],
+            single: true
+          });
+          activeLocation.client = client;
+
+          // Paiements de location
+          locationPayments = await apiClient.select<any[]>({
+            table: "paiements_locations",
+            filters: [{ op: "eq", column: "location_id", value: activeLocation.id }],
+            orderBy: { column: "date_paiement", ascending: false }
+          }) || [];
         }
       } else if (propriete.usage === "Bail") {
         // Souscription active
-        const { data } = await supabase
-          .from("souscriptions")
-          .select(`
-            *,
-            client:clients(*)
-          `)
-          .eq("propriete_id", propriete.id)
-          .eq("statut", "active")
-          .single();
-        activeSubscription = data;
+        const souscriptions = await apiClient.select<any[]>({
+          table: "souscriptions",
+          filters: [
+            { op: "eq", column: "propriete_id", value: propriete.id },
+            { op: "eq", column: "statut", value: "active" }
+          ]
+        });
+        activeSubscription = souscriptions?.[0] || null;
 
-        // Paiements de souscription
         if (activeSubscription) {
-          const { data: payments } = await supabase
-            .from("paiements_souscriptions")
-            .select("*")
-            .eq("souscription_id", activeSubscription.id)
-            .order("date_paiement", { ascending: false });
-          subscriptionPayments = payments || [];
+          // Récupérer le client
+          const client = await apiClient.select<any>({
+            table: "clients",
+            filters: [{ op: "eq", column: "id", value: activeSubscription.client_id }],
+            single: true
+          });
+          activeSubscription.client = client;
+
+          // Paiements de souscription
+          subscriptionPayments = await apiClient.select<any[]>({
+            table: "paiements_souscriptions",
+            filters: [{ op: "eq", column: "souscription_id", value: activeSubscription.id }],
+            orderBy: { column: "date_paiement", ascending: false }
+          }) || [];
         }
       }
 
       // Reçus générés (pour l'usage actuel)
       const referenceId = activeLocation?.id || activeSubscription?.id;
       if (referenceId) {
-        const { data } = await supabase
-          .from("recus")
-          .select(`
-            *,
-            client:clients(nom, prenom)
-          `)
-          .eq("reference_id", referenceId)
-          .order("date_generation", { ascending: false });
-        receipts = data || [];
+        receipts = await apiClient.select<any[]>({
+          table: "recus",
+          filters: [{ op: "eq", column: "reference_id", value: referenceId }],
+          orderBy: { column: "date_generation", ascending: false }
+        }) || [];
       }
 
       return {

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-
+import { apiClient } from "@/integrations/api/client";
 import { ReceiptDetailsDialog } from "./ReceiptDetailsDialog";
 import {
   Dialog,
@@ -59,18 +59,18 @@ export function AgentOperationsDialog({ agent, isOpen, onClose }: AgentOperation
     queryKey: ["agent_operations", agent?.id, periodRange()],
     queryFn: async () => {
       if (!agent?.id) return [];
-      
-      const range = periodRange();
-      const { data, error } = await supabase
-        .from("cash_transactions")
-        .select("*")
-        .eq("agent_id", agent.id)
-        .gte("date_transaction", range.start)
-        .lte("date_transaction", range.end)
-        .order("date_transaction", { ascending: false })
-        .order("heure_transaction", { ascending: false });
 
-      if (error) throw error;
+      const range = periodRange();
+      const data = await apiClient.select<any[]>({
+        table: "cash_transactions",
+        filters: [
+          { op: "eq", column: "agent_id", value: agent.id },
+          { op: "gte", column: "date_transaction", value: range.start },
+          { op: "lte", column: "date_transaction", value: range.end }
+        ],
+        orderBy: { column: "date_transaction", ascending: false }
+      });
+
       return data || [];
     },
     enabled: !!agent?.id,
@@ -80,15 +80,14 @@ export function AgentOperationsDialog({ agent, isOpen, onClose }: AgentOperation
     queryKey: ["agent_detailed_stats", agent?.id, periodRange()],
     queryFn: async () => {
       if (!agent?.id) return null;
-      
+
       const range = periodRange();
-      const { data, error } = await supabase.rpc("get_agent_statistics", {
+      const data = await apiClient.rpc<any[]>("get_agent_statistics", {
         agent_uuid: agent.id,
         start_date: range.start,
         end_date: range.end
       });
-      
-      if (error) throw error;
+
       return data?.[0];
     },
     enabled: !!agent?.id,
@@ -99,35 +98,31 @@ export function AgentOperationsDialog({ agent, isOpen, onClose }: AgentOperation
     queryKey: ["agent_receipts", agent?.id, periodRange()],
     queryFn: async () => {
       if (!agent?.id) return [];
-      
+
       const range = periodRange();
-      
+
       // Get all cash transactions for this agent in the period
-      const { data: transactions, error: transError } = await supabase
-        .from("cash_transactions")
-        .select("id")
-        .eq("agent_id", agent.id)
-        .gte("date_transaction", range.start)
-        .lte("date_transaction", range.end);
-      
-      if (transError) throw transError;
+      const transactions = await apiClient.select<any[]>({
+        table: "cash_transactions",
+        filters: [
+          { op: "eq", column: "agent_id", value: agent.id },
+          { op: "gte", column: "date_transaction", value: range.start },
+          { op: "lte", column: "date_transaction", value: range.end }
+        ]
+      });
+
       if (!transactions?.length) return [];
-      
+
       // Get receipts that reference these transactions
       const transactionIds = transactions.map(t => t.id);
-      const { data: receipts, error: receiptError } = await supabase
-        .from("recus")
-        .select(`
-          *,
-          clients:client_id (
-            nom,
-            prenom
-          )
-        `)
-        .in("reference_id", transactionIds);
-      
-      if (receiptError) throw receiptError;
-      return receipts || [];
+      const receiptsData = await apiClient.select<any[]>({
+        table: "recus",
+        filters: [
+          { op: "in", column: "reference_id", values: transactionIds }
+        ]
+      });
+
+      return receiptsData || [];
     },
     enabled: !!agent?.id,
   });
