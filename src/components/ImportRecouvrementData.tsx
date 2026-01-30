@@ -720,7 +720,7 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
     }
   };
 
-  // Create payments from Excel data
+  // Create payments from Excel data using RPC functions for proper cash transaction handling
   const createPaymentsFromExcel = async (contract: any, operationType: 'loyer' | 'droit_terre' | 'souscription', paiementsMensuels: number[]) => {
     let paymentsCreated = 0;
     const currentYear = new Date().getFullYear();
@@ -736,44 +736,30 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
       const montant = paiementsMensuels[monthIndex];
       if (montant <= 0) continue;
 
-      const paymentDate = new Date(currentYear, monthIndex, 15).toISOString().split('T')[0];
-
       try {
         if (operationType === 'loyer') {
-          // Créer paiement location
-          await apiClient.insert({
-            table: 'paiements_locations',
-            values: {
-              location_id: contract.id,
-              montant,
-              date_paiement: paymentDate,
-              mode_paiement: 'especes',
-              reference: `Import ${monthNames[monthIndex]} ${currentYear}`
-            }
+          // Utiliser RPC pour paiement location avec gestion de caisse
+          await apiClient.payLocationWithCash({
+            location_id: contract.id,
+            montant,
+            mode_paiement: 'especes',
+            reference: `Import ${monthNames[monthIndex]} ${currentYear}`
           });
         } else if (operationType === 'droit_terre') {
-          // Créer paiement droit de terre
-          await apiClient.insert({
-            table: 'paiements_droit_terre',
-            values: {
-              souscription_id: contract.id,
-              montant,
-              date_paiement: paymentDate,
-              mode_paiement: 'especes',
-              reference: `Import ${monthNames[monthIndex]} ${currentYear}`
-            }
+          // Utiliser RPC pour paiement droit de terre avec gestion de caisse
+          await apiClient.payDroitTerreWithCash({
+            souscription_id: contract.id,
+            montant,
+            mode_paiement: 'especes',
+            reference: `Import ${monthNames[monthIndex]} ${currentYear}`
           });
         } else {
-          // Créer paiement souscription
-          await apiClient.insert({
-            table: 'paiements_souscriptions',
-            values: {
-              souscription_id: contract.id,
-              montant,
-              date_paiement: paymentDate,
-              mode_paiement: 'especes',
-              reference: `Import ${monthNames[monthIndex]} ${currentYear}`
-            }
+          // Utiliser RPC pour paiement souscription avec gestion de caisse
+          await apiClient.paySouscriptionWithCash({
+            souscription_id: contract.id,
+            montant,
+            mode_paiement: 'especes',
+            reference: `Import ${monthNames[monthIndex]} ${currentYear}`
           });
         }
         paymentsCreated++;
