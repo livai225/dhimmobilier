@@ -40,7 +40,7 @@ export function SouscriptionDetailsDialog({
       if (!souscription?.client_id) return null;
       const data = await apiClient.select({
         table: 'clients',
-        filters: [{ column: 'id', type: 'eq', value: souscription.client_id }],
+        filters: [{ op: 'eq', column: 'id', value: souscription.client_id }],
         limit: 1
       });
       return data[0] || null;
@@ -54,7 +54,7 @@ export function SouscriptionDetailsDialog({
       if (!souscription?.propriete_id) return null;
       const data = await apiClient.select({
         table: 'proprietes',
-        filters: [{ column: 'id', type: 'eq', value: souscription.propriete_id }],
+        filters: [{ op: 'eq', column: 'id', value: souscription.propriete_id }],
         limit: 1
       });
       return data[0] || null;
@@ -69,8 +69,8 @@ export function SouscriptionDetailsDialog({
       console.log("Récupération des paiements pour souscription:", souscription.id);
       const data = await apiClient.select({
         table: 'paiements_souscriptions',
-        filters: [{ column: 'souscription_id', type: 'eq', value: souscription.id }],
-        order: { column: 'date_paiement', ascending: false }
+        filters: [{ op: 'eq', column: 'souscription_id', value: souscription.id }],
+        orderBy: { column: 'date_paiement', ascending: false }
       });
       console.log("Paiements récupérés:", data?.length || 0);
       return data;
@@ -89,10 +89,10 @@ export function SouscriptionDetailsDialog({
       return await apiClient.select({
         table: 'recus',
         filters: [
-          { column: 'reference_id', type: 'in', value: paymentIds },
-          { column: 'type_operation', type: 'eq', value: 'apport_souscription' }
+          { op: 'in', column: 'reference_id', values: paymentIds },
+          { op: 'eq', column: 'type_operation', value: 'apport_souscription' }
         ],
-        order: { column: 'date_generation', ascending: false }
+        orderBy: { column: 'date_generation', ascending: false }
       });
     },
     enabled: !!paiements && paiements.length > 0,
@@ -147,8 +147,8 @@ export function SouscriptionDetailsDialog({
       const receipts = await apiClient.select({
         table: 'recus',
         filters: [
-          { column: 'reference_id', type: 'eq', value: paiementId },
-          { column: 'type_operation', type: 'eq', value: 'apport_souscription' }
+          { op: 'eq', column: 'reference_id', value: paiementId },
+          { op: 'eq', column: 'type_operation', value: 'apport_souscription' }
         ],
         limit: 1
       });

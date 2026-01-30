@@ -44,8 +44,8 @@ export function LocationDetailsDialog({ location, onClose, onUpdate }: LocationD
     queryFn: async () => {
       return await apiClient.select({
         table: 'paiements_locations',
-        filters: [{ column: 'location_id', type: 'eq', value: location.id }],
-        order: { column: 'date_paiement', ascending: false }
+        filters: [{ op: 'eq', column: 'location_id', value: location.id }],
+        orderBy: { column: 'date_paiement', ascending: false }
       });
     },
   });
@@ -58,10 +58,9 @@ export function LocationDetailsDialog({ location, onClose, onUpdate }: LocationD
       const paymentIds = paiements.map(p => p.id);
       return await apiClient.select({
         table: 'recus',
-        columns: 'numero, periode_debut, periode_fin, date_generation, reference_id',
         filters: [
-          { column: 'type_operation', type: 'eq', value: 'location' },
-          { column: 'reference_id', type: 'in', value: paymentIds }
+          { op: 'eq', column: 'type_operation', value: 'location' },
+          { op: 'in', column: 'reference_id', values: paymentIds }
         ]
       });
     },
@@ -73,14 +72,14 @@ export function LocationDetailsDialog({ location, onClose, onUpdate }: LocationD
       // Update location status
       await apiClient.update({
         table: 'locations',
-        data: { statut: 'termine' },
-        filters: [{ column: 'id', type: 'eq', value: location.id }]
+        values: { statut: 'termine' },
+        filters: [{ op: 'eq', column: 'id', value: location.id }]
       });
       // Update property status back to 'Libre'
       await apiClient.update({
         table: 'proprietes',
-        data: { statut: 'Libre' },
-        filters: [{ column: 'id', type: 'eq', value: location.propriete_id }]
+        values: { statut: 'Libre' },
+        filters: [{ op: 'eq', column: 'id', value: location.propriete_id }]
       });
     },
     onSuccess: () => {

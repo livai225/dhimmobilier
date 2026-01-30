@@ -71,11 +71,10 @@ export const MissingReceiptsRecovery = () => {
       // Récupérer les locations créées récemment sans paiements
       const locationsData = await apiClient.select({
         table: 'locations',
-        columns: 'id, loyer_mensuel, created_at, clients!inner(nom, prenom)',
         filters: [
-          { column: 'created_at', type: 'gte', value: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString() }
+          { op: 'gte', column: 'created_at', value: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString() }
         ],
-        order: { column: 'created_at', ascending: false }
+        orderBy: { column: 'created_at', ascending: false }
       });
 
       console.log(`${locationsData?.length || 0} locations trouvées`);
@@ -92,8 +91,7 @@ export const MissingReceiptsRecovery = () => {
       const locationIds = locationsData.map(l => l.id);
       const existingPayments = await apiClient.select({
         table: 'paiements_locations',
-        columns: 'location_id',
-        filters: [{ column: 'location_id', type: 'in', value: locationIds }]
+        filters: [{ op: 'in', column: 'location_id', values: locationIds }]
       });
 
       const paidLocationIds = new Set(existingPayments?.map(p => p.location_id) || []);
@@ -135,12 +133,11 @@ export const MissingReceiptsRecovery = () => {
       // Récupérer les souscriptions en phase droit_terre avec dates valides
       const souscriptionsData = await apiClient.select({
         table: 'souscriptions',
-        columns: 'id, montant_droit_terre_mensuel, date_debut_droit_terre, created_at, clients!inner(nom, prenom), proprietes!inner(nom)',
         filters: [
-          { column: 'phase_actuelle', type: 'eq', value: 'droit_terre' },
-          { column: 'date_debut_droit_terre', type: 'not', value: null },
-          { column: 'montant_droit_terre_mensuel', type: 'not', value: null },
-          { column: 'montant_droit_terre_mensuel', type: 'gt', value: 0 }
+          { op: 'eq', column: 'phase_actuelle', value: 'droit_terre' },
+          { op: 'not', column: 'date_debut_droit_terre', value: null },
+          { op: 'not', column: 'montant_droit_terre_mensuel', value: null },
+          { op: 'gt', column: 'montant_droit_terre_mensuel', value: 0 }
         ]
       });
 
@@ -174,8 +171,7 @@ export const MissingReceiptsRecovery = () => {
         try {
           paiements = await apiClient.select({
             table: 'paiements_droit_terre',
-            columns: 'montant',
-            filters: [{ column: 'souscription_id', type: 'eq', value: souscription.id }]
+            filters: [{ op: 'eq', column: 'souscription_id', value: souscription.id }]
           });
         } catch (paiementsError) {
           console.error(`Erreur paiements pour ${souscription.id}:`, paiementsError);
@@ -379,12 +375,11 @@ export const MissingReceiptsRecovery = () => {
       // Récupérer toutes les souscriptions en phase droit_terre
       const souscriptionsData = await apiClient.select({
         table: 'souscriptions',
-        columns: 'id, montant_droit_terre_mensuel, date_debut_droit_terre, clients!inner(nom, prenom), proprietes!inner(nom)',
         filters: [
-          { column: 'phase_actuelle', type: 'eq', value: 'droit_terre' },
-          { column: 'date_debut_droit_terre', type: 'not', value: null },
-          { column: 'montant_droit_terre_mensuel', type: 'not', value: null },
-          { column: 'montant_droit_terre_mensuel', type: 'gt', value: 0 }
+          { op: 'eq', column: 'phase_actuelle', value: 'droit_terre' },
+          { op: 'not', column: 'date_debut_droit_terre', value: null },
+          { op: 'not', column: 'montant_droit_terre_mensuel', value: null },
+          { op: 'gt', column: 'montant_droit_terre_mensuel', value: 0 }
         ]
       });
 
@@ -420,11 +415,10 @@ export const MissingReceiptsRecovery = () => {
         try {
           paiements = await apiClient.select({
             table: 'paiements_droit_terre',
-            columns: 'id',
             filters: [
-              { column: 'souscription_id', type: 'eq', value: souscription.id },
-              { column: 'date_paiement', type: 'gte', value: startOfMonth.toISOString().split('T')[0] },
-              { column: 'date_paiement', type: 'lte', value: endOfMonth.toISOString().split('T')[0] }
+              { op: 'eq', column: 'souscription_id', value: souscription.id },
+              { op: 'gte', column: 'date_paiement', value: startOfMonth.toISOString().split('T')[0] },
+              { op: 'lte', column: 'date_paiement', value: endOfMonth.toISOString().split('T')[0] }
             ]
           });
         } catch (paiementsError) {

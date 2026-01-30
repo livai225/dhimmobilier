@@ -275,7 +275,7 @@ export function ImportHistoricalRentals() {
       if (clearExistingClients && !simulate) {
         await apiClient.delete({
           table: 'clients',
-          filters: [{ column: 'id', type: 'neq', value: '00000000-0000-0000-0000-000000000000' }]
+          filters: [{ op: 'neq', column: 'id', value: '00000000-0000-0000-0000-000000000000' }]
         });
         toast.info('Clients existants supprimés');
       }
@@ -308,7 +308,7 @@ export function ImportHistoricalRentals() {
             if (!simulate) {
               await apiClient.insert({
                 table: 'clients',
-                data: {
+                values: {
                   nom,
                   prenom,
                   telephone_principal: null, // Allow null for historical clients
@@ -317,8 +317,8 @@ export function ImportHistoricalRentals() {
               // Fetch the created client
               const newClients = await apiClient.select({
                 table: 'clients',
-                filters: [{ column: 'nom', type: 'eq', value: nom }],
-                order: { column: 'created_at', ascending: false },
+                filters: [{ op: 'eq', column: 'nom', value: nom }],
+                orderBy: { column: 'created_at', ascending: false },
                 limit: 1
               });
               client = newClients[0];
@@ -339,7 +339,7 @@ export function ImportHistoricalRentals() {
               if (!simulate) {
                 await apiClient.insert({
                   table: 'clients',
-                  data: {
+                  values: {
                     nom,
                     prenom,
                     telephone_principal: null, // Allow null for historical clients
@@ -348,8 +348,8 @@ export function ImportHistoricalRentals() {
                 // Fetch the created client
                 const newClients = await apiClient.select({
                   table: 'clients',
-                  filters: [{ column: 'nom', type: 'eq', value: nom }],
-                  order: { column: 'created_at', ascending: false },
+                  filters: [{ op: 'eq', column: 'nom', value: nom }],
+                  orderBy: { column: 'created_at', ascending: false },
                   limit: 1
                 });
                 client = newClients[0];
@@ -374,7 +374,7 @@ export function ImportHistoricalRentals() {
             if (!simulate) {
               await apiClient.insert({
                 table: 'proprietes',
-                data: {
+                values: {
                   nom: row.sites,
                   loyer_mensuel: row.prixLoyer,
                   statut: 'Occupé',
@@ -384,8 +384,8 @@ export function ImportHistoricalRentals() {
               // Fetch the created property
               const newProperties = await apiClient.select({
                 table: 'proprietes',
-                filters: [{ column: 'nom', type: 'eq', value: row.sites }],
-                order: { column: 'created_at', ascending: false },
+                filters: [{ op: 'eq', column: 'nom', value: row.sites }],
+                orderBy: { column: 'created_at', ascending: false },
                 limit: 1
               });
               property = newProperties[0];
@@ -400,10 +400,9 @@ export function ImportHistoricalRentals() {
           if (!simulate && client && property) {
             const existingLocations = await apiClient.select({
               table: 'locations',
-              columns: 'id',
               filters: [
-                { column: 'client_id', type: 'eq', value: client.id },
-                { column: 'propriete_id', type: 'eq', value: property.id }
+                { op: 'eq', column: 'client_id', value: client.id },
+                { op: 'eq', column: 'propriete_id', value: property.id }
               ],
               limit: 1
             });
@@ -412,7 +411,7 @@ export function ImportHistoricalRentals() {
               // Historical clients don't have caution - they already paid it long ago
               await apiClient.insert({
                 table: 'locations',
-                data: {
+                values: {
                   client_id: client.id,
                   propriete_id: property.id,
                   loyer_mensuel: row.prixLoyer,
@@ -438,10 +437,9 @@ export function ImportHistoricalRentals() {
               // Get location ID
               const locations = await apiClient.select({
                 table: 'locations',
-                columns: 'id',
                 filters: [
-                  { column: 'client_id', type: 'eq', value: client.id },
-                  { column: 'propriete_id', type: 'eq', value: property.id }
+                  { op: 'eq', column: 'client_id', value: client.id },
+                  { op: 'eq', column: 'propriete_id', value: property.id }
                 ],
                 limit: 1
               });
@@ -450,7 +448,7 @@ export function ImportHistoricalRentals() {
                 // Create payment record
                 await apiClient.insert({
                   table: 'paiements_locations',
-                  data: {
+                  values: {
                     location_id: locations[0].id,
                     montant: row.montantVerse,
                     date_paiement: new Date().toISOString().split('T')[0],

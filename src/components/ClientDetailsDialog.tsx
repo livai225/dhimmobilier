@@ -136,9 +136,8 @@ export function ClientDetailsDialog({ client, open, onOpenChange }: ClientDetail
       if (!client?.id) return [];
       return await apiClient.select({
         table: 'locations',
-        columns: '*, proprietes(nom, adresse, loyer_mensuel)',
-        filters: [{ column: 'client_id', type: 'eq', value: client.id }],
-        order: { column: 'created_at', ascending: false }
+        filters: [{ op: 'eq', column: 'client_id', value: client.id }],
+        orderBy: { column: 'created_at', ascending: false }
       });
     },
     enabled: !!client?.id,
@@ -151,9 +150,8 @@ export function ClientDetailsDialog({ client, open, onOpenChange }: ClientDetail
       if (!client?.id) return [];
       return await apiClient.select({
         table: 'souscriptions',
-        columns: '*, proprietes(nom, adresse)',
-        filters: [{ column: 'client_id', type: 'eq', value: client.id }],
-        order: { column: 'created_at', ascending: false }
+        filters: [{ op: 'eq', column: 'client_id', value: client.id }],
+        orderBy: { column: 'created_at', ascending: false }
       });
     },
     enabled: !!client?.id,
@@ -167,17 +165,15 @@ export function ClientDetailsDialog({ client, open, onOpenChange }: ClientDetail
       // First get locations for this client
       const clientLocations = await apiClient.select({
         table: 'locations',
-        columns: 'id, proprietes(nom)',
-        filters: [{ column: 'client_id', type: 'eq', value: client.id }]
+        filters: [{ op: 'eq', column: 'client_id', value: client.id }]
       });
       if (!clientLocations.length) return [];
       const locationIds = clientLocations.map(l => l.id);
       // Then get payments for those locations
       const payments = await apiClient.select({
         table: 'paiements_locations',
-        columns: '*',
-        filters: [{ column: 'location_id', type: 'in', value: locationIds }],
-        order: { column: 'date_paiement', ascending: false }
+        filters: [{ op: 'in', column: 'location_id', values: locationIds }],
+        orderBy: { column: 'date_paiement', ascending: false }
       });
       // Map property names
       const locationMap = new Map(clientLocations.map(l => [l.id, l.proprietes]));
@@ -197,17 +193,15 @@ export function ClientDetailsDialog({ client, open, onOpenChange }: ClientDetail
       // First get souscriptions for this client
       const clientSouscriptions = await apiClient.select({
         table: 'souscriptions',
-        columns: 'id, proprietes(nom)',
-        filters: [{ column: 'client_id', type: 'eq', value: client.id }]
+        filters: [{ op: 'eq', column: 'client_id', value: client.id }]
       });
       if (!clientSouscriptions.length) return [];
       const souscriptionIds = clientSouscriptions.map(s => s.id);
       // Then get payments for those souscriptions
       const payments = await apiClient.select({
         table: 'paiements_souscriptions',
-        columns: '*',
-        filters: [{ column: 'souscription_id', type: 'in', value: souscriptionIds }],
-        order: { column: 'date_paiement', ascending: false }
+        filters: [{ op: 'in', column: 'souscription_id', values: souscriptionIds }],
+        orderBy: { column: 'date_paiement', ascending: false }
       });
       // Map property names
       const souscriptionMap = new Map(clientSouscriptions.map(s => [s.id, s.proprietes]));
@@ -228,8 +222,7 @@ export function ClientDetailsDialog({ client, open, onOpenChange }: ClientDetail
       // Get client souscriptions first
       const clientSouscriptions = await apiClient.select({
         table: 'souscriptions',
-        columns: 'id, propriete_id, proprietes(nom)',
-        filters: [{ column: 'client_id', type: 'eq', value: client.id }]
+        filters: [{ op: 'eq', column: 'client_id', value: client.id }]
       });
 
       if (!clientSouscriptions.length) return [];
@@ -239,9 +232,8 @@ export function ClientDetailsDialog({ client, open, onOpenChange }: ClientDetail
       // Get payments for those souscriptions
       const payments = await apiClient.select({
         table: 'paiements_droit_terre',
-        columns: 'id, montant, date_paiement, mode_paiement, reference, souscription_id, created_at',
-        filters: [{ column: 'souscription_id', type: 'in', value: souscriptionIds }],
-        order: { column: 'date_paiement', ascending: false }
+        filters: [{ op: 'in', column: 'souscription_id', values: souscriptionIds }],
+        orderBy: { column: 'date_paiement', ascending: false }
       });
 
       // Create a map for property names
@@ -265,8 +257,8 @@ export function ClientDetailsDialog({ client, open, onOpenChange }: ClientDetail
       if (!client?.id) return [];
       return await apiClient.select({
         table: 'recus',
-        filters: [{ column: 'client_id', type: 'eq', value: client.id }],
-        order: { column: 'date_generation', ascending: false }
+        filters: [{ op: 'eq', column: 'client_id', value: client.id }],
+        orderBy: { column: 'date_generation', ascending: false }
       });
     },
     enabled: !!client?.id,

@@ -267,13 +267,13 @@ export function ImportHistoricalSubscriptions({ inline = false }: { inline?: boo
           if (!client && !simulate) {
             await apiClient.insert({
               table: 'clients',
-              data: { nom: row.clientName }
+              values: { nom: row.clientName }
             });
             // Fetch the created client
             const newClients = await apiClient.select({
               table: 'clients',
-              filters: [{ column: 'nom', type: 'eq', value: row.clientName }],
-              order: { column: 'created_at', ascending: false },
+              filters: [{ op: 'eq', column: 'nom', value: row.clientName }],
+              orderBy: { column: 'created_at', ascending: false },
               limit: 1
             });
             client = newClients[0];
@@ -290,7 +290,7 @@ export function ImportHistoricalSubscriptions({ inline = false }: { inline?: boo
           if (!property && !simulate) {
             await apiClient.insert({
               table: 'proprietes',
-              data: {
+              values: {
                 nom: row.site,
                 type: 'terrain',
                 statut: 'disponible',
@@ -300,8 +300,8 @@ export function ImportHistoricalSubscriptions({ inline = false }: { inline?: boo
             // Fetch the created property
             const newProperties = await apiClient.select({
               table: 'proprietes',
-              filters: [{ column: 'nom', type: 'eq', value: row.site }],
-              order: { column: 'created_at', ascending: false },
+              filters: [{ op: 'eq', column: 'nom', value: row.site }],
+              orderBy: { column: 'created_at', ascending: false },
               limit: 1
             });
             property = newProperties[0];
@@ -314,7 +314,7 @@ export function ImportHistoricalSubscriptions({ inline = false }: { inline?: boo
           if (!simulate && client && property) {
             await apiClient.insert({
               table: 'souscriptions',
-              data: {
+              values: {
                 client_id: client.id,
                 propriete_id: property.id,
                 prix_total: row.prixAcquisition,
@@ -331,10 +331,10 @@ export function ImportHistoricalSubscriptions({ inline = false }: { inline?: boo
             const newSouscriptions = await apiClient.select({
               table: 'souscriptions',
               filters: [
-                { column: 'client_id', type: 'eq', value: client.id },
-                { column: 'propriete_id', type: 'eq', value: property.id }
+                { op: 'eq', column: 'client_id', value: client.id },
+                { op: 'eq', column: 'propriete_id', value: property.id }
               ],
-              order: { column: 'created_at', ascending: false },
+              orderBy: { column: 'created_at', ascending: false },
               limit: 1
             });
             const newSouscription = newSouscriptions[0];
