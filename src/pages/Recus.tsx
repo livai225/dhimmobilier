@@ -12,7 +12,7 @@ import { useReceipts, useReceiptStats, ReceiptWithDetails } from "@/hooks/useRec
 import { ReceiptDetailsDialog } from "@/components/ReceiptDetailsDialog";
 import { downloadReceiptPDF } from "@/utils/pdfGenerator";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient } from "@/integrations/api/client";
 import { ExportToExcelButton } from "@/components/ExportToExcelButton";
 import { useCompanyLogo } from "@/hooks/useCompanyLogo";
 
@@ -37,12 +37,7 @@ export default function Recus() {
   const { data: clients } = useQuery({
     queryKey: ["clients-for-filter"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("clients")
-        .select("id, nom, prenom")
-        .limit(999999)
-        .order("nom");
-      if (error) throw error;
+      const data = await apiClient.getClients();
       return data;
     },
   });

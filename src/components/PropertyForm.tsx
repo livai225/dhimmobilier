@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient } from "@/integrations/api/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuditLog } from "@/hooks/useAuditLog";
 import { Button } from "@/components/ui/button";
@@ -68,11 +68,7 @@ export function PropertyForm({ property, onSuccess }: PropertyFormProps) {
   const { data: typesProprietes = [] } = useQuery({
     queryKey: ['types-proprietes'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('types_proprietes')
-        .select('*')
-        .order('nom');
-      if (error) throw error;
+      const data = await apiClient.getTypesProprietes();
       return data || [];
     },
   });
@@ -80,12 +76,11 @@ export function PropertyForm({ property, onSuccess }: PropertyFormProps) {
   const { data: agents = [] } = useQuery({
     queryKey: ['agents-recouvrement'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('agents_recouvrement')
-        .select('*')
-        .eq('statut', 'actif')
-        .order('nom');
-      if (error) throw error;
+      const data = await apiClient.select({
+        table: "agents_recouvrement",
+        filters: [{ op: "eq", column: "statut", value: "actif" }],
+        orderBy: { column: "nom", ascending: true }
+      });
       return data || [];
     },
   });
@@ -108,20 +103,19 @@ export function PropertyForm({ property, onSuccess }: PropertyFormProps) {
       };
 
       if (property) {
-        const { error } = await supabase
-          .from("proprietes")
-          .update(processedData)
-          .eq("id", property.id);
-        if (error) throw error;
+        await apiClient.updatePropriete(property.id, processedData);
         return { isUpdate: true, data: processedData, id: property.id };
       } else {
-        const { data: newProperty, error } = await supabase
-          .from("proprietes")
-          .insert([processedData])
-          .select()
-          .single();
-        if (error) throw error;
-        return { isUpdate: false, data: newProperty, id: newProperty.id };
+        await apiClient.createPropriete(processedData);
+        // Récupérer la propriété créée
+        const proprietes = await apiClient.select({
+          table: "proprietes",
+          filters: [{ op: "eq", column: "nom", value: data.nom }],
+          orderBy: { column: "created_at", ascending: false },
+          limit: 1
+        });
+        const newProperty = proprietes?.[0];
+        return { isUpdate: false, data: newProperty, id: newProperty?.id };
       }
     },
     onSuccess: (result) => {

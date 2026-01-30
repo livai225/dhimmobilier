@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient } from "@/integrations/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -79,13 +79,12 @@ export function PaiementFactureDialog({
     queryKey: ["paiements", facture?.id],
     queryFn: async () => {
       if (!facture?.id) return [];
-      const { data, error } = await supabase
-        .from("paiements_factures")
-        .select("*")
-        .eq("facture_id", facture.id)
-        .order("date_paiement", { ascending: false });
-      if (error) throw error;
-      return data;
+      const data = await apiClient.select({
+        table: 'paiements_factures',
+        filters: [{ op: 'eq', column: 'facture_id', value: facture.id }],
+        orderBy: { column: 'date_paiement', ascending: false }
+      });
+      return Array.isArray(data) ? data : [];
     },
     enabled: !!facture?.id,
   });
@@ -95,15 +94,14 @@ export function PaiementFactureDialog({
       if (!facture?.id) throw new Error("Facture introuvable");
 
       // 1) Paiement via caisse (sortie + journal)
-      const { data: paiementId, error } = await supabase.rpc("pay_facture_with_cash" as any, {
-        p_facture_id: facture.id,
-        p_montant: data.montant,
-        p_date_paiement: data.date_paiement,
-        p_mode_paiement: data.mode_paiement || null,
-        p_reference: data.reference || null,
-        p_description: "Paiement facture fournisseur",
+      const paiementId = await apiClient.rpc("pay_facture_with_cash", {
+        facture_id: facture.id,
+        montant: data.montant,
+        date_paiement: data.date_paiement,
+        mode_paiement: data.mode_paiement || null,
+        reference: data.reference || null,
+        description: "Paiement facture fournisseur",
       });
-      if (error) throw error;
 
       // Le reçu sera généré automatiquement par trigger
       return { paiementId };
@@ -146,12 +144,13 @@ export function PaiementFactureDialog({
   const onSubmit = async (data: PaiementFormData) => {
     if (!facture) return;
 
-    const { data: paiementsExistants } = await supabase
-      .from('paiements_factures')
-      .select('montant')
-      .eq('facture_id', facture.id);
+    const paiementsExistants = await apiClient.select({
+      table: 'paiements_factures',
+      columns: ['montant'],
+      filters: [{ op: 'eq', column: 'facture_id', value: facture.id }]
+    });
 
-    const totalPaye = paiementsExistants?.reduce((sum, p) => sum + Number(p.montant), 0) || 0;
+    const totalPaye = (Array.isArray(paiementsExistants) ? paiementsExistants : []).reduce((sum: number, p: any) => sum + Number(p.montant), 0);
     const montantRestant = facture.montant_total - totalPaye;
     if (data.montant > montantRestant + 0.01) {
       toast({

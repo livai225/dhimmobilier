@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient } from "@/integrations/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,21 +37,20 @@ export function LocationForm({ onClose, onSuccess }: LocationFormProps) {
   const { data: clients = [], isLoading: clientsLoading } = useQuery({
     queryKey: ["clients", clientSearchTerm],
     queryFn: async () => {
-      let query = supabase
-        .from("clients")
-        .select("id, nom, prenom, telephone_principal")
-        .order("nom");
-      
-      // Si on a un terme de recherche, filtrer côté serveur
+      const filters: any[] = [];
       if (clientSearchTerm.trim()) {
-        query = query.or(`nom.ilike.%${clientSearchTerm}%,prenom.ilike.%${clientSearchTerm}%`);
+        filters.push({ op: 'or', filters: [
+          { op: 'ilike', column: 'nom', value: `%${clientSearchTerm}%` },
+          { op: 'ilike', column: 'prenom', value: `%${clientSearchTerm}%` }
+        ]});
       }
-      
-      const { data, error } = await query;
-      if (error) throw error;
-      
+      const data = await apiClient.select({
+        table: 'clients',
+        columns: 'id, nom, prenom, telephone_principal',
+        filters,
+        orderBy: { column: 'nom', ascending: true }
+      });
       console.log(`Clients chargés pour location: ${data?.length || 0} (recherche: "${clientSearchTerm}")`);
-      
       return data;
     },
     enabled: true,
@@ -61,13 +60,12 @@ export function LocationForm({ onClose, onSuccess }: LocationFormProps) {
   const { data: proprietes } = useQuery({
     queryKey: ["proprietes", "libre"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("proprietes")
-        .select("id, nom, adresse, loyer_mensuel")
-        .eq("statut", "Libre")
-        .order("nom");
-      if (error) throw error;
-      return data;
+      return await apiClient.select({
+        table: 'proprietes',
+        columns: 'id, nom, adresse, loyer_mensuel',
+        filters: [{ op: 'eq', column: 'statut', value: 'Libre' }],
+        orderBy: { column: 'nom', ascending: true }
+      });
     },
   });
 
@@ -75,8 +73,7 @@ export function LocationForm({ onClose, onSuccess }: LocationFormProps) {
   const { data: cashBalance } = useQuery({
     queryKey: ["cash_balance"],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("get_current_cash_balance");
-      if (error) throw error;
+      const data = await apiClient.rpc("get_current_cash_balance");
       return Number(data || 0);
     },
     refetchOnWindowFocus: false,
@@ -105,37 +102,28 @@ export function LocationForm({ onClose, onSuccess }: LocationFormProps) {
       }
 
       // Create the location
-      const { data: location, error: locationError } = await supabase
-        .from("locations")
-        .insert([locationData])
-        .select()
-        .single();
-
-      if (locationError) throw locationError;
+      const locationId = await apiClient.insert({
+        table: 'locations',
+        data: locationData
+      });
+      const location = { id: locationId, ...locationData };
 
       // Update property status to 'Occupé'
-      const { error: propertyError } = await supabase
-        .from("proprietes")
-        .update({ statut: "Occupé" })
-        .eq("id", locationData.propriete_id);
-
-      if (propertyError) throw propertyError;
+      await apiClient.update({
+        table: 'proprietes',
+        data: { statut: 'Occupé' },
+        filters: [{ op: 'eq', column: 'id', value: locationData.propriete_id }]
+      });
 
       // Record caution payment in cash system (sortie de caisse)
-      const { data: cashTransaction, error: cashError } = await supabase
-        .rpc('pay_caution_with_cash', {
-          p_location_id: location.id,
-          p_montant: locationData.caution_totale,
-          p_date_paiement: locationData.date_debut,
-          p_mode_paiement: 'Caution initiale',
-          p_reference: `LOC-${location.id}`,
-          p_description: 'Avance caution location'
-        });
-
-      if (cashError) {
-        console.error('Cash transaction error:', cashError);
-        throw new Error(`Erreur lors de l'enregistrement de la caution: ${cashError.message}`);
-      }
+      const cashTransaction = await apiClient.rpc('pay_caution_with_cash', {
+        location_id: location.id,
+        montant: locationData.caution_totale,
+        date_paiement: locationData.date_debut,
+        mode_paiement: 'Caution initiale',
+        reference: `LOC-${location.id}`,
+        description: 'Avance caution location'
+      });
 
       // Le reçu de caution sera généré automatiquement par trigger sur cash_transactions
       return { location, cashTransaction };

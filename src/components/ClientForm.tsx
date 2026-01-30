@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient } from "@/integrations/api/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuditLog } from "@/hooks/useAuditLog";
 import { Button } from "@/components/ui/button";
@@ -92,20 +92,19 @@ export function ClientForm({ client, onSuccess }: ClientFormProps) {
       };
 
       if (client) {
-        const { error } = await supabase
-          .from("clients")
-          .update(cleanData)
-          .eq("id", client.id);
-        if (error) throw error;
+        await apiClient.updateClient(client.id, cleanData);
         return { isUpdate: true, data: cleanData, id: client.id };
       } else {
-        const { data: newClient, error } = await supabase
-          .from("clients")
-          .insert([cleanData])
-          .select()
-          .single();
-        if (error) throw error;
-        return { isUpdate: false, data: newClient, id: newClient.id };
+        await apiClient.createClient(cleanData);
+        // Récupérer le client créé
+        const clients = await apiClient.select({
+          table: "clients",
+          filters: [{ op: "eq", column: "nom", value: cleanData.nom }],
+          orderBy: { column: "created_at", ascending: false },
+          limit: 1
+        });
+        const newClient = clients?.[0];
+        return { isUpdate: false, data: newClient, id: newClient?.id };
       }
     },
     onSuccess: (result) => {

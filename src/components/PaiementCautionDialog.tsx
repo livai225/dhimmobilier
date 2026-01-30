@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient } from "@/integrations/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -65,32 +65,24 @@ export function PaiementCautionDialog({
       if (!location?.id) throw new Error("Location introuvable");
 
       // 1) Check cash balance
-      const { data: balance, error: balanceError } = await supabase.rpc(
-        "get_current_cash_balance"
-      );
-      if (balanceError) throw balanceError;
+      const balance = Number(await apiClient.rpc("get_current_cash_balance"));
 
-      if (Number(balance) < data.montant) {
+      if (balance < data.montant) {
         throw new Error(
-          `Solde insuffisant. Solde actuel: ${Number(balance).toLocaleString()} FCFA, Montant demandé: ${data.montant.toLocaleString()} FCFA`
+          `Solde insuffisant. Solde actuel: ${balance.toLocaleString()} FCFA, Montant demandé: ${data.montant.toLocaleString()} FCFA`
         );
       }
 
       // 2) Record cash transaction
-      const { data: transactionId, error: transactionError } = await supabase.rpc(
-        "record_cash_transaction",
-        {
-          p_type_transaction: "sortie",
-          p_montant: data.montant,
-          p_type_operation: "paiement_caution",
-          p_agent_id: null,
-          p_beneficiaire: `${location.clients?.prenom} ${location.clients?.nom}`,
-          p_reference_operation: location.id,
-          p_description: `Paiement caution - ${location.proprietes?.nom}`,
-          p_piece_justificative: data.reference || null,
-        }
-      );
-      if (transactionError) throw transactionError;
+      const transactionId = await apiClient.rpc("record_cash_transaction", {
+        type_transaction: "sortie",
+        montant: data.montant,
+        type_operation: "paiement_caution",
+        agent_id: null,
+        beneficiaire: `${location.clients?.prenom} ${location.clients?.nom}`,
+        reference_operation: location.id,
+        description: `Paiement caution - ${location.proprietes?.nom}`,
+      });
 
       // Le reçu sera généré automatiquement par trigger
       return { transactionId };

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient } from "@/integrations/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -41,16 +41,19 @@ export default function Fournisseurs() {
   const { data: fournisseurs = [], isLoading, isFetching } = useQuery({
     queryKey: ["fournisseurs"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("fournisseurs")
-        .select(`
-          *,
-          secteur:secteurs_activite(nom)
-        `)
-        .order("nom");
-      
-      if (error) throw error;
-      return data;
+      const [fournisseursData, secteursData] = await Promise.all([
+        apiClient.getFournisseurs(),
+        apiClient.select({ table: "secteurs_activite", orderBy: { column: "nom", ascending: true } })
+      ]);
+
+      // Joindre les secteurs aux fournisseurs
+      return fournisseursData.map((fournisseur: any) => {
+        const secteur = secteursData.find((s: any) => s.id === fournisseur.secteur_id);
+        return {
+          ...fournisseur,
+          secteur: secteur ? { nom: secteur.nom } : null
+        };
+      });
     },
   });
 
@@ -58,12 +61,10 @@ export default function Fournisseurs() {
   const { data: secteurs = [] } = useQuery({
     queryKey: ["secteurs"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("secteurs_activite")
-        .select("*")
-        .order("nom");
-      
-      if (error) throw error;
+      const data = await apiClient.select({
+        table: "secteurs_activite",
+        orderBy: { column: "nom", ascending: true }
+      });
       return data;
     },
   });
@@ -71,11 +72,7 @@ export default function Fournisseurs() {
   // Delete supplier mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("fournisseurs")
-        .delete()
-        .eq("id", id);
-      if (error) throw error;
+      await apiClient.deleteFournisseur(id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["fournisseurs"] });
@@ -84,10 +81,10 @@ export default function Fournisseurs() {
         description: "Fournisseur supprimé avec succès",
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       toast({
         title: "Erreur",
-        description: "Erreur lors de la suppression du fournisseur",
+        description: error.message || "Erreur lors de la suppression du fournisseur",
         variant: "destructive",
       });
     },

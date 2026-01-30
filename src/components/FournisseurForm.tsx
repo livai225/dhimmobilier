@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient } from "@/integrations/api/client";
 import { useAuditLog } from "@/hooks/useAuditLog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -71,12 +71,10 @@ export function FournisseurForm({ fournisseur, onSuccess }: FournisseurFormProps
   const { data: secteurs = [] } = useQuery({
     queryKey: ["secteurs"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("secteurs_activite")
-        .select("*")
-        .order("nom");
-      
-      if (error) throw error;
+      const data = await apiClient.select({
+        table: "secteurs_activite",
+        orderBy: { column: "nom", ascending: true }
+      });
       return data;
     },
   });
@@ -85,20 +83,25 @@ export function FournisseurForm({ fournisseur, onSuccess }: FournisseurFormProps
   const mutation = useMutation({
     mutationFn: async (data: FournisseurFormData) => {
       let secteurId = data.secteur_id;
-      
+
       // Si "Autre" est sélectionné et qu'un secteur personnalisé est fourni, créer un nouveau secteur
       if (isOtherSector && data.secteur_custom?.trim()) {
-        const { data: newSecteur, error: secteurError } = await supabase
-          .from("secteurs_activite")
-          .insert({
+        await apiClient.insert({
+          table: "secteurs_activite",
+          values: {
             nom: data.secteur_custom.trim(),
             description: `Secteur personnalisé: ${data.secteur_custom.trim()}`
-          })
-          .select()
-          .single();
-        
-        if (secteurError) throw secteurError;
-        secteurId = newSecteur.id;
+          }
+        });
+
+        // Récupérer le nouveau secteur créé
+        const secteurs = await apiClient.select({
+          table: "secteurs_activite",
+          filters: [{ op: "eq", column: "nom", value: data.secteur_custom.trim() }]
+        });
+        if (secteurs && secteurs.length > 0) {
+          secteurId = secteurs[0].id;
+        }
       }
 
       const cleanData = {
@@ -114,20 +117,19 @@ export function FournisseurForm({ fournisseur, onSuccess }: FournisseurFormProps
       };
 
       if (fournisseur) {
-        const { error } = await supabase
-          .from("fournisseurs")
-          .update(cleanData)
-          .eq("id", fournisseur.id);
-        if (error) throw error;
+        await apiClient.updateFournisseur(fournisseur.id, cleanData);
         return { isUpdate: true, data: cleanData, id: fournisseur.id };
       } else {
-        const { data: newFournisseur, error } = await supabase
-          .from("fournisseurs")
-          .insert(cleanData)
-          .select()
-          .single();
-        if (error) throw error;
-        return { isUpdate: false, data: newFournisseur, id: newFournisseur.id };
+        await apiClient.createFournisseur(cleanData);
+        // Récupérer le fournisseur créé
+        const fournisseurs = await apiClient.select({
+          table: "fournisseurs",
+          filters: [{ op: "eq", column: "nom", value: data.nom }],
+          orderBy: { column: "created_at", ascending: false },
+          limit: 1
+        });
+        const newFournisseur = fournisseurs?.[0];
+        return { isUpdate: false, data: newFournisseur, id: newFournisseur?.id };
       }
     },
     onSuccess: (result) => {

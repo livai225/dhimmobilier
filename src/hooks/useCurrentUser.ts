@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/api/client";
 import { apiClient } from "@/integrations/api/client";
 
 export interface User {

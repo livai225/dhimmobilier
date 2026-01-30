@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient } from "@/integrations/api/client";
 import { Plus, Edit, Trash2, Users, Phone, Mail, MapPin, AlertTriangle, Search, TrendingUp, Activity, Eye, Loader2, ArrowUpDown, Home, User, UserCheck } from "lucide-react";
 import { ProtectedAction } from "@/components/ProtectedAction";
 import { useToast } from "@/hooks/use-toast";
@@ -138,95 +138,94 @@ export default function Clients() {
   const { data: agents } = useQuery({
     queryKey: ['agents'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('agents_recouvrement')
-        .select('id, nom, prenom, code_agent')
-        .eq('statut', 'actif')
-        .order('nom');
-      if (error) throw error;
-      return data || [];
+      const data = await apiClient.select({
+        table: 'agents_recouvrement',
+        columns: ['id', 'nom', 'prenom', 'code_agent'],
+        filters: [{ op: 'eq', column: 'statut', value: 'actif' }],
+        orderBy: { column: 'nom', ascending: true }
+      });
+      return Array.isArray(data) ? data : [];
     },
   });
 
   // Pagination côté serveur avec tri et filtres
-  const itemsPerPage = 100;
+  const itemsPerPage = 20;
   const { data: clients, isLoading, isFetching } = useQuery({
     queryKey: ['clients', debouncedSearchTerm, filterMissingPhone, filterMissingUrgence, selectedAgentId, clientTypeFilter, currentPage, itemsPerPage, sortBy, sortDir],
     queryFn: async () => {
-      const term = debouncedSearchTerm;
-      const offset = (currentPage - 1) * itemsPerPage;
-      const end = offset + itemsPerPage - 1;
+      // Fetch all data and perform joins client-side
+      const [clientsData, locationsData, souscriptionsData, proprietesData] = await Promise.all([
+        apiClient.select({ table: 'clients' }),
+        apiClient.select({ table: 'locations' }),
+        apiClient.select({ table: 'souscriptions' }),
+        apiClient.select({ table: 'proprietes' })
+      ]);
 
-      let query = supabase
-        .from('clients')
-        .select(`
-          *,
-          locations:locations!left(count),
-          souscriptions:souscriptions!left(count)
-        `);
+      let clientsList = Array.isArray(clientsData) ? clientsData : [];
+      const locationsList = Array.isArray(locationsData) ? locationsData : [];
+      const souscriptionsList = Array.isArray(souscriptionsData) ? souscriptionsData : [];
+      const proprietesList = Array.isArray(proprietesData) ? proprietesData : [];
+
+      // Add counts for locations and souscriptions
+      clientsList = clientsList.map((client: any) => ({
+        ...client,
+        locations: [{ count: locationsList.filter((l: any) => l.client_id === client.id).length }],
+        souscriptions: [{ count: souscriptionsList.filter((s: any) => s.client_id === client.id).length }]
+      }));
 
       // Filter by agent if selected
       if (selectedAgentId && selectedAgentId !== "all") {
-        const { data: clientIds } = await supabase
-          .from('locations')
-          .select('client_id, proprietes!inner(agent_id)')
-          .eq('proprietes.agent_id', selectedAgentId);
-        
-        const { data: clientIdsFromSouscriptions } = await supabase
-          .from('souscriptions')
-          .select('client_id, proprietes!inner(agent_id)')
-          .eq('proprietes.agent_id', selectedAgentId);
+        const agentProprietes = proprietesList.filter((p: any) => p.agent_id === selectedAgentId);
+        const agentPropIds = agentProprietes.map((p: any) => p.id);
 
-        const allClientIds = [
-          ...(clientIds || []).map(item => item.client_id),
-          ...(clientIdsFromSouscriptions || []).map(item => item.client_id)
-        ];
-        
-        const uniqueClientIds = [...new Set(allClientIds)];
-        
+        const clientIdsFromLocations = locationsList
+          .filter((l: any) => agentPropIds.includes(l.propriete_id))
+          .map((l: any) => l.client_id);
+
+        const clientIdsFromSouscriptions = souscriptionsList
+          .filter((s: any) => agentPropIds.includes(s.propriete_id))
+          .map((s: any) => s.client_id);
+
+        const uniqueClientIds = [...new Set([...clientIdsFromLocations, ...clientIdsFromSouscriptions])];
+
         if (uniqueClientIds.length === 0) {
           return [];
         }
-        
-        query = query.in('id', uniqueClientIds);
+
+        clientsList = clientsList.filter((c: any) => uniqueClientIds.includes(c.id));
       }
 
-      // Recherche multi-champs
+      // Search filter
+      const term = debouncedSearchTerm;
       if (term.trim().length > 0) {
         const normalizedSearch = normalizeString(term);
-        const searchWords = normalizedSearch.split(' ').filter(w => w.length > 0);
-        const conditions = [
-          `nom.ilike.%${normalizedSearch}%`,
-          `prenom.ilike.%${normalizedSearch}%`,
-          `email.ilike.%${normalizedSearch}%`,
-          `telephone_principal.ilike.%${term}%`,
-          `adresse.ilike.%${normalizedSearch}%`
-        ];
-        if (searchWords.length > 1) {
-          conditions.push(`nom.ilike.%${searchWords.join('%')}%`);
-          conditions.push(`prenom.ilike.%${searchWords.join('%')}%`);
-          const reversed = [...searchWords].reverse().join(' ');
-          conditions.push(`nom.ilike.%${reversed}%`);
-          conditions.push(`prenom.ilike.%${reversed}%`);
-        }
-        query = query.or(conditions.join(','));
+        clientsList = clientsList.filter((client: any) => {
+          return fuzzyMatch(client.nom || '', term) ||
+                 fuzzyMatch(client.prenom || '', term) ||
+                 fuzzyMatch(client.email || '', term) ||
+                 (client.telephone_principal || '').includes(term) ||
+                 fuzzyMatch(client.adresse || '', term);
+        });
       }
 
-      // Filtres rapides côté serveur
-      if (filterMissingPhone) query = query.is('telephone_principal', null);
-      if (filterMissingUrgence) query = query.is('contact_urgence_nom', null);
+      // Quick filters
+      if (filterMissingPhone) {
+        clientsList = clientsList.filter((c: any) => !c.telephone_principal);
+      }
+      if (filterMissingUrgence) {
+        clientsList = clientsList.filter((c: any) => !c.contact_urgence_nom);
+      }
 
-      // Apply client type filter - filtering will be done client-side after fetching data
-      // Server-side filtering with LEFT JOIN counts is problematic in Supabase
-
-      // Tri côté serveur
+      // Sort
       const sortColumn = sortBy === 'telephone' ? 'telephone_principal' : (sortBy === 'email' ? 'email' : (sortBy === 'created_at' ? 'created_at' : 'nom'));
-      query = query.order(sortColumn, { ascending: sortDir === 'asc' });
+      clientsList.sort((a: any, b: any) => {
+        const aVal = a[sortColumn] || '';
+        const bVal = b[sortColumn] || '';
+        const comparison = aVal.localeCompare(bVal);
+        return sortDir === 'asc' ? comparison : -comparison;
+      });
 
-      // Charger tous les clients sans limite
-      const { data, error } = await query.limit(999999);
-      if (error) throw error;
-      return data || [];
+      return clientsList;
     },
     placeholderData: (prev) => prev,
   });
@@ -265,41 +264,32 @@ export default function Clients() {
   const { data: stats } = useQuery({
     queryKey: ['client-stats'],
     queryFn: async () => {
-      const [
-        { count: totalClients },
-        { data: recentClients },
-        { data: locations },
-        { data: souscriptions }
-      ] = await Promise.all([
-        supabase.from('clients').select('*', { count: 'exact', head: true }),
-        supabase.from('clients').select('*').order('created_at', { ascending: false }).limit(5),
-        supabase.from('locations').select('client_id').eq('statut', 'active'),
-        supabase.from('souscriptions').select('client_id').eq('statut', 'active')
+      const [clientsData, locationsData, souscriptionsData] = await Promise.all([
+        apiClient.select({ table: 'clients', orderBy: { column: 'created_at', ascending: false } }),
+        apiClient.select({ table: 'locations', filters: [{ op: 'eq', column: 'statut', value: 'active' }] }),
+        apiClient.select({ table: 'souscriptions', filters: [{ op: 'eq', column: 'statut', value: 'active' }] })
       ]);
 
-      const activeRentals = locations?.length || 0;
-      const activeSubscriptions = souscriptions?.length || 0;
+      const allClients = Array.isArray(clientsData) ? clientsData : [];
       const thisMonth = new Date();
       thisMonth.setDate(1);
-      const newClientsThisMonth = recentClients?.filter(client => 
+      const newClientsThisMonth = allClients.filter((client: any) =>
         new Date(client.created_at) >= thisMonth
-      ).length || 0;
+      ).length;
 
       return {
-        totalClients: totalClients || 0,
+        totalClients: allClients.length,
         newClientsThisMonth,
-        activeRentals,
-        activeSubscriptions,
-        recentClients: recentClients || []
+        activeRentals: Array.isArray(locationsData) ? locationsData.length : 0,
+        activeSubscriptions: Array.isArray(souscriptionsData) ? souscriptionsData.length : 0,
+        recentClients: allClients.slice(0, 5)
       };
     },
   });
 
   const createClient = useMutation({
     mutationFn: async (clientData: typeof formData) => {
-      const { data, error } = await supabase.from('clients').insert([clientData]).select();
-      if (error) throw error;
-      return data;
+      return await apiClient.insert({ table: 'clients', values: clientData });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clients'] });
@@ -322,9 +312,7 @@ export default function Clients() {
 
   const updateClient = useMutation({
     mutationFn: async ({ id, ...clientData }: any) => {
-      const { data, error } = await supabase.from('clients').update(clientData).eq('id', id).select();
-      if (error) throw error;
-      return data;
+      return await apiClient.update({ table: 'clients', filters: [{ op: 'eq', column: 'id', value: id }], values: clientData });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clients'] });
@@ -348,8 +336,7 @@ export default function Clients() {
 
   const deleteClient = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('clients').delete().eq('id', id);
-      if (error) throw error;
+      return await apiClient.delete({ table: 'clients', filters: [{ op: 'eq', column: 'id', value: id }] });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clients'] });
@@ -432,7 +419,9 @@ export default function Clients() {
 
   // Pagination calculée via totalCount et page courante
   const totalPages = Math.max(1, Math.ceil((totalCount as number) / itemsPerPage));
-  const currentClients = filteredClients || [];
+  // Appliquer la pagination côté client
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const currentClients = (filteredClients || []).slice(startIndex, startIndex + itemsPerPage);
 
   // Reset to first page when search changes with debouncing
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {

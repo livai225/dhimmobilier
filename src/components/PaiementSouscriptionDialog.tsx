@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient } from "@/integrations/api/client";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
@@ -77,18 +77,19 @@ export function PaiementSouscriptionDialog({
 
 
       // 1) Paiement via caisse (entree + journal)
-      const { data: paiementId, error } = await supabase.rpc("pay_souscription_with_cash" as any, {
-        p_souscription_id: souscription.id,
-        p_montant: data.montant,
-        p_date_paiement: data.date_paiement,
-        p_mode_paiement: data.mode_paiement || null,
-        p_reference: data.reference || null,
-        p_description: data.periode_paiement 
-          ? `Paiement souscription - ${format(new Date(data.periode_paiement + "-01"), "MMMM yyyy", { locale: fr })}`
-          : "Paiement souscription",
-        p_periode_paiement: data.periode_paiement ? data.periode_paiement + "-01" : null,
+      const description = data.periode_paiement
+        ? `Paiement souscription - ${format(new Date(data.periode_paiement + "-01"), "MMMM yyyy", { locale: fr })}`
+        : "Paiement souscription";
+
+      const paiementId = await apiClient.rpc("pay_souscription_with_cash", {
+        souscription_id: souscription.id,
+        montant: data.montant,
+        date_paiement: data.date_paiement,
+        mode_paiement: data.mode_paiement || null,
+        reference: data.reference || null,
+        description: description,
+        periode_paiement: data.periode_paiement ? data.periode_paiement + "-01" : null,
       });
-      if (error) throw error;
 
       return { paiementId };
     },

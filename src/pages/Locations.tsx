@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient } from "@/integrations/api/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -41,31 +41,48 @@ export default function Locations() {
   const { data: locations, isLoading } = useQuery({
     queryKey: ["locations"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("locations")
-        .select(`
-          *,
-          clients(nom, prenom, telephone_principal),
-          proprietes!inner(nom, adresse, loyer_mensuel, agent_id, zone, agents_recouvrement(nom, prenom)),
-          paiements_locations(montant)
-        `)
-        .order("created_at", { ascending: false });
+      // Récupérer les locations
+      const locationsData = await apiClient.select({
+        table: "locations",
+        orderBy: { column: "created_at", ascending: false }
+      });
 
-      if (error) throw error;
-      return data;
+      // Récupérer les données liées
+      const [clientsData, proprietesData, agentsData, paiementsData] = await Promise.all([
+        apiClient.select({ table: "clients" }),
+        apiClient.select({ table: "proprietes" }),
+        apiClient.select({ table: "agents_recouvrement" }),
+        apiClient.select({ table: "paiements_locations" })
+      ]);
+
+      // Joindre les données
+      return locationsData.map((location: any) => {
+        const client = clientsData.find((c: any) => c.id === location.client_id);
+        const propriete = proprietesData.find((p: any) => p.id === location.propriete_id);
+        const agent = propriete ? agentsData.find((a: any) => a.id === propriete.agent_id) : null;
+        const paiements = paiementsData.filter((p: any) => p.location_id === location.id);
+
+        return {
+          ...location,
+          clients: client ? { nom: client.nom, prenom: client.prenom, telephone_principal: client.telephone_principal } : null,
+          proprietes: propriete ? {
+            ...propriete,
+            agents_recouvrement: agent ? { nom: agent.nom, prenom: agent.prenom } : null
+          } : null,
+          paiements_locations: paiements
+        };
+      });
     },
   });
 
   const { data: agents } = useQuery({
     queryKey: ["agents"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("agents_recouvrement")
-        .select("id, nom, prenom")
-        .eq("statut", "actif")
-        .order("nom");
-
-      if (error) throw error;
+      const data = await apiClient.select({
+        table: "agents_recouvrement",
+        filters: [{ op: "eq", column: "statut", value: "actif" }],
+        orderBy: { column: "nom", ascending: true }
+      });
       return data;
     },
   });
@@ -73,17 +90,11 @@ export default function Locations() {
   const { data: zones } = useQuery({
     queryKey: ["zones"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("proprietes")
-        .select("zone")
-        .not("zone", "is", null)
-        .neq("zone", "");
+      const data = await apiClient.select({ table: "proprietes" });
 
-      if (error) throw error;
-      
       // Extraire les zones uniques et les trier
-      const uniqueZones = [...new Set(data?.map(p => p.zone).filter(Boolean))].sort();
-      return uniqueZones;
+      const uniqueZones = [...new Set(data?.map((p: any) => p.zone).filter(Boolean))].sort();
+      return uniqueZones as string[];
     },
   });
 
@@ -98,19 +109,15 @@ export default function Locations() {
 
   const deleteLocationMutation = useMutation({
     mutationFn: async (locationId: string) => {
-      const { data, error } = await supabase
-        .rpc("delete_location_safely", { p_location_id: locationId });
-
-      if (error) throw error;
-      return data;
+      return await apiClient.deleteLocationSafely(locationId);
     },
-    onSuccess: (report: any) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["locations"] });
       queryClient.invalidateQueries({ queryKey: ["cash_transactions"] });
       queryClient.invalidateQueries({ queryKey: ["cash_balance"] });
       toast({
         title: "Location supprimée avec succès",
-        description: `${report.paiements_supprimes} paiement(s) et ${report.recus_supprimes} reçu(s) supprimés. Montant total: ${report.montant_total_paiements?.toLocaleString()} FCFA. Les soldes de caisse ont été recalculés.`,
+        description: "La location et ses paiements associés ont été supprimés. Les soldes de caisse ont été recalculés.",
       });
     },
     onError: (error: any) => {

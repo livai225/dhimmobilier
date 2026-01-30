@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Combobox } from "@/components/ui/combobox";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient } from "@/integrations/api/client";
 import { Plus, Edit, Trash2, Building, Search } from "lucide-react";
 import { ProtectedAction } from "@/components/ProtectedAction";
 import { useToast } from "@/hooks/use-toast";
@@ -73,51 +73,41 @@ export default function Proprietes() {
   const { data: proprietes, isLoading } = useQuery({
     queryKey: ['proprietes'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('proprietes')
-        .select(`
-          *,
-          types_proprietes (
-            id,
-            nom,
-            description
-          ),
-          agents_recouvrement (
-            id,
-            nom,
-            prenom,
-            code_agent
-          )
-        `)
-        .order('nom');
-      if (error) throw error;
-      return data;
+      // Fetch all data in parallel then join
+      const [proprietesData, typesData, agentsData] = await Promise.all([
+        apiClient.select({ table: 'proprietes', orderBy: { column: 'nom', ascending: true } }),
+        apiClient.select({ table: 'types_proprietes' }),
+        apiClient.select({ table: 'agents_recouvrement' })
+      ]);
+      const proprietesList = Array.isArray(proprietesData) ? proprietesData : [];
+      const typesList = Array.isArray(typesData) ? typesData : [];
+      const agentsList = Array.isArray(agentsData) ? agentsData : [];
+
+      return proprietesList.map((p: any) => ({
+        ...p,
+        types_proprietes: typesList.find((t: any) => t.id === p.type_id),
+        agents_recouvrement: agentsList.find((a: any) => a.id === p.agent_id)
+      }));
     },
   });
 
   const { data: typesProprietes = [] } = useQuery({
     queryKey: ['types-proprietes'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('types_proprietes').select('*').order('nom');
-      if (error) {
-        console.error('Erreur lors du chargement des types:', error);
-        throw error;
-      }
-      console.log('Types propriétés chargés:', data);
-      return data || [];
+      const data = await apiClient.select({ table: 'types_proprietes', orderBy: { column: 'nom', ascending: true } });
+      return Array.isArray(data) ? data : [];
     },
   });
 
   const { data: agents = [] } = useQuery({
     queryKey: ['agents-recouvrement'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('agents_recouvrement')
-        .select('*')
-        .eq('statut', 'actif')
-        .order('nom');
-      if (error) throw error;
-      return data || [];
+      const data = await apiClient.select({
+        table: 'agents_recouvrement',
+        filters: [{ op: 'eq', column: 'statut', value: 'actif' }],
+        orderBy: { column: 'nom', ascending: true }
+      });
+      return Array.isArray(data) ? data : [];
     },
   });
 
@@ -127,7 +117,6 @@ export default function Proprietes() {
         nom: proprieteData.nom,
         adresse: proprieteData.adresse || null,
         surface: proprieteData.surface ? parseFloat(proprieteData.surface) : null,
-        // prix_achat retiré pour la création
         agent_id: proprieteData.agent_id || null,
         statut: proprieteData.statut,
         zone: proprieteData.zone || null,
@@ -136,9 +125,7 @@ export default function Proprietes() {
         montant_bail: proprieteData.montant_bail ? parseFloat(proprieteData.montant_bail) : 0,
         droit_terre: proprieteData.droit_terre ? parseFloat(proprieteData.droit_terre) : 0,
       };
-      const { data, error } = await supabase.from('proprietes').insert([processedData]).select();
-      if (error) throw error;
-      return data;
+      return await apiClient.insert({ table: 'proprietes', values: processedData });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['proprietes'] });
@@ -174,9 +161,7 @@ export default function Proprietes() {
         montant_bail: proprieteData.montant_bail ? parseFloat(proprieteData.montant_bail) : 0,
         droit_terre: proprieteData.droit_terre ? parseFloat(proprieteData.droit_terre) : 0,
       };
-      const { data, error } = await supabase.from('proprietes').update(processedData).eq('id', id).select();
-      if (error) throw error;
-      return data;
+      return await apiClient.update({ table: 'proprietes', filters: [{ op: 'eq', column: 'id', value: id }], values: processedData });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['proprietes'] });
@@ -199,8 +184,7 @@ export default function Proprietes() {
 
   const deletePropriete = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('proprietes').delete().eq('id', id);
-      if (error) throw error;
+      return await apiClient.delete({ table: 'proprietes', filters: [{ op: 'eq', column: 'id', value: id }] });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['proprietes'] });

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient } from "@/integrations/api/client";
 import { ProtectedAction } from "@/components/ProtectedAction";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,12 +31,8 @@ export default function Agents() {
   const { data: agents = [], isLoading } = useQuery({
     queryKey: ["agents_recouvrement"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("agents_recouvrement")
-        .select("id, nom, prenom, code_agent, telephone, email, statut, date_embauche")
-        .order("nom");
-      if (error) throw error;
-      return data;
+      const data = await apiClient.select({ table: 'agents_recouvrement', orderBy: { column: 'nom', ascending: true } });
+      return Array.isArray(data) ? data : [];
     },
   });
 
@@ -44,9 +40,8 @@ export default function Agents() {
     queryKey: ["agent_stats", selectedAgent],
     queryFn: async () => {
       if (!selectedAgent) return null;
-      const { data, error } = await supabase.rpc("get_agent_statistics", { agent_uuid: selectedAgent });
-      if (error) throw error;
-      return data?.[0];
+      const data = await apiClient.rpc("get_agent_statistics", { agent_id: selectedAgent });
+      return Array.isArray(data) && data.length > 0 ? data[0] : null;
     },
     enabled: !!selectedAgent,
   });
@@ -54,15 +49,15 @@ export default function Agents() {
   const createAgent = useMutation({
     mutationFn: async () => {
       if (!form.nom || !form.prenom || !form.code_agent) throw new Error("Nom, Prénom et Code agent sont requis");
-      const { error } = await supabase.from("agents_recouvrement").insert({
+      const agentData = {
         nom: form.nom,
         prenom: form.prenom,
         code_agent: form.code_agent,
         telephone: form.telephone || null,
         email: form.email || null,
         statut: form.statut,
-      });
-      if (error) throw error;
+      };
+      return await apiClient.insert({ table: 'agents_recouvrement', values: agentData });
     },
     onSuccess: () => {
       setForm({ nom: "", prenom: "", code_agent: "", telephone: "", email: "", statut: "actif" });
@@ -74,11 +69,7 @@ export default function Agents() {
 
   const deleteAgent = useMutation({
     mutationFn: async (agentId: string) => {
-      const { error } = await supabase
-        .from("agents_recouvrement")
-        .delete()
-        .eq("id", agentId);
-      if (error) throw error;
+      return await apiClient.delete({ table: 'agents_recouvrement', filters: [{ op: 'eq', column: 'id', value: agentId }] });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["agents_recouvrement"] });

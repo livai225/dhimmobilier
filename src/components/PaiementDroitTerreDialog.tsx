@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient } from "@/integrations/api/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,13 +38,12 @@ export function PaiementDroitTerreDialog({ open, onOpenChange, souscription, onS
     queryKey: ["paiements_droit_terre", souscription?.id],
     queryFn: async () => {
       if (!souscription?.id) return [];
-      const { data, error } = await supabase
-        .from("paiements_droit_terre")
-        .select("*")
-        .eq("souscription_id", souscription.id)
-        .order("date_paiement", { ascending: false });
-      if (error) throw error;
-      return data;
+      const data = await apiClient.select({
+        table: 'paiements_droit_terre',
+        filters: [{ op: 'eq', column: 'souscription_id', value: souscription.id }],
+        orderBy: { column: 'date_paiement', ascending: false }
+      });
+      return Array.isArray(data) ? data : [];
     },
     enabled: !!souscription?.id && open,
   });
@@ -53,10 +52,7 @@ export function PaiementDroitTerreDialog({ open, onOpenChange, souscription, onS
     queryKey: ["solde_droit_terre", souscription?.id],
     queryFn: async () => {
       if (!souscription?.id) return null;
-      const { data, error } = await supabase
-        .rpc("calculate_solde_droit_terre", { souscription_uuid: souscription.id });
-      if (error) throw error;
-      return data;
+      return await apiClient.rpc("calculate_solde_droit_terre", { souscription_id: souscription.id });
     },
     enabled: !!souscription?.id && open,
   });
@@ -85,16 +81,14 @@ export function PaiementDroitTerreDialog({ open, onOpenChange, souscription, onS
       }
 
       // 1) Paiement via caisse (sortie + journal)
-      const { data: paiementId, error } = await supabase.rpc("pay_droit_terre_with_cash" as any, {
-        p_souscription_id: souscription.id,
-        p_montant: montantNum,
-        p_date_paiement: formData.date_paiement,
-        p_mode_paiement: formData.mode_paiement || null,
-        p_reference: formData.reference || null,
-        p_description: "Paiement droit de terre",
-        p_periode_paiement: null
+      const paiementId = await apiClient.rpc("pay_droit_terre_with_cash", {
+        souscription_id: souscription.id,
+        montant: montantNum,
+        date_paiement: formData.date_paiement,
+        mode_paiement: formData.mode_paiement || null,
+        reference: formData.reference || null,
+        description: "Paiement droit de terre",
       });
-      if (error) throw error;
 
       // Le reçu sera généré automatiquement par trigger
       

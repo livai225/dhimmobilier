@@ -3,7 +3,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLe
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient } from "@/integrations/api/client";
 import { 
   Users, 
   Building, 
@@ -62,13 +62,13 @@ export default function ModernDashboard() {
     queryKey: ['dashboard-stats'],
     queryFn: async () => {
       const [
-        clients, 
-        proprietes, 
-        factures, 
-        souscriptions, 
-        locations, 
-        paiementsFactures, 
-        paiementsLocations, 
+        clients,
+        proprietes,
+        factures,
+        souscriptions,
+        locations,
+        paiementsFactures,
+        paiementsLocations,
         paiementsSouscriptions,
         paiementsDroitTerre,
         echeances,
@@ -76,54 +76,68 @@ export default function ModernDashboard() {
         soldeCaisseVersement,
         depensesEntreprise
       ] = await Promise.all([
-        supabase.from('clients').select('*', { count: 'exact' }),
-        supabase.from('proprietes').select('*'),
-        supabase.from('factures_fournisseurs').select('*'),
-        supabase.from('souscriptions').select('*'),
-        supabase.from('locations').select('*'),
-        supabase.from('paiements_factures').select('*'),
-        supabase.from('paiements_locations').select('*'),
-        supabase.from('paiements_souscriptions').select('*'),
-        supabase.from('paiements_droit_terre').select('*'),
-        supabase.from('echeances_droit_terre').select('*'),
-        supabase.rpc('get_solde_caisse_entreprise'),
-        supabase.rpc('get_current_cash_balance'),
-        supabase.from('cash_transactions').select('*').eq('type_operation', 'depense_entreprise')
+        apiClient.select({ table: 'clients' }),
+        apiClient.select({ table: 'proprietes' }),
+        apiClient.select({ table: 'factures_fournisseurs' }),
+        apiClient.select({ table: 'souscriptions' }),
+        apiClient.select({ table: 'locations' }),
+        apiClient.select({ table: 'paiements_factures' }),
+        apiClient.select({ table: 'paiements_locations' }),
+        apiClient.select({ table: 'paiements_souscriptions' }),
+        apiClient.select({ table: 'paiements_droit_terre' }),
+        apiClient.select({ table: 'echeances_droit_terre' }),
+        apiClient.rpc('get_solde_caisse_entreprise'),
+        apiClient.rpc('get_current_cash_balance'),
+        apiClient.select({ table: 'cash_transactions', filters: [{ op: 'eq', column: 'type_operation', value: 'depense_entreprise' }] })
       ]);
 
+      const clientsData = Array.isArray(clients) ? clients : [];
+      const proprietesData = Array.isArray(proprietes) ? proprietes : [];
+      const facturesData = Array.isArray(factures) ? factures : [];
+      const souscriptionsData = Array.isArray(souscriptions) ? souscriptions : [];
+      const locationsData = Array.isArray(locations) ? locations : [];
+      const paiementsFacturesData = Array.isArray(paiementsFactures) ? paiementsFactures : [];
+      const paiementsLocationsData = Array.isArray(paiementsLocations) ? paiementsLocations : [];
+      const paiementsSouscriptionsData = Array.isArray(paiementsSouscriptions) ? paiementsSouscriptions : [];
+      const paiementsDroitTerreData = Array.isArray(paiementsDroitTerre) ? paiementsDroitTerre : [];
+      const echeancesData = Array.isArray(echeances) ? echeances : [];
+      const soldeCaisseEntrepriseValue = Number(soldeCaisseEntreprise) || 0;
+      const soldeCaisseVersementValue = Number(soldeCaisseVersement) || 0;
+      const depensesEntrepriseData = Array.isArray(depensesEntreprise) ? depensesEntreprise : [];
+
       // Calculate main KPIs
-      const totalFactures = factures.data?.reduce((sum, f) => sum + (f.montant_total || 0), 0) || 0;
-      const totalPaiementsFactures = paiementsFactures.data?.reduce((sum, p) => sum + (p.montant || 0), 0) || 0;
-      
+      const totalFactures = facturesData.reduce((sum: number, f: any) => sum + (f.montant_total || 0), 0);
+      const totalPaiementsFactures = paiementsFacturesData.reduce((sum: number, p: any) => sum + (p.montant || 0), 0);
+
       // Solde de caisse (ex-chiffre d'affaires) = revenus - dépenses entreprise
-      const soldeCaisse = Number(soldeCaisseEntreprise.data || 0);
-      
+      const soldeCaisse = soldeCaisseEntrepriseValue;
+
       // Dépenses = paiements de factures fournisseurs + dépenses d'entreprise de la caisse
-      const depensesEntrepriseMontant = depensesEntreprise.data?.reduce((sum, t) => sum + (t.montant || 0), 0) || 0;
+      const depensesEntrepriseMontant = depensesEntrepriseData.reduce((sum: number, t: any) => sum + (t.montant || 0), 0);
       const totalDepenses = totalPaiementsFactures + depensesEntrepriseMontant;
-      
+
       // Solde de caisse versement (ancien solde caisse)
-      const soldeCaisseVersementMontant = Number(soldeCaisseVersement.data || 0);
-      
-      const facturesImpayees = factures.data?.reduce((sum, f) => sum + (f.solde || 0), 0) || 0;
-      const dettesLocations = locations.data?.reduce((sum, l) => sum + (l.dette_totale || 0), 0) || 0;
-      const echeancesEnRetard = echeances.data?.filter(e => 
+      const soldeCaisseVersementMontant = soldeCaisseVersementValue;
+
+      const facturesImpayees = facturesData.reduce((sum: number, f: any) => sum + (f.solde || 0), 0);
+      const dettesLocations = locationsData.reduce((sum: number, l: any) => sum + (l.dette_totale || 0), 0);
+      const echeancesEnRetard = echeancesData.filter((e: any) =>
         e.statut === 'en_attente' && new Date(e.date_echeance) < new Date()
-      ).reduce((sum, e) => sum + (e.montant || 0), 0) || 0;
-      
+      ).reduce((sum: number, e: any) => sum + (e.montant || 0), 0);
+
       const creancesImpayees = facturesImpayees + dettesLocations + echeancesEnRetard;
-      
-      const souscriptionsActives = souscriptions.data?.filter(s => s.statut === 'active').length || 0;
-      const locationsActives = locations.data?.filter(l => l.statut === 'active').length || 0;
+
+      const souscriptionsActives = souscriptionsData.filter((s: any) => s.statut === 'active').length;
+      const locationsActives = locationsData.filter((l: any) => l.statut === 'active').length;
       const contratsActifs = souscriptionsActives + locationsActives;
-      
-      const proprietesLibres = proprietes.data?.filter(p => p.statut === 'Libre').length || 0;
-      const proprietesOccupees = proprietes.data?.filter(p => p.statut === 'Occupé').length || 0;
+
+      const proprietesLibres = proprietesData.filter((p: any) => p.statut === 'Libre').length;
+      const proprietesOccupees = proprietesData.filter((p: any) => p.statut === 'Occupé').length;
 
       // Calculate revenue details for charts
-      const totalRevenuLocations = paiementsLocations.data?.reduce((sum, p) => sum + (p.montant || 0), 0) || 0;
-      const totalRevenuSouscriptions = paiementsSouscriptions.data?.reduce((sum, p) => sum + (p.montant || 0), 0) || 0;
-      const totalRevenuDroitTerre = paiementsDroitTerre.data?.reduce((sum, p) => sum + (p.montant || 0), 0) || 0;
+      const totalRevenuLocations = paiementsLocationsData.reduce((sum: number, p: any) => sum + (p.montant || 0), 0);
+      const totalRevenuSouscriptions = paiementsSouscriptionsData.reduce((sum: number, p: any) => sum + (p.montant || 0), 0);
+      const totalRevenuDroitTerre = paiementsDroitTerreData.reduce((sum: number, p: any) => sum + (p.montant || 0), 0);
 
       // Revenue breakdown with better colors
       const revenueBreakdown = [
@@ -138,19 +152,19 @@ export default function ModernDashboard() {
         const date = new Date();
         date.setMonth(date.getMonth() - i);
         const monthKey = date.toISOString().slice(0, 7);
-        
-        const monthLocations = paiementsLocations.data?.filter(p => 
-          p.date_paiement.startsWith(monthKey)
-        ).reduce((sum, p) => sum + (p.montant || 0), 0) || 0;
-        
-        const monthSouscriptions = paiementsSouscriptions.data?.filter(p => 
-          p.date_paiement.startsWith(monthKey)
-        ).reduce((sum, p) => sum + (p.montant || 0), 0) || 0;
-        
-        const monthDroitTerre = paiementsDroitTerre.data?.filter(p => 
-          p.date_paiement.startsWith(monthKey)
-        ).reduce((sum, p) => sum + (p.montant || 0), 0) || 0;
-        
+
+        const monthLocations = paiementsLocationsData.filter((p: any) =>
+          p.date_paiement?.startsWith(monthKey)
+        ).reduce((sum: number, p: any) => sum + (p.montant || 0), 0);
+
+        const monthSouscriptions = paiementsSouscriptionsData.filter((p: any) =>
+          p.date_paiement?.startsWith(monthKey)
+        ).reduce((sum: number, p: any) => sum + (p.montant || 0), 0);
+
+        const monthDroitTerre = paiementsDroitTerreData.filter((p: any) =>
+          p.date_paiement?.startsWith(monthKey)
+        ).reduce((sum: number, p: any) => sum + (p.montant || 0), 0);
+
         monthlyRevenue.push({
           month: date.toLocaleDateString('fr-FR', { month: 'short' }),
           monthFull: date.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }),
@@ -162,35 +176,35 @@ export default function ModernDashboard() {
       }
 
       // Performance metrics
-      const tauxRecouvrement = contratsActifs > 0 ? 
+      const tauxRecouvrement = contratsActifs > 0 ?
         Math.round((soldeCaisse / (soldeCaisse + creancesImpayees)) * 100) : 0;
-      
-      const tauxOccupation = proprietes.data?.length ? 
-        Math.round((proprietesOccupees / proprietes.data.length) * 100) : 0;
+
+      const tauxOccupation = proprietesData.length ?
+        Math.round((proprietesOccupees / proprietesData.length) * 100) : 0;
 
       // Weekly performance data with realistic demo data
       const weeklyData = [];
       const demoRevenus = [120000, 85000, 150000, 200000, 180000, 95000, 110000];
       const demoTransactions = [3, 2, 4, 5, 4, 2, 3];
-      
+
       for (let i = 6; i >= 0; i--) {
         const date = new Date();
         date.setDate(date.getDate() - i);
         const dayKey = date.toISOString().slice(0, 10);
-        
+
         const dayPaiements = [
-          ...(paiementsLocations.data?.filter(p => p.date_paiement.startsWith(dayKey)) || []),
-          ...(paiementsSouscriptions.data?.filter(p => p.date_paiement.startsWith(dayKey)) || []),
-          ...(paiementsDroitTerre.data?.filter(p => p.date_paiement.startsWith(dayKey)) || [])
+          ...paiementsLocationsData.filter((p: any) => p.date_paiement?.startsWith(dayKey)),
+          ...paiementsSouscriptionsData.filter((p: any) => p.date_paiement?.startsWith(dayKey)),
+          ...paiementsDroitTerreData.filter((p: any) => p.date_paiement?.startsWith(dayKey))
         ];
-        
-        const realRevenus = dayPaiements.reduce((sum, p) => sum + (p.montant || 0), 0);
+
+        const realRevenus = dayPaiements.reduce((sum: number, p: any) => sum + (p.montant || 0), 0);
         const realTransactions = dayPaiements.length;
-        
+
         // Use real data if available, otherwise use demo data
         const revenus = realRevenus > 0 ? realRevenus : demoRevenus[6-i];
         const transactions = realTransactions > 0 ? realTransactions : demoTransactions[6-i];
-        
+
         weeklyData.push({
           day: date.toLocaleDateString('fr-FR', { weekday: 'short' }),
           dayFull: date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric' }),
@@ -207,34 +221,34 @@ export default function ModernDashboard() {
         creancesImpayees,
         contratsActifs,
         proprietesDisponibles: proprietesLibres,
-        
+
         // Detailed stats
-        totalClients: clients.count || 0,
-        revenusRecurrents: (locations.data?.reduce((sum, l) => sum + (l.loyer_mensuel || 0), 0) || 0) +
-                          (souscriptions.data?.filter(s => s.statut === 'active').reduce((sum, s) => sum + (s.montant_mensuel || 0), 0) || 0),
-        totalFactures: factures.data?.length || 0,
-        facturesImpayeesCount: factures.data?.filter(f => f.solde > 0).length || 0,
+        totalClients: clientsData.length,
+        revenusRecurrents: locationsData.reduce((sum: number, l: any) => sum + (l.loyer_mensuel || 0), 0) +
+                          souscriptionsData.filter((s: any) => s.statut === 'active').reduce((sum: number, s: any) => sum + (s.montant_mensuel || 0), 0),
+        totalFactures: facturesData.length,
+        facturesImpayeesCount: facturesData.filter((f: any) => f.solde > 0).length,
         facturesImpayeesMontant: facturesImpayees,
         tauxOccupation,
         tauxRecouvrement,
-        echeancesEnRetardCount: echeances.data?.filter(e => 
+        echeancesEnRetardCount: echeancesData.filter((e: any) =>
           e.statut === 'en_attente' && new Date(e.date_echeance) < new Date()
-        ).length || 0,
-        
+        ).length,
+
         // Charts data
         revenueBreakdown,
         monthlyRevenue,
         weeklyData,
-        
+
         // Alerts
-        facturesImpayeesListe: factures.data?.filter(f => f.solde > 0 && 
+        facturesImpayeesListe: facturesData.filter((f: any) => f.solde > 0 &&
           new Date(f.date_facture) < new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-        ) || [],
-        locationsEndettees: locations.data?.filter(l => l.dette_totale > 100000) || [],
-        proprietesLibresLongtemps: proprietes.data?.filter(p => 
-          p.statut === 'Libre' && 
+        ),
+        locationsEndettees: locationsData.filter((l: any) => l.dette_totale > 100000),
+        proprietesLibresLongtemps: proprietesData.filter((p: any) =>
+          p.statut === 'Libre' &&
           new Date(p.updated_at) < new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
-        ) || [],
+        ),
       };
     },
   });
@@ -243,18 +257,42 @@ export default function ModernDashboard() {
   const { data: recentActivity } = useQuery({
     queryKey: ['recent-activity'],
     queryFn: async () => {
-      const [recentSouscriptions, recentPaiements, recentClients] = await Promise.all([
-        supabase.from('souscriptions').select('*, clients(nom, prenom), proprietes(nom)')
-          .order('created_at', { ascending: false }).limit(5),
-        supabase.from('paiements_locations').select('*, locations(*, clients(nom, prenom), proprietes(nom))')
-          .order('date_paiement', { ascending: false }).limit(5),
-        supabase.from('clients').select('*').order('created_at', { ascending: false }).limit(5),
+      const [souscriptions, paiements, clients, proprietes, locations] = await Promise.all([
+        apiClient.select({ table: 'souscriptions', orderBy: { column: 'created_at', ascending: false }, limit: 5 }),
+        apiClient.select({ table: 'paiements_locations', orderBy: { column: 'date_paiement', ascending: false }, limit: 5 }),
+        apiClient.select({ table: 'clients', orderBy: { column: 'created_at', ascending: false }, limit: 5 }),
+        apiClient.select({ table: 'proprietes' }),
+        apiClient.select({ table: 'locations' }),
       ]);
 
+      const clientsList = Array.isArray(clients) ? clients : [];
+      const proprietesList = Array.isArray(proprietes) ? proprietes : [];
+      const locationsList = Array.isArray(locations) ? locations : [];
+
+      // Join data for souscriptions
+      const souscriptionsList = (Array.isArray(souscriptions) ? souscriptions : []).map((s: any) => ({
+        ...s,
+        clients: clientsList.find((c: any) => c.id === s.client_id),
+        proprietes: proprietesList.find((p: any) => p.id === s.propriete_id)
+      }));
+
+      // Join data for paiements
+      const paiementsList = (Array.isArray(paiements) ? paiements : []).map((p: any) => {
+        const location = locationsList.find((l: any) => l.id === p.location_id);
+        return {
+          ...p,
+          locations: location ? {
+            ...location,
+            clients: clientsList.find((c: any) => c.id === location.client_id),
+            proprietes: proprietesList.find((pr: any) => pr.id === location.propriete_id)
+          } : null
+        };
+      });
+
       return {
-        recentSouscriptions: recentSouscriptions.data || [],
-        recentPaiements: recentPaiements.data || [],
-        recentClients: recentClients.data || [],
+        recentSouscriptions: souscriptionsList,
+        recentPaiements: paiementsList,
+        recentClients: clientsList,
       };
     },
   });

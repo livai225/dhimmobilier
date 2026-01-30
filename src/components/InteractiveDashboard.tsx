@@ -22,7 +22,7 @@ import {
   Target
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient } from "@/integrations/api/client";
 import { formatCurrency } from "@/lib/format";
 
 interface DashboardWidgetProps {
@@ -77,18 +77,42 @@ export function InteractiveDashboard() {
   const { data: recentActivity, refetch: refetchActivity } = useQuery({
     queryKey: ['recent-activity'],
     queryFn: async () => {
-      const [recentSouscriptions, recentPaiements, recentClients] = await Promise.all([
-        supabase.from('souscriptions').select('*, clients(nom, prenom), proprietes(nom)')
-          .order('created_at', { ascending: false }).limit(10),
-        supabase.from('paiements_locations').select('*, locations(*, clients(nom, prenom), proprietes(nom))')
-          .order('date_paiement', { ascending: false }).limit(10),
-        supabase.from('clients').select('*').order('created_at', { ascending: false }).limit(10),
+      const [souscriptions, paiements, clients, proprietes, locations] = await Promise.all([
+        apiClient.select({ table: 'souscriptions', orderBy: { column: 'created_at', ascending: false }, limit: 10 }),
+        apiClient.select({ table: 'paiements_locations', orderBy: { column: 'date_paiement', ascending: false }, limit: 10 }),
+        apiClient.select({ table: 'clients', orderBy: { column: 'created_at', ascending: false }, limit: 10 }),
+        apiClient.select({ table: 'proprietes' }),
+        apiClient.select({ table: 'locations' }),
       ]);
 
+      const clientsList = Array.isArray(clients) ? clients : [];
+      const proprietesList = Array.isArray(proprietes) ? proprietes : [];
+      const locationsList = Array.isArray(locations) ? locations : [];
+
+      // Join data for souscriptions
+      const souscriptionsList = (Array.isArray(souscriptions) ? souscriptions : []).map((s: any) => ({
+        ...s,
+        clients: clientsList.find((c: any) => c.id === s.client_id),
+        proprietes: proprietesList.find((p: any) => p.id === s.propriete_id)
+      }));
+
+      // Join data for paiements
+      const paiementsList = (Array.isArray(paiements) ? paiements : []).map((p: any) => {
+        const location = locationsList.find((l: any) => l.id === p.location_id);
+        return {
+          ...p,
+          locations: location ? {
+            ...location,
+            clients: clientsList.find((c: any) => c.id === location.client_id),
+            proprietes: proprietesList.find((pr: any) => pr.id === location.propriete_id)
+          } : null
+        };
+      });
+
       return {
-        recentSouscriptions: recentSouscriptions.data || [],
-        recentPaiements: recentPaiements.data || [],
-        recentClients: recentClients.data || [],
+        recentSouscriptions: souscriptionsList,
+        recentPaiements: paiementsList,
+        recentClients: clientsList,
       };
     },
   });
@@ -97,18 +121,38 @@ export function InteractiveDashboard() {
   const { data: alerts } = useQuery({
     queryKey: ['dashboard-alerts'],
     queryFn: async () => {
-      const [factures, locations, proprietes, echeances] = await Promise.all([
-        supabase.from('factures_fournisseurs').select('*, fournisseurs(nom)').gt('solde', 0),
-        supabase.from('locations').select('*, clients(nom, prenom)').gt('dette_totale', 100000),
-        supabase.from('proprietes').select('*').eq('statut', 'Libre'),
-        supabase.from('echeances_droit_terre').select('*').eq('statut', 'en_attente').lt('date_echeance', new Date().toISOString())
+      const [factures, locations, proprietes, echeances, fournisseurs, clients] = await Promise.all([
+        apiClient.select({ table: 'factures_fournisseurs', filters: [{ op: 'gt', column: 'solde', value: 0 }] }),
+        apiClient.select({ table: 'locations', filters: [{ op: 'gt', column: 'dette_totale', value: 100000 }] }),
+        apiClient.select({ table: 'proprietes', filters: [{ op: 'eq', column: 'statut', value: 'Libre' }] }),
+        apiClient.select({ table: 'echeances_droit_terre', filters: [
+          { op: 'eq', column: 'statut', value: 'en_attente' },
+          { op: 'lt', column: 'date_echeance', value: new Date().toISOString() }
+        ] }),
+        apiClient.select({ table: 'fournisseurs' }),
+        apiClient.select({ table: 'clients' })
       ]);
 
+      const fournisseursList = Array.isArray(fournisseurs) ? fournisseurs : [];
+      const clientsList = Array.isArray(clients) ? clients : [];
+
+      // Join fournisseurs to factures
+      const facturesList = (Array.isArray(factures) ? factures : []).map((f: any) => ({
+        ...f,
+        fournisseurs: fournisseursList.find((fo: any) => fo.id === f.fournisseur_id)
+      }));
+
+      // Join clients to locations
+      const locationsList = (Array.isArray(locations) ? locations : []).map((l: any) => ({
+        ...l,
+        clients: clientsList.find((c: any) => c.id === l.client_id)
+      }));
+
       return {
-        facturesImpayees: factures.data || [],
-        locationsEndettees: locations.data || [],
-        proprietesLibres: proprietes.data || [],
-        echeancesEnRetard: echeances.data || [],
+        facturesImpayees: facturesList,
+        locationsEndettees: locationsList,
+        proprietesLibres: Array.isArray(proprietes) ? proprietes : [],
+        echeancesEnRetard: Array.isArray(echeances) ? echeances : [],
       };
     },
   });

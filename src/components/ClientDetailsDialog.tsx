@@ -22,7 +22,7 @@ import {
   Calendar,
   DollarSign
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/api/client";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 

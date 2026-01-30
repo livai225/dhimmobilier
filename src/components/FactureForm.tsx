@@ -2,7 +2,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient } from "@/integrations/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -54,13 +54,11 @@ export function FactureForm({ facture, onSuccess }: FactureFormProps) {
   const { data: fournisseurs = [] } = useQuery({
     queryKey: ["fournisseurs-form"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("fournisseurs")
-        .select("id, nom")
-        .order("nom");
-      
-      if (error) throw error;
-      return data;
+      return await apiClient.select({
+        table: 'fournisseurs',
+        columns: 'id, nom',
+        orderBy: { column: 'nom', ascending: true }
+      });
     },
   });
 
@@ -68,21 +66,36 @@ export function FactureForm({ facture, onSuccess }: FactureFormProps) {
   const { data: proprietes = [] } = useQuery({
     queryKey: ["proprietes-form"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("proprietes")
-        .select("id, nom")
-        .order("nom");
-      
-      if (error) throw error;
-      return data;
+      if (useApi) {
+        return await apiClient.select({
+          table: 'proprietes',
+          columns: 'id, nom',
+          orderBy: { column: 'nom', ascending: true }
+        });
+      } else {
+        const { data, error } = await supabase
+          .from("proprietes")
+          .select("id, nom")
+          .order("nom");
+
+        if (error) throw error;
+        return data;
+      }
     },
   });
 
   // Generate invoice number if not provided
   const generateNumero = async () => {
-    const { data, error } = await supabase.rpc('generate_facture_number');
-    if (!error && data) {
-      form.setValue('numero', data);
+    if (useApi) {
+      const data = await apiClient.rpc('generate_facture_number');
+      if (data) {
+        form.setValue('numero', data);
+      }
+    } else {
+      const { data, error } = await supabase.rpc('generate_facture_number');
+      if (!error && data) {
+        form.setValue('numero', data);
+      }
     }
   };
 
@@ -102,23 +115,40 @@ export function FactureForm({ facture, onSuccess }: FactureFormProps) {
 
       if (facture) {
         // For updates, preserve existing payment amounts
-        const { error } = await supabase
-          .from("factures_fournisseurs")
-          .update({
-            numero: cleanData.numero,
-            fournisseur_id: cleanData.fournisseur_id,
-            propriete_id: data.propriete_id === "none" ? null : data.propriete_id || null,
-            date_facture: cleanData.date_facture,
-            montant_total: cleanData.montant_total,
-            description: cleanData.description,
-          })
-          .eq("id", facture.id);
-        if (error) throw error;
+        const updateData = {
+          numero: cleanData.numero,
+          fournisseur_id: cleanData.fournisseur_id,
+          propriete_id: data.propriete_id === "none" ? null : data.propriete_id || null,
+          date_facture: cleanData.date_facture,
+          montant_total: cleanData.montant_total,
+          description: cleanData.description,
+        };
+
+        if (useApi) {
+          await apiClient.update({
+            table: 'factures_fournisseurs',
+            data: updateData,
+            filters: [{ op: 'eq', column: 'id', value: facture.id }]
+          });
+        } else {
+          const { error } = await supabase
+            .from("factures_fournisseurs")
+            .update(updateData)
+            .eq("id", facture.id);
+          if (error) throw error;
+        }
       } else {
-        const { error } = await supabase
-          .from("factures_fournisseurs")
-          .insert(cleanData);
-        if (error) throw error;
+        if (useApi) {
+          await apiClient.insert({
+            table: 'factures_fournisseurs',
+            data: cleanData
+          });
+        } else {
+          const { error } = await supabase
+            .from("factures_fournisseurs")
+            .insert(cleanData);
+          if (error) throw error;
+        }
       }
     },
     onSuccess: () => {

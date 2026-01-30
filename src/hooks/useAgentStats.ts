@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient } from "@/integrations/api/client";
 
 interface AgentStats {
   totalProperties: number;
@@ -40,12 +40,10 @@ export function useAgentStats(agentId: string | null, mode: 'locations' | 'sousc
       }
 
       // Get properties managed by this agent
-      const { data: properties, error: propertiesError } = await supabase
-        .from("proprietes")
-        .select("id, loyer_mensuel")
-        .eq("agent_id", agentId);
-
-      if (propertiesError) throw propertiesError;
+      const properties = await apiClient.select({
+        table: "proprietes",
+        filters: [{ op: "eq", column: "agent_id", value: agentId }]
+      });
 
       const propertyIds = properties?.map(p => p.id) || [];
 
@@ -73,14 +71,11 @@ export function useAgentStats(agentId: string | null, mode: 'locations' | 'sousc
 
       // Get active locations for this agent's properties (if needed)
       if (mode === 'locations' || mode === 'all') {
-        const { data: locationsData, error: locationsError } = await supabase
-          .from("locations")
-          .select("id, loyer_mensuel, client_id")
-          .in("propriete_id", propertyIds)
-          .eq("statut", "active");
-
-        if (locationsError) throw locationsError;
-        locations = locationsData || [];
+        const allLocations = await apiClient.select({
+          table: "locations",
+          filters: [{ op: "eq", column: "statut", value: "active" }]
+        });
+        locations = allLocations.filter((l: any) => propertyIds.includes(l.propriete_id));
 
         // Count distinct clients from locations
         const uniqueLocationClients = new Set(locations.map(l => l.client_id));
@@ -89,14 +84,11 @@ export function useAgentStats(agentId: string | null, mode: 'locations' | 'sousc
 
       // Get active subscriptions for this agent's properties (if needed)
       if (mode === 'souscriptions' || mode === 'all') {
-        const { data: souscriptionsData, error: souscriptionsError } = await supabase
-          .from("souscriptions")
-          .select("id, montant_droit_terre_mensuel, phase_actuelle, client_id")
-          .in("propriete_id", propertyIds)
-          .eq("statut", "active");
-
-        if (souscriptionsError) throw souscriptionsError;
-        souscriptions = souscriptionsData || [];
+        const allSouscriptions = await apiClient.select({
+          table: "souscriptions",
+          filters: [{ op: "eq", column: "statut", value: "active" }]
+        });
+        souscriptions = allSouscriptions.filter((s: any) => propertyIds.includes(s.propriete_id));
 
         // Count distinct clients from subscriptions
         const uniqueSubscriptionClients = new Set(souscriptions.map(s => s.client_id));
@@ -175,19 +167,18 @@ export function useAgentStats(agentId: string | null, mode: 'locations' | 'sousc
         }
 
         // Get actual payments for locations
-        let paymentsQuery = supabase
-          .from("paiements_locations")
-          .select("montant, location_id")
-          .in("location_id", locations.map(l => l.id));
-        
+        const locationIds = locations.map((l: any) => l.id);
+        let allLocationPayments = await apiClient.select({ table: "paiements_locations" });
+        let locationPayments = allLocationPayments.filter((p: any) => locationIds.includes(p.location_id));
+
         if (startDate && endDate) {
-          paymentsQuery = paymentsQuery
-            .gte("date_paiement", startDate)
-            .lte("date_paiement", endDate);
+          locationPayments = locationPayments.filter((p: any) => {
+            const payDate = p.date_paiement;
+            return payDate >= startDate && payDate <= endDate;
+          });
         }
 
-        const { data: locationPayments } = await paymentsQuery;
-        totalPaid += locationPayments?.reduce((sum, p) => sum + (p.montant || 0), 0) || 0;
+        totalPaid += locationPayments?.reduce((sum: number, p: any) => sum + (p.montant || 0), 0) || 0;
       }
 
       if (mode === 'souscriptions' || mode === 'all') {
@@ -218,19 +209,18 @@ export function useAgentStats(agentId: string | null, mode: 'locations' | 'sousc
         }
 
         // Get actual payments for land rights
-        let landPaymentsQuery = supabase
-          .from("paiements_droit_terre")
-          .select("montant, souscription_id")
-          .in("souscription_id", souscriptions.map(s => s.id));
-        
+        const souscriptionIds = souscriptions.map((s: any) => s.id);
+        let allLandPayments = await apiClient.select({ table: "paiements_droit_terre" });
+        let landPayments = allLandPayments.filter((p: any) => souscriptionIds.includes(p.souscription_id));
+
         if (startDate && endDate) {
-          landPaymentsQuery = landPaymentsQuery
-            .gte("date_paiement", startDate)
-            .lte("date_paiement", endDate);
+          landPayments = landPayments.filter((p: any) => {
+            const payDate = p.date_paiement;
+            return payDate >= startDate && payDate <= endDate;
+          });
         }
 
-        const { data: landPayments } = await landPaymentsQuery;
-        totalPaid += landPayments?.reduce((sum, p) => sum + (p.montant || 0), 0) || 0;
+        totalPaid += landPayments?.reduce((sum: number, p: any) => sum + (p.montant || 0), 0) || 0;
       }
 
       // Calculate recovery rate and outstanding

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient } from "@/integrations/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -78,12 +78,10 @@ export default function Users() {
   const { data: availablePermissions } = useQuery({
     queryKey: ['available-permissions'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('available_permissions')
-        .select('*')
-        .order('category, display_name');
-      
-      if (error) throw error;
+      const data = await apiClient.select({
+        table: "available_permissions",
+        orderBy: { column: "display_name", ascending: true }
+      });
       return data as AvailablePermission[];
     }
   });
@@ -93,13 +91,11 @@ export default function Users() {
     queryKey: ['user-permissions', editingUser?.id],
     queryFn: async () => {
       if (!editingUser?.id) return [];
-      
-      const { data, error } = await supabase
-        .from('user_permissions')
-        .select('permission_name, granted')
-        .eq('user_id', editingUser.id);
-      
-      if (error) throw error;
+
+      const data = await apiClient.select({
+        table: "user_permissions",
+        filters: [{ op: "eq", column: "user_id", value: editingUser.id }]
+      });
       return data as UserPermission[];
     },
     enabled: !!editingUser?.id
@@ -118,12 +114,7 @@ export default function Users() {
   const { data: users, isLoading } = useQuery({
     queryKey: ['users'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .order('nom');
-      
-      if (error) throw error;
+      const data = await apiClient.getUsers();
       return data as User[];
     }
   });
@@ -140,32 +131,29 @@ export default function Users() {
       const { password, ...userDataToInsert } = userData;
       const finalUserData = {
         ...userDataToInsert,
-        password_hash: hashedPassword
+        password_hash: hashedPassword,
+        actif: true
       };
 
-      const { data, error } = await supabase
-        .from('users')
-        .insert([finalUserData])
-        .select()
-        .single();
-      
-      if (error) throw error;
+      await apiClient.insert({ table: "users", values: finalUserData });
+
+      // Récupérer l'utilisateur créé pour obtenir son ID
+      const users = await apiClient.select({
+        table: "users",
+        filters: [{ op: "eq", column: "username", value: userData.username }],
+        single: true
+      });
+      const data = users;
 
       // Sauvegarder les permissions personnalisées
-      if (selectedPermissions.length > 0) {
+      if (selectedPermissions.length > 0 && data?.id) {
         const permissionsToInsert = selectedPermissions.map(permissionName => ({
           user_id: data.id,
           permission_name: permissionName,
           granted: true
         }));
 
-        const { error: permError } = await supabase
-          .from('user_permissions')
-          .insert(permissionsToInsert);
-
-        if (permError) {
-          console.error('Error saving permissions:', permError);
-        }
+        await apiClient.insert({ table: "user_permissions", values: permissionsToInsert });
       }
 
       return data;
@@ -177,8 +165,8 @@ export default function Users() {
       toast.success("Utilisateur créé avec succès");
     },
     onError: (error: any) => {
-      toast.error(error.message?.includes('users_username_key') 
-        ? "Ce nom d'utilisateur existe déjà" 
+      toast.error(error.message?.includes('users_username_key')
+        ? "Ce nom d'utilisateur existe déjà"
         : "Erreur lors de la création de l'utilisateur");
       console.error(error);
     }
@@ -193,25 +181,18 @@ export default function Users() {
       }
 
       const { password, ...userDataToUpdate } = userData;
-      const finalUserData = hashedPassword 
+      const finalUserData = hashedPassword
         ? { ...userDataToUpdate, password_hash: hashedPassword }
         : userDataToUpdate;
 
-      const { data, error } = await supabase
-        .from('users')
-        .update(finalUserData)
-        .eq('id', id)
-        .select()
-        .single();
-      
-      if (error) throw error;
+      await apiClient.updateUser(id, finalUserData);
 
       // Mettre à jour les permissions personnalisées
       // D'abord, supprimer toutes les permissions existantes
-      await supabase
-        .from('user_permissions')
-        .delete()
-        .eq('user_id', id);
+      await apiClient.delete({
+        table: "user_permissions",
+        filters: [{ op: "eq", column: "user_id", value: id }]
+      });
 
       // Puis, insérer les nouvelles permissions sélectionnées
       if (selectedPermissions.length > 0) {
@@ -221,16 +202,10 @@ export default function Users() {
           granted: true
         }));
 
-        const { error: permError } = await supabase
-          .from('user_permissions')
-          .insert(permissionsToInsert);
-
-        if (permError) {
-          console.error('Error saving permissions:', permError);
-        }
+        await apiClient.insert({ table: "user_permissions", values: permissionsToInsert });
       }
 
-      return data;
+      return { id };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
@@ -240,8 +215,8 @@ export default function Users() {
       toast.success("Utilisateur modifié avec succès");
     },
     onError: (error: any) => {
-      toast.error(error.message?.includes('users_username_key') 
-        ? "Ce nom d'utilisateur existe déjà" 
+      toast.error(error.message?.includes('users_username_key')
+        ? "Ce nom d'utilisateur existe déjà"
         : "Erreur lors de la modification de l'utilisateur");
       console.error(error);
     }
@@ -249,18 +224,13 @@ export default function Users() {
 
   const deleteUserMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('users')
-        .update({ actif: false })
-        .eq('id', id);
-      
-      if (error) throw error;
+      await apiClient.updateUser(id, { actif: false });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       toast.success("Utilisateur désactivé avec succès");
     },
-    onError: (error) => {
+    onError: (error: any) => {
       toast.error("Erreur lors de la désactivation de l'utilisateur");
       console.error(error);
     }

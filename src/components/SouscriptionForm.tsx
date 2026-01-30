@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient } from "@/integrations/api/client";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -81,28 +81,28 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
   const { data: clients = [], isLoading: clientsLoading } = useQuery<Array<Client & { label: string; value: string }>>({
     queryKey: ["clients", clientSearchTerm],
     queryFn: async () => {
-      let query = supabase
-        .from("clients")
-        .select("id, nom, prenom")
-        .order("nom");
-      
-      // Si on a un terme de recherche, filtrer côté serveur
+      const filters: any[] = [];
       if (clientSearchTerm.trim()) {
-        query = query.or(`nom.ilike.%${clientSearchTerm}%,prenom.ilike.%${clientSearchTerm}%`);
+        filters.push({ op: 'or', filters: [
+          { op: 'ilike', column: 'nom', value: `%${clientSearchTerm}%` },
+          { op: 'ilike', column: 'prenom', value: `%${clientSearchTerm}%` }
+        ]});
       }
-      
-      const { data, error } = await query;
-      if (error) throw error;
-      
+      const data: Client[] = await apiClient.select({
+        table: 'clients',
+        columns: 'id, nom, prenom',
+        filters,
+        orderBy: { column: 'nom', ascending: true }
+      });
+
       console.log(`Clients chargés: ${data?.length || 0} (recherche: "${clientSearchTerm}")`);
-      
-      return (data as Client[]).map(client => ({
+
+      return data.map(client => ({
         ...client,
         label: `${client.prenom} ${client.nom}`,
         value: client.id
       }));
     },
-    // Charger tous les clients au début, puis filtrer selon la recherche
     enabled: true,
   });
 
@@ -117,22 +117,23 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
   const { data: proprietes = [] } = useQuery<Array<Propriete & { label: string; value: string }>>({
     queryKey: ["proprietes", souscription?.id],
     queryFn: async () => {
-      let query = supabase
-        .from("proprietes")
-        .select("id, nom, adresse, montant_bail, droit_terre")
-        .eq("usage", "Bail");
-      
-      // En mode édition, inclure la propriété actuelle ET les propriétés libres
+      const filters: any[] = [{ op: 'eq', column: 'usage', value: 'Bail' }];
       if (souscription?.propriete_id) {
-        query = query.or(`statut.eq.Libre,id.eq.${souscription.propriete_id}`);
+        filters.push({ op: 'or', filters: [
+          { op: 'eq', column: 'statut', value: 'Libre' },
+          { op: 'eq', column: 'id', value: souscription.propriete_id }
+        ]});
       } else {
-        // En mode création, seulement les propriétés libres
-        query = query.eq("statut", "Libre");
+        filters.push({ op: 'eq', column: 'statut', value: 'Libre' });
       }
-      
-      const { data, error } = await query.order("nom");
-      if (error) throw error;
-      return (data as Propriete[]).map(propriete => ({
+      const data: Propriete[] = await apiClient.select({
+        table: 'proprietes',
+        columns: 'id, nom, adresse, montant_bail, droit_terre',
+        filters,
+        orderBy: { column: 'nom', ascending: true }
+      });
+
+      return data.map(propriete => ({
         ...propriete,
         label: propriete.nom,
         value: propriete.id
@@ -181,54 +182,50 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
 
       // Update property status to "Occupé" when creating a new subscription
       if (!souscription && data.propriete_id) {
-        await supabase
-          .from("proprietes")
-          .update({ statut: "Occupé" })
-          .eq("id", data.propriete_id);
+        await apiClient.update({
+          table: 'proprietes',
+          data: { statut: 'Occupé' },
+          filters: [{ op: 'eq', column: 'id', value: data.propriete_id }]
+        });
       }
 
-      let result;
+      let resultData: any = null;
       let receipt = null;
-      
+
       if (souscription) {
-        result = await supabase
-          .from("souscriptions")
-          .update(processedData)
-          .eq("id", souscription.id);
+        await apiClient.update({
+          table: 'souscriptions',
+          data: processedData,
+          filters: [{ op: 'eq', column: 'id', value: souscription.id }]
+        });
+        resultData = { id: souscription.id };
       } else {
-        result = await supabase
-          .from("souscriptions")
-          .insert(processedData)
-          .select()
-          .single();
-        
+        const insertedId = await apiClient.insert({
+          table: 'souscriptions',
+          data: processedData
+        });
+        resultData = { id: insertedId };
+
         // Enregistrer le paiement via la fonction RPC pour déduire la caisse
-        if (apportAmount > 0 && result.data) {
-          const operationType = 'paiement_souscription';
+        if (apportAmount > 0 && resultData?.id) {
           const description = data.paiement_immediat
             ? 'Paiement intégral de souscription'
             : 'Apport initial pour souscription';
 
-          const { data: txId, error: payError } = await supabase.rpc('pay_souscription_with_cash' as any, {
-            p_souscription_id: result.data.id,
-            p_montant: apportAmount,
-            p_date_paiement: processedData.date_debut,
-            p_mode_paiement: data.mode_paiement || 'especes',
-            p_reference: `${description} - ${result.data.id}`,
-            p_description: description,
+          await apiClient.rpc('pay_souscription_with_cash', {
+            souscription_id: resultData.id,
+            montant: apportAmount,
+            date_paiement: processedData.date_debut,
+            mode_paiement: data.mode_paiement || 'especes',
+            reference: `${description} - ${resultData.id}`,
+            description: description,
           });
-
-          if (payError) {
-            console.error('Error paying subscription with cash:', payError);
-            throw new Error("Erreur lors de l'enregistrement du paiement et de la déduction de caisse");
-          }
 
           // Le reçu sera généré automatiquement par trigger
         }
       }
 
-      if (result.error) throw result.error;
-      return { result, receipt };
+      return { result: { data: resultData }, receipt };
     },
     onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ["souscriptions"] });

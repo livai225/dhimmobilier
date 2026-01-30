@@ -1,6 +1,5 @@
 import { useCurrentUser } from "./useCurrentUser";
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { apiClient } from "@/integrations/api/client";
 
 interface UserPermission {
@@ -12,7 +11,6 @@ export const useUserPermissions = () => {
   const { currentUser } = useCurrentUser();
   const [customPermissions, setCustomPermissions] = useState<UserPermission[]>([]);
   const [loading, setLoading] = useState(false);
-  const useApi = import.meta.env.VITE_USE_API === 'true';
 
   // Charger les permissions personnalisées seulement pour les non-admins
   useEffect(() => {
@@ -26,24 +24,11 @@ export const useUserPermissions = () => {
 
   const loadCustomPermissions = async () => {
     if (!currentUser?.id || currentUser.role === 'admin') return;
-    
+
     setLoading(true);
     try {
-      if (useApi) {
-        const res = await apiClient.getUserPermissions(currentUser.id);
-        setCustomPermissions(res || []);
-      } else {
-        const { data, error } = await supabase
-          .from('user_permissions')
-          .select('permission_name, granted')
-          .eq('user_id', currentUser.id);
-
-        if (error) {
-          console.error('Error loading custom permissions:', error);
-        } else {
-          setCustomPermissions(data || []);
-        }
-      }
+      const res = await apiClient.getUserPermissions(currentUser.id);
+      setCustomPermissions(res || []);
     } catch (error) {
       console.error('Error loading custom permissions:', error);
     } finally {

@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient } from "@/integrations/api/client";
 import {
   Dialog,
   DialogContent,
@@ -78,15 +78,14 @@ export function PaiementSouscriptionEcheanceDialog({
 
 
       // 2) Paiement via caisse (entree + journal)
-      const { data: paiementId, error: rpcError } = await supabase.rpc("pay_souscription_with_cash" as any, {
-        p_souscription_id: souscription.id,
-        p_montant: montantPaiement,
-        p_date_paiement: data.date_paiement,
-        p_mode_paiement: data.mode_paiement || null,
-        p_reference: data.reference || null,
-        p_description: "Paiement souscription",
+      const paiementId = await apiClient.rpc("pay_souscription_with_cash", {
+        souscription_id: souscription.id,
+        montant: montantPaiement,
+        date_paiement: data.date_paiement,
+        mode_paiement: data.mode_paiement || null,
+        reference: data.reference || null,
+        description: "Paiement souscription",
       });
-      if (rpcError) throw rpcError;
 
       return { paiementId };
     },

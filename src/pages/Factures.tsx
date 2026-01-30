@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient } from "@/integrations/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -49,17 +49,22 @@ export default function Factures() {
   const { data: factures = [], isLoading, isFetching } = useQuery({
     queryKey: ["factures"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("factures_fournisseurs")
-        .select(`
-          *,
-          fournisseur:fournisseurs(nom),
-          propriete:proprietes(nom)
-        `)
-        .order("date_facture", { ascending: false });
-      
-      if (error) throw error;
-      return data;
+      const [facturesData, fournisseursData, proprietesData] = await Promise.all([
+        apiClient.getFactures(),
+        apiClient.getFournisseurs(),
+        apiClient.getProprietes()
+      ]);
+
+      // Joindre les données
+      return facturesData.map((facture: any) => {
+        const fournisseur = fournisseursData.find((f: any) => f.id === facture.fournisseur_id);
+        const propriete = proprietesData.find((p: any) => p.id === facture.propriete_id);
+        return {
+          ...facture,
+          fournisseur: fournisseur ? { nom: fournisseur.nom } : null,
+          propriete: propriete ? { nom: propriete.nom } : null
+        };
+      });
     },
   });
 
@@ -67,12 +72,7 @@ export default function Factures() {
   const { data: fournisseurs = [] } = useQuery({
     queryKey: ["fournisseurs-filter"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("fournisseurs")
-        .select("id, nom")
-        .order("nom");
-      
-      if (error) throw error;
+      const data = await apiClient.getFournisseurs();
       return data;
     },
   });
@@ -80,11 +80,10 @@ export default function Factures() {
   // Delete invoice mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("factures_fournisseurs")
-        .delete()
-        .eq("id", id);
-      if (error) throw error;
+      await apiClient.delete({
+        table: "factures_fournisseurs",
+        filters: [{ op: "eq", column: "id", value: id }]
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["factures"] });
@@ -93,10 +92,10 @@ export default function Factures() {
         description: "Facture supprimée avec succès",
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       toast({
         title: "Erreur",
-        description: "Erreur lors de la suppression de la facture",
+        description: error.message || "Erreur lors de la suppression de la facture",
         variant: "destructive",
       });
     },

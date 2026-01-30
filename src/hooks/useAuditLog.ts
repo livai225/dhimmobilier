@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient } from "@/integrations/api/client";
 import { useCurrentUser } from "./useCurrentUser";
 import { toast } from "./use-toast";
 
@@ -22,9 +22,9 @@ export const useAuditLog = () => {
         throw new Error('User not authenticated');
       }
 
-      const { data, error } = await supabase
-        .from('audit_logs')
-        .insert({
+      await apiClient.insert({
+        table: 'audit_logs',
+        values: {
           user_id: currentUser.id,
           action_type: entry.action_type,
           table_name: entry.table_name,
@@ -32,16 +32,10 @@ export const useAuditLog = () => {
           old_values: entry.old_values || null,
           new_values: entry.new_values || null,
           description: entry.description || null
-        })
-        .select()
-        .single();
+        }
+      });
 
-      if (error) {
-        console.error('Failed to log audit event:', error);
-        throw error;
-      }
-
-      return data;
+      return { success: true };
     },
     onError: (error) => {
       console.error('Audit log error:', error);

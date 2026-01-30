@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useCurrentUser, User } from "@/hooks/useCurrentUser";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/api/client";
 import {
   Select,
   SelectContent,

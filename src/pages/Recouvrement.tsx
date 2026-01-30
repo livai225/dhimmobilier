@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient } from "@/integrations/api/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -43,13 +43,11 @@ export default function Recouvrement() {
   const { data: allAgents = [] } = useQuery({
     queryKey: ['all-agents'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('agents_recouvrement')
-        .select('id, nom, prenom, code_agent')
-        .eq('statut', 'actif')
-        .order('nom');
-      
-      if (error) throw error;
+      const data = await apiClient.select({
+        table: 'agents_recouvrement',
+        filters: [{ op: 'eq', column: 'statut', value: 'actif' }],
+        orderBy: { column: 'nom', ascending: true }
+      });
       return data;
     },
   });
@@ -58,76 +56,73 @@ export default function Recouvrement() {
   const { data: agentsRecovery = [], isLoading } = useQuery({
     queryKey: ['agents-recovery', monthFilter],
     queryFn: async () => {
-      // Get agents with their assigned properties
-      const { data: agents, error: agentsError } = await supabase
-        .from('agents_recouvrement')
-        .select(`
-          id, nom, prenom, code_agent, statut,
-          proprietes:proprietes!agent_id (
-            id, nom, usage, loyer_mensuel, droit_terre,
-            locations:locations!propriete_id (
-              id, client_id, loyer_mensuel, date_debut,
-              clients:clients!client_id (nom, prenom)
-            ),
-        souscriptions:souscriptions!propriete_id (
-          id, client_id, type_souscription, montant_droit_terre_mensuel, phase_actuelle, statut,
-          clients:clients!client_id (nom, prenom)
-        )
-          )
-        `)
-        .eq('statut', 'actif')
-        .order('nom');
+      // Récupérer toutes les données nécessaires en parallèle
+      const [
+        agentsData,
+        proprietesData,
+        locationsData,
+        souscriptionsData,
+        clientsData,
+        paiementsLocationsData,
+        paiementsDroitTerreData
+      ] = await Promise.all([
+        apiClient.select({ table: 'agents_recouvrement', filters: [{ op: 'eq', column: 'statut', value: 'actif' }], orderBy: { column: 'nom', ascending: true } }),
+        apiClient.select({ table: 'proprietes' }),
+        apiClient.select({ table: 'locations' }),
+        apiClient.select({ table: 'souscriptions' }),
+        apiClient.select({ table: 'clients' }),
+        apiClient.select({ table: 'paiements_locations' }),
+        apiClient.select({ table: 'paiements_droit_terre' })
+      ]);
 
-      if (agentsError) throw agentsError;
+      // Joindre les données
+      const agents = agentsData.map((agent: any) => {
+        const agentProprietes = proprietesData.filter((p: any) => p.agent_id === agent.id);
+        const proprietesWithRelations = agentProprietes.map((propriete: any) => {
+          const proprieteLocations = locationsData
+            .filter((l: any) => l.propriete_id === propriete.id)
+            .map((location: any) => ({
+              ...location,
+              clients: clientsData.find((c: any) => c.id === location.client_id) || null
+            }));
+          const proprieteSouscriptions = souscriptionsData
+            .filter((s: any) => s.propriete_id === propriete.id)
+            .map((souscription: any) => ({
+              ...souscription,
+              clients: clientsData.find((c: any) => c.id === souscription.client_id) || null
+            }));
+          return {
+            ...propriete,
+            locations: proprieteLocations,
+            souscriptions: proprieteSouscriptions
+          };
+        });
+        return { ...agent, proprietes: proprietesWithRelations };
+      });
 
       // Calculate the date range for the month
       const startOfMonth = `${monthFilter}-01`;
       const date = new Date(`${monthFilter}-01`);
       const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
       const endOfMonth = `${monthFilter}-${String(lastDay).padStart(2, '0')}`;
-      
-      // Get all payments for locations in the month
-      const { data: paiementsLocations, error: locError } = await supabase
-        .from('paiements_locations')
-        .select('location_id, montant')
-        .gte('date_paiement', startOfMonth)
-        .lte('date_paiement', endOfMonth);
 
-      if (locError) {
-        console.error('Error fetching paiements_locations:', locError);
-      }
-
-      // Get all payments for land rights in the month
-      const { data: paiementsDroitTerre, error: dtError } = await supabase
-        .from('paiements_droit_terre')
-        .select('souscription_id, montant')
-        .gte('date_paiement', startOfMonth)
-        .lte('date_paiement', endOfMonth);
-
-      if (dtError) {
-        console.error('Error fetching paiements_droit_terre:', dtError);
-      }
-
-      // Get location to property mappings
-      const locationIds = paiementsLocations?.map(p => p.location_id) || [];
-      const { data: locations } = await supabase
-        .from('locations')
-        .select('id, propriete_id')
-        .in('id', locationIds);
-
-      const locationPropertyMap = new Map(
-        locations?.map(l => [l.id, l.propriete_id]) || []
+      // Filter payments for the month
+      const paiementsLocations = paiementsLocationsData.filter((p: any) =>
+        p.date_paiement >= startOfMonth && p.date_paiement <= endOfMonth
       );
 
-      // Get souscription to property mappings
-      const souscriptionIds = paiementsDroitTerre?.map(p => p.souscription_id) || [];
-      const { data: souscriptions } = await supabase
-        .from('souscriptions')
-        .select('id, propriete_id')
-        .in('id', souscriptionIds);
+      const paiementsDroitTerre = paiementsDroitTerreData.filter((p: any) =>
+        p.date_paiement >= startOfMonth && p.date_paiement <= endOfMonth
+      );
 
+      // Build location to property mappings
+      const locationPropertyMap = new Map(
+        locationsData.map((l: any) => [l.id, l.propriete_id])
+      );
+
+      // Build souscription to property mappings
       const souscriptionPropertyMap = new Map(
-        souscriptions?.map(s => [s.id, s.propriete_id]) || []
+        souscriptionsData.map((s: any) => [s.id, s.propriete_id])
       );
 
       // Process recovery data

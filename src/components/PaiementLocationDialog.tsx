@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient } from "@/integrations/api/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,16 +37,16 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
   const { data: paidMonths = [] } = useQuery({
     queryKey: ["paid_months", location.id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("recus")
-        .select("periode_debut, meta")
-        .eq("type_operation", "location")
-        .eq("meta->>objet_id", location.id)
-        .not("periode_debut", "is", null);
-      
-      if (error) throw error;
-      
-      return data.map(recu => format(new Date(recu.periode_debut), "yyyy-MM"));
+      const data = await apiClient.select({
+        table: 'recus',
+        filters: [
+          { op: 'eq', column: 'type_operation', value: 'location' }
+        ]
+      });
+      const filtered = (Array.isArray(data) ? data : []).filter((r: any) =>
+        r.meta?.objet_id === location.id && r.periode_debut
+      );
+      return filtered.map((recu: any) => format(new Date(recu.periode_debut), "yyyy-MM"));
     },
     enabled: !!location.id,
   });
@@ -74,16 +74,15 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
         ? `Loyer ${format(new Date(selectedMonth + "-01"), "MMMM yyyy", { locale: fr })}`
         : "Paiement loyer";
 
-      const { data: paiementId, error: rpcError } = await supabase.rpc("pay_location_with_cash" as any, {
-        p_location_id: location.id,
-        p_montant: amount,
-        p_date_paiement: datePaiement.toISOString().split("T")[0],
-        p_mode_paiement: modePaiement || null,
-        p_reference: reference || null,
-        p_description: description,
-        p_periode_paiement: selectedMonth ? selectedMonth + "-01" : null,
+      const paiementId = await apiClient.rpc("pay_location_with_cash", {
+        location_id: location.id,
+        montant: amount,
+        date_paiement: datePaiement.toISOString().split("T")[0],
+        mode_paiement: modePaiement || null,
+        reference: reference || null,
+        description: description,
+        periode_paiement: selectedMonth ? selectedMonth + "-01" : null,
       });
-      if (rpcError) throw rpcError;
 
       // Le trigger se charge maintenant automatiquement de créer le reçu avec la bonne période
 

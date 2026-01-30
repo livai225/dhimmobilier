@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient } from "@/integrations/api/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -43,65 +43,49 @@ export default function Souscriptions() {
   const { data: souscriptions, isLoading, refetch } = useQuery({
     queryKey: ["souscriptions"],
     queryFn: async () => {
-      // Récupérer d'abord le nombre total de souscriptions
-      const { count, error: countError } = await supabase
-        .from("souscriptions")
-        .select("*", { count: "exact", head: true });
-      
-      if (countError) throw countError;
-      
-      console.log(`Nombre total de souscriptions dans la base: ${count}`);
-      
-      // Si plus de 10000 souscriptions, utiliser une approche par lots
-      if (count && count > 10000) {
-        console.log("Trop de souscriptions, chargement par lots...");
-        setAllSouscriptionsLoaded(false);
-        
-        // Charger les 10000 plus récentes d'abord
-        const { data, error } = await supabase
-          .from("souscriptions")
-          .select(`
-            *,
-            clients(nom, prenom),
-            proprietes!inner(nom, adresse, agent_id, zone, agents_recouvrement(nom, prenom))
-          `)
-          .order("created_at", { ascending: false })
-          .limit(10000);
+      // Récupérer les souscriptions
+      const souscriptionsData = await apiClient.select({
+        table: "souscriptions",
+        orderBy: { column: "created_at", ascending: false },
+        limit: 10000
+      });
 
-        if (error) throw error;
-        
-        console.log(`Souscriptions chargées (premiers 10000): ${data?.length || 0}`);
-        return data;
-      } else {
-        // Charger toutes les souscriptions si moins de 10000
-        const { data, error } = await supabase
-          .from("souscriptions")
-          .select(`
-            *,
-            clients(nom, prenom),
-            proprietes!inner(nom, adresse, agent_id, zone, agents_recouvrement(nom, prenom))
-          `)
-          .order("created_at", { ascending: false });
+      // Récupérer les données liées
+      const [clientsData, proprietesData, agentsData] = await Promise.all([
+        apiClient.select({ table: "clients" }),
+        apiClient.select({ table: "proprietes" }),
+        apiClient.select({ table: "agents_recouvrement" })
+      ]);
 
-        if (error) throw error;
-        
-        console.log(`Toutes les souscriptions chargées: ${data?.length || 0}`);
-        setAllSouscriptionsLoaded(true);
-        return data;
-      }
+      console.log(`Souscriptions chargées: ${souscriptionsData?.length || 0}`);
+      setAllSouscriptionsLoaded(souscriptionsData?.length < 10000);
+
+      // Joindre les données
+      return souscriptionsData.map((souscription: any) => {
+        const client = clientsData.find((c: any) => c.id === souscription.client_id);
+        const propriete = proprietesData.find((p: any) => p.id === souscription.propriete_id);
+        const agent = propriete ? agentsData.find((a: any) => a.id === propriete.agent_id) : null;
+
+        return {
+          ...souscription,
+          clients: client ? { nom: client.nom, prenom: client.prenom } : null,
+          proprietes: propriete ? {
+            ...propriete,
+            agents_recouvrement: agent ? { nom: agent.nom, prenom: agent.prenom } : null
+          } : null
+        };
+      });
     },
   });
 
   const { data: agents } = useQuery({
     queryKey: ["agents"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("agents_recouvrement")
-        .select("id, nom, prenom")
-        .eq("statut", "actif")
-        .order("nom");
-
-      if (error) throw error;
+      const data = await apiClient.select({
+        table: "agents_recouvrement",
+        filters: [{ op: "eq", column: "statut", value: "actif" }],
+        orderBy: { column: "nom", ascending: true }
+      });
       return data;
     },
   });
@@ -109,29 +93,18 @@ export default function Souscriptions() {
   const { data: zones } = useQuery({
     queryKey: ["zones"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("proprietes")
-        .select("zone")
-        .not("zone", "is", null)
-        .neq("zone", "");
+      const data = await apiClient.select({ table: "proprietes" });
 
-      if (error) throw error;
-      
       // Extraire les zones uniques et les trier
-      const uniqueZones = [...new Set(data?.map(p => p.zone).filter(Boolean))].sort();
-      return uniqueZones;
+      const uniqueZones = [...new Set(data?.map((p: any) => p.zone).filter(Boolean))].sort();
+      return uniqueZones as string[];
     },
   });
 
   const { data: baremes } = useQuery({
     queryKey: ["bareme_droits_terre"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("bareme_droits_terre")
-        .select("*")
-        .order("montant_mensuel");
-
-      if (error) throw error;
+      const data = await apiClient.getBaremeDroitsTerre();
       return data;
     },
   });
@@ -147,72 +120,41 @@ export default function Souscriptions() {
     }
 
     try {
-      // Étape 1 : Supprimer les reçus liés
-      const { error: recusError } = await supabase
-        .from("recus")
-        .delete()
-        .eq("reference_id", souscriptionId)
-        .in("type_operation", ["paiement_souscription", "paiement_droit_terre"]);
+      // Supprimer les reçus liés
+      await apiClient.delete({
+        table: "recus",
+        filters: [{ op: "eq", column: "reference_id", value: souscriptionId }]
+      });
 
-      if (recusError) {
-        console.error("Erreur lors de la suppression des reçus:", recusError);
-        throw new Error("Impossible de supprimer les reçus associés");
-      }
+      // Supprimer les transactions de caisse liées
+      await apiClient.delete({
+        table: "cash_transactions",
+        filters: [{ op: "eq", column: "reference_operation", value: souscriptionId }]
+      });
 
-      // Étape 2 : Supprimer les transactions de caisse liées
-      const { error: cashError } = await supabase
-        .from("cash_transactions")
-        .delete()
-        .eq("reference_operation", souscriptionId);
+      // Supprimer les paiements de souscription
+      await apiClient.delete({
+        table: "paiements_souscriptions",
+        filters: [{ op: "eq", column: "souscription_id", value: souscriptionId }]
+      });
 
-      if (cashError) {
-        console.error("Erreur lors de la suppression des transactions:", cashError);
-        throw new Error("Impossible de supprimer les transactions de caisse associées");
-      }
+      // Supprimer les paiements de droit de terre
+      await apiClient.delete({
+        table: "paiements_droit_terre",
+        filters: [{ op: "eq", column: "souscription_id", value: souscriptionId }]
+      });
 
-      // Étape 3 : Supprimer les paiements de souscription
-      const { error: paiementsError } = await supabase
-        .from("paiements_souscriptions")
-        .delete()
-        .eq("souscription_id", souscriptionId);
+      // Supprimer les échéances de droit de terre
+      await apiClient.delete({
+        table: "echeances_droit_terre",
+        filters: [{ op: "eq", column: "souscription_id", value: souscriptionId }]
+      });
 
-      if (paiementsError) {
-        console.error("Erreur lors de la suppression des paiements de souscription:", paiementsError);
-        throw new Error("Impossible de supprimer les paiements de souscription");
-      }
-
-      // Étape 4 : Supprimer les paiements de droit de terre
-      const { error: droitTerreError } = await supabase
-        .from("paiements_droit_terre")
-        .delete()
-        .eq("souscription_id", souscriptionId);
-
-      if (droitTerreError) {
-        console.error("Erreur lors de la suppression des paiements de droit de terre:", droitTerreError);
-        throw new Error("Impossible de supprimer les paiements de droit de terre");
-      }
-
-      // Étape 5 : Supprimer les échéances de droit de terre
-      const { error: echeancesError } = await supabase
-        .from("echeances_droit_terre")
-        .delete()
-        .eq("souscription_id", souscriptionId);
-
-      if (echeancesError) {
-        console.error("Erreur lors de la suppression des échéances:", echeancesError);
-        throw new Error("Impossible de supprimer les échéances de droit de terre");
-      }
-
-      // Étape 6 : Supprimer la souscription elle-même
-      const { error: souscriptionError } = await supabase
-        .from("souscriptions")
-        .delete()
-        .eq("id", souscriptionId);
-
-      if (souscriptionError) {
-        console.error("Erreur lors de la suppression de la souscription:", souscriptionError);
-        throw new Error("Impossible de supprimer la souscription");
-      }
+      // Supprimer la souscription elle-même
+      await apiClient.delete({
+        table: "souscriptions",
+        filters: [{ op: "eq", column: "id", value: souscriptionId }]
+      });
 
       toast({
         title: "Succès",
@@ -220,6 +162,8 @@ export default function Souscriptions() {
       });
 
       refetch();
+      queryClient.invalidateQueries({ queryKey: ["cash_transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["cash_balance"] });
     } catch (error) {
       console.error("Erreur lors de la suppression:", error);
       toast({
