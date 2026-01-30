@@ -9,7 +9,7 @@ import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Upload, FileSpreadsheet, Users, Home, Receipt, AlertCircle, CheckCircle, Info } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { apiClient } from '@/integrations/api/client';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 

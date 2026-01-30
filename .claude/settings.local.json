@@ -1,7 +1,43 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm install)"
+      "Bash(npm install)",
+      "Bash(npm run build:*)",
+      "Bash(timeout 5 npm start:*)",
+      "Bash(pkill:*)",
+      "Bash(kill:*)",
+      "Bash(lsof:*)",
+      "Bash(netstat:*)",
+      "Bash(fuser:*)",
+      "Bash(curl:*)",
+      "Bash(__NEW_LINE_00ebdaf91dcf08b3__ echo -e \"\\\\n=== Test RPC avec montant invalide ===\")",
+      "Bash(__NEW_LINE_f80753e390103805__ echo -e \"\\\\n=== Test paramètre manquant ===\")",
+      "Bash(fi)",
+      "Bash(COOKIE=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkMTBkNTg4Zi02NDI3LTRlMzAtYWM1NC0wZGQzYmNlNmViNGQiLCJyb2xlIjoiYWRtaW4iLCJpYXQiOjE3Njk3MzYxODYsImV4cCI6MTc2OTc3OTM4Nn0.sHjRZJeTElDcqvQCqg3Lo_fbYJQAk06AyOqMbpjVT1A\")",
+      "Bash(__NEW_LINE_5397f0208a2cb870__ echo \"=== Test location introuvable \\(404\\) ===\")",
+      "Bash(__NEW_LINE_3cd3a2e3ca825662__ curl -s -X POST http://localhost:3001/rpc/pay_location_with_cash -H \"Content-Type: application/json\" -H \"Cookie: dhimmobilier_session=$COOKIE\" -d '{\"\"location_id\"\": \"\"non-existant-id\"\", \"\"montant\"\": 1000}')",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push)",
+      "Bash(grep:*)",
+      "Bash(npx prisma generate:*)",
+      "Bash(npx prisma:*)",
+      "Bash(mysql:*)",
+      "Bash(mysql -u dhimmobilier -pdhimmobilier -e:*)",
+      "Bash(pm2 list:*)",
+      "Bash(systemctl list-units:*)",
+      "Bash(pm2 restart:*)",
+      "Bash(pm2 show:*)",
+      "Bash(pm2 logs:*)",
+      "Bash(nginx -t:*)",
+      "Bash(systemctl reload:*)",
+      "Bash(service nginx reload:*)",
+      "Bash(ls:*)",
+      "Bash(# Test avec le cookie de session curl -s -c /tmp/cookies.txt -X POST \"\"http://127.0.0.1:3001/auth/login\"\" \\\\ -H \"\"Content-Type: application/json\"\" \\\\ -d ''{\"\"username\"\":\"\"admin\"\",\"\"password\"\":\"\"admin123\"\"}'' curl -s -b /tmp/cookies.txt -X POST \"\"http://127.0.0.1:3001/db/select\"\" \\\\ -H \"\"Content-Type: application/json\"\" \\\\ -d ''{\"\"table\"\":\"\"secteurs_activite\"\",\"\"orderBy\"\":{\"\"column\"\":\"\"nom\"\",\"\"ascending\"\":true}}'' 2>&1)",
+      "Bash(# Test rapide des endpoints critiques echo \"\"=== Test API Backend ===\"\" # 1. Login pour obtenir session curl -s -c /tmp/cookies.txt -X POST \"\"http://127.0.0.1:3001/auth/login\"\" \\\\ -H \"\"Content-Type: application/json\"\" \\\\ -d ''{\"\"username\"\":\"\"admin\"\",\"\"password\"\":\"\"admin123\"\"}'' # 2. Test select locations echo \"\"1. Locations:\"\" curl -s -b /tmp/cookies.txt -X POST \"\"http://127.0.0.1:3001/db/select\"\" \\\\ -H \"\"Content-Type: application/json\"\" \\\\ -d ''{\"\"table\"\":\"\"locations\"\",\"\"limit\"\":1}'')",
+      "Bash(__NEW_LINE_9266cfd6abf32c96__ echo -e \"\\\\n=== Fin tests ===\")",
+      "Bash(__NEW_LINE_0b74cce4e3870415__ echo -e \"\\\\n4. Propriétés libres:\")",
+      "Bash(__NEW_LINE_bd73e2c39896cf82__ echo -e \"\\\\n=== Fin ===\")"
     ]
   }
 }
