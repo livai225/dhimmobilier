@@ -8,14 +8,28 @@ import fastifyIO from "fastify-socket.io";
 
 const app = Fastify({ logger: true });
 
+// Configuration CORS - utiliser CORS_ORIGIN ou permettre toutes les origines en dev
+const corsOrigin = process.env.CORS_ORIGIN;
+const allowedOrigins = corsOrigin && corsOrigin !== "*"
+  ? corsOrigin.split(",").map(o => o.trim())
+  : true; // true = toutes les origines (dev mode)
+
 await app.register(cors, {
-  origin: true,
+  origin: allowedOrigins,
   credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
 });
 await app.register(cookie);
 await app.register(authPlugin);
 await app.register(socketEvents);
-await app.register(fastifyIO, { cors: { origin: true, credentials: true } });
+await app.register(fastifyIO, {
+  cors: {
+    origin: allowedOrigins,
+    credentials: true,
+    methods: ["GET", "POST"],
+  }
+});
 
 await dbRoutes(app);
 await authRoutes(app);

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { apiClient } from "@/integrations/api/client";
 
@@ -11,13 +11,15 @@ export interface User {
   role: 'admin' | 'comptable' | 'secretaire';
   actif: boolean;
   username?: string;
-  password_hash?: string;
 }
+
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 5000;
 
 export const useCurrentUser = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [retryCount, setRetryCount] = useState(0);
+  const retryCountRef = useRef(0);
   const useApi = import.meta.env.VITE_USE_API === 'true';
 
   useEffect(() => {
@@ -78,12 +80,12 @@ export const useCurrentUser = () => {
         const cachedUser = localStorage.getItem('cached_user_data');
         if (cachedUser && (error?.message?.includes('network') || error?.code === 'PGRST301')) {
           console.log('Using cached user data due to network error');
-          if (!isRetry && retryCount < 3) {
+          if (!isRetry && retryCountRef.current < MAX_RETRIES) {
             // Retry in background
+            retryCountRef.current += 1;
             setTimeout(() => {
-              setRetryCount(prev => prev + 1);
               loadUser(userId, true);
-            }, 5000);
+            }, RETRY_DELAY_MS);
           }
           setIsLoading(false);
           return;
@@ -97,7 +99,7 @@ export const useCurrentUser = () => {
         // Cache the user data and reset retry count
         localStorage.setItem('cached_user_data', JSON.stringify(data));
         setCurrentUser(data);
-        setRetryCount(0);
+        retryCountRef.current = 0;
       }
     } catch (error: any) {
       console.error('Error loading user:', error);
@@ -105,12 +107,12 @@ export const useCurrentUser = () => {
       // Handle timeout or network errors gracefully
       if (error.name === 'AbortError' || error.message?.includes('network')) {
         const cachedUser = localStorage.getItem('cached_user_data');
-        if (cachedUser && !isRetry && retryCount < 3) {
+        if (cachedUser && !isRetry && retryCountRef.current < MAX_RETRIES) {
           console.log('Network error, retrying...');
+          retryCountRef.current += 1;
           setTimeout(() => {
-            setRetryCount(prev => prev + 1);
             loadUser(userId, true);
-          }, 5000);
+          }, RETRY_DELAY_MS);
           setIsLoading(false);
           return;
         }

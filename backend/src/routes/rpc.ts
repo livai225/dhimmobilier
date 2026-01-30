@@ -5,6 +5,20 @@ import { nanoid } from "nanoid";
 const receiptNumber = () => `R-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 const factureNumber = () => `F-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
+// Erreur métier avec code HTTP approprié
+class BusinessError extends Error {
+  statusCode: number;
+  constructor(message: string, statusCode: number = 400) {
+    super(message);
+    this.name = "BusinessError";
+    this.statusCode = statusCode;
+  }
+}
+
+// Helpers pour créer des erreurs métier
+const notFound = (resource: string) => new BusinessError(`${resource} introuvable`, 404);
+const badRequest = (message: string) => new BusinessError(message, 400);
+
 // Helper to normalize params (remove p_ prefix used by frontend)
 function normalizeParams(params: Record<string, any>): Record<string, any> {
   const normalized: Record<string, any> = {};
@@ -13,6 +27,16 @@ function normalizeParams(params: Record<string, any>): Record<string, any> {
     normalized[normalizedKey] = value;
   }
   return normalized;
+}
+
+// Helper to validate required parameters
+function validateRequired(params: Record<string, any>, required: string[]): string | null {
+  for (const field of required) {
+    if (params[field] === undefined || params[field] === null || params[field] === "") {
+      return `Le paramètre '${field}' est requis`;
+    }
+  }
+  return null;
 }
 
 // Helper to get current cash balance
@@ -82,10 +106,25 @@ export async function rpcRoutes(app: FastifyInstance) {
 
         // ============== CASH TRANSACTIONS ==============
         case "record_cash_transaction": {
+          // Validation du montant
           const montant = Number(params.montant || 0);
+          if (montant <= 0) {
+            reply.code(400);
+            return { error: "Le montant doit être supérieur à 0" };
+          }
+
           const typeTransaction = params.type_transaction || "entree";
+          const agentId = params.agent_id || null;
 
           const result = await prisma.$transaction(async (tx) => {
+            // Vérifier que l'agent existe si fourni
+            if (agentId) {
+              const agent = await tx.agents_recouvrement.findUnique({ where: { id: agentId } });
+              if (!agent) {
+                throw notFound("Agent");
+              }
+            }
+
             const { solde_avant, solde_apres } = await updateCashBalance(tx, montant, typeTransaction);
 
             const rec = await tx.cash_transactions.create({
@@ -93,7 +132,7 @@ export async function rpcRoutes(app: FastifyInstance) {
                 montant,
                 type_transaction: typeTransaction,
                 type_operation: params.type_operation || "autre",
-                agent_id: params.agent_id || null,
+                agent_id: agentId,
                 beneficiaire: params.beneficiaire || null,
                 reference_operation: params.reference_operation || null,
                 description: params.description || null,
@@ -113,12 +152,29 @@ export async function rpcRoutes(app: FastifyInstance) {
         }
 
         case "record_sale_with_cash": {
-          const montant = Number(params.montant || 0);
+          // Validation des paramètres
+          const validationError = validateRequired(params, ["article_id", "montant"]);
+          if (validationError) {
+            reply.code(400);
+            return { error: validationError };
+          }
+
+          const montant = Number(params.montant);
+          if (montant <= 0) {
+            reply.code(400);
+            return { error: "Le montant doit être supérieur à 0" };
+          }
 
           const result = await prisma.$transaction(async (tx) => {
+            // Vérifier que l'article existe
+            const article = await tx.articles.findUnique({ where: { id: params.article_id } });
+            if (!article) {
+              throw notFound("Article");
+            }
+
             const sale = await tx.ventes.create({
               data: {
-                article_id: params.article_id || nanoid(),
+                article_id: params.article_id,
                 montant,
                 quantite: Number(params.quantite || 1),
               },
@@ -148,17 +204,31 @@ export async function rpcRoutes(app: FastifyInstance) {
 
         // ============== LOCATION PAYMENTS ==============
         case "pay_location_with_cash": {
-          const montant = Number(params.montant || 0);
+          // Validation des paramètres requis
+          const validationError = validateRequired(params, ["location_id", "montant"]);
+          if (validationError) {
+            reply.code(400);
+            return { error: validationError };
+          }
+
+          const montant = Number(params.montant);
+          if (montant <= 0) {
+            reply.code(400);
+            return { error: "Le montant doit être supérieur à 0" };
+          }
+
           const locationId = params.location_id;
           const clientId = params.client_id;
 
           const recuId = await prisma.$transaction(async (tx) => {
-            // Get location to find client if not provided
-            let finalClientId = clientId;
-            if (!finalClientId && locationId) {
-              const location = await tx.locations.findUnique({ where: { id: locationId } });
-              finalClientId = location?.client_id || locationId;
+            // Vérifier que la location existe
+            const location = await tx.locations.findUnique({ where: { id: locationId } });
+            if (!location) {
+              throw notFound("Location");
             }
+
+            // Utiliser le client_id de la location si non fourni
+            const finalClientId = clientId || location.client_id;
 
             // Create payment
             const payment = await tx.paiements_locations.create({
@@ -210,17 +280,31 @@ export async function rpcRoutes(app: FastifyInstance) {
 
         // ============== SOUSCRIPTION PAYMENTS ==============
         case "pay_souscription_with_cash": {
-          const montant = Number(params.montant || 0);
+          // Validation des paramètres requis
+          const validationError = validateRequired(params, ["souscription_id", "montant"]);
+          if (validationError) {
+            reply.code(400);
+            return { error: validationError };
+          }
+
+          const montant = Number(params.montant);
+          if (montant <= 0) {
+            reply.code(400);
+            return { error: "Le montant doit être supérieur à 0" };
+          }
+
           const souscriptionId = params.souscription_id;
           const clientId = params.client_id;
 
           const recuId = await prisma.$transaction(async (tx) => {
-            // Get souscription to find client if not provided
-            let finalClientId = clientId;
-            if (!finalClientId && souscriptionId) {
-              const souscription = await tx.souscriptions.findUnique({ where: { id: souscriptionId } });
-              finalClientId = souscription?.client_id || souscriptionId;
+            // Vérifier que la souscription existe
+            const souscription = await tx.souscriptions.findUnique({ where: { id: souscriptionId } });
+            if (!souscription) {
+              throw notFound("Souscription");
             }
+
+            // Utiliser le client_id de la souscription si non fourni
+            const finalClientId = clientId || souscription.client_id;
 
             // Create payment
             const payment = await tx.paiements_souscriptions.create({
@@ -277,17 +361,31 @@ export async function rpcRoutes(app: FastifyInstance) {
 
         // ============== DROIT DE TERRE PAYMENTS ==============
         case "pay_droit_terre_with_cash": {
-          const montant = Number(params.montant || 0);
+          // Validation des paramètres requis
+          const validationError = validateRequired(params, ["souscription_id", "montant"]);
+          if (validationError) {
+            reply.code(400);
+            return { error: validationError };
+          }
+
+          const montant = Number(params.montant);
+          if (montant <= 0) {
+            reply.code(400);
+            return { error: "Le montant doit être supérieur à 0" };
+          }
+
           const souscriptionId = params.souscription_id;
           const clientId = params.client_id;
 
           const recuId = await prisma.$transaction(async (tx) => {
-            // Get souscription to find client if not provided
-            let finalClientId = clientId;
-            if (!finalClientId && souscriptionId) {
-              const souscription = await tx.souscriptions.findUnique({ where: { id: souscriptionId } });
-              finalClientId = souscription?.client_id || souscriptionId;
+            // Vérifier que la souscription existe
+            const souscription = await tx.souscriptions.findUnique({ where: { id: souscriptionId } });
+            if (!souscription) {
+              throw notFound("Souscription");
             }
+
+            // Utiliser le client_id de la souscription si non fourni
+            const finalClientId = clientId || souscription.client_id;
 
             // Create payment
             const payment = await tx.paiements_droit_terre.create({
@@ -338,13 +436,27 @@ export async function rpcRoutes(app: FastifyInstance) {
 
         // ============== FACTURE PAYMENTS ==============
         case "pay_facture_with_cash": {
-          const montant = Number(params.montant || 0);
+          // Validation des paramètres requis
+          const validationError = validateRequired(params, ["facture_id", "montant"]);
+          if (validationError) {
+            reply.code(400);
+            return { error: validationError };
+          }
+
+          const montant = Number(params.montant);
+          if (montant <= 0) {
+            reply.code(400);
+            return { error: "Le montant doit être supérieur à 0" };
+          }
+
           const factureId = params.facture_id;
 
           const recuId = await prisma.$transaction(async (tx) => {
-            // Get facture to find fournisseur
+            // Vérifier que la facture existe
             const facture = await tx.factures_fournisseurs.findUnique({ where: { id: factureId } });
-            if (!facture) throw new Error("Facture introuvable");
+            if (!facture) {
+              throw notFound("Facture");
+            }
 
             // Create payment
             const payment = await tx.paiements_factures.create({
@@ -658,6 +770,12 @@ export async function rpcRoutes(app: FastifyInstance) {
         }
       }
     } catch (error: any) {
+      // Erreur métier avec code HTTP approprié
+      if (error instanceof BusinessError) {
+        reply.code(error.statusCode);
+        return { error: error.message };
+      }
+      // Erreur technique (500)
       req.log.error(error);
       reply.code(500);
       return { error: error.message || "rpc error" };
