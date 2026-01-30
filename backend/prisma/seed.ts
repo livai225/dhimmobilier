@@ -100,6 +100,37 @@ async function main() {
   }
   console.log("✅ Barème des droits de terre créé");
 
+  // Créer les secteurs d'activité (construction et services liés)
+  const secteursActiviteData = [
+    { nom: "Construction", description: "Entreprise générale de construction et BTP" },
+    { nom: "Maçonnerie", description: "Travaux de maçonnerie et gros œuvre" },
+    { nom: "Plomberie", description: "Installation et réparation de plomberie" },
+    { nom: "Électricité", description: "Travaux d'installation électrique" },
+    { nom: "Menuiserie", description: "Travaux de menuiserie bois et aluminium" },
+    { nom: "Peinture", description: "Travaux de peinture et décoration" },
+    { nom: "Carrelage", description: "Pose de carrelage et revêtement de sol" },
+    { nom: "Climatisation", description: "Installation et maintenance de climatisation" },
+    { nom: "Toiture", description: "Travaux de couverture et charpente" },
+    { nom: "Vitrerie", description: "Installation de vitres et miroiterie" },
+    { nom: "Jardinage", description: "Entretien des espaces verts et jardinage" },
+    { nom: "Nettoyage", description: "Services de nettoyage et entretien" },
+    { nom: "Sécurité", description: "Services de gardiennage et sécurité" },
+    { nom: "Ferronnerie", description: "Travaux de ferronnerie et métallerie" },
+    { nom: "Plâtrerie", description: "Travaux de plâtrerie et faux plafonds" },
+    { nom: "Étanchéité", description: "Travaux d'étanchéité et imperméabilisation" },
+    { nom: "Assainissement", description: "Travaux d'assainissement et fosse septique" },
+    { nom: "Autre", description: "Autre secteur d'activité" },
+  ];
+
+  for (const secteur of secteursActiviteData) {
+    await prisma.secteurs_activite.upsert({
+      where: { nom: secteur.nom },
+      update: {},
+      create: secteur,
+    });
+  }
+  console.log("✅ Secteurs d'activité créés");
+
   // Créer le solde initial de la caisse
   const existingBalance = await prisma.caisse_balance.findFirst();
   if (!existingBalance) {

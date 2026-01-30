@@ -71,17 +71,21 @@ model types_proprietes {
 }
 
 model proprietes {
-  id          String   @id @default(uuid())
-  nom         String
-  adresse     String?
-  zone        String?
-  type_id     String?
-  surface     Float?
-  prix_achat  Float?
-  agent_id    String?
-  statut      String?  @default("disponible")
-  created_at  DateTime @default(now())
-  updated_at  DateTime @updatedAt
+  id             String   @id @default(uuid())
+  nom            String
+  adresse        String?
+  zone           String?
+  type_id        String?
+  surface        Float?
+  prix_achat     Float?
+  agent_id       String?
+  statut         String?  @default("disponible")
+  usage          String?  @default("Location")
+  loyer_mensuel  Float?   @default(0)
+  montant_bail   Float?   @default(0)
+  droit_terre    Float?   @default(0)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
 
   type_propriete types_proprietes? @relation(fields: [type_id], references: [id])
   souscriptions  souscriptions[]
@@ -234,17 +238,33 @@ model bareme_droits_terre {
 
 // ============== FOURNISSEURS & FACTURES ==============
 
-model fournisseurs {
-  id         String   @id @default(uuid())
-  nom        String
-  contact    String?
-  telephone  String?
-  email      String?
-  adresse    String?
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
+model secteurs_activite {
+  id          String   @id @default(uuid())
+  nom         String   @unique
+  description String?  @db.Text
+  created_at  DateTime @default(now())
 
+  fournisseurs fournisseurs[]
+}
+
+model fournisseurs {
+  id               String   @id @default(uuid())
+  nom              String
+  contact          String?
+  telephone        String?
+  email            String?
+  adresse          String?
+  secteur_id       String?
+  site_web         String?
+  numero_tva       String?
+  note_performance Int?
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  secteur  secteurs_activite? @relation(fields: [secteur_id], references: [id])
   factures factures_fournisseurs[]
+
+  @@index([secteur_id])
 }
 
 model factures_fournisseurs {
