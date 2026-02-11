@@ -37,6 +37,7 @@ import { useAuditLog } from "@/hooks/useAuditLog";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { AlertTriangle } from "lucide-react";
+import { getInsufficientFundsMessage } from "@/utils/errorMessages";
 
 
 const paiementSchema = z.object({
@@ -125,6 +126,15 @@ export function PaiementFactureDialog({
       onSuccess();
     },
     onError: (error: Error) => {
+      const insufficientMessage = getInsufficientFundsMessage(error);
+      if (insufficientMessage) {
+        toast({
+          title: "Montant insuffisant",
+          description: insufficientMessage,
+          variant: "destructive",
+        });
+        return;
+      }
       let errorMessage = error.message;
       if (errorMessage.includes('dépasse le solde restant')) {
         const matches = errorMessage.match(/Montant total: ([\d.]+), Déjà payé: ([\d.]+), Solde restant: ([\d.]+)/);

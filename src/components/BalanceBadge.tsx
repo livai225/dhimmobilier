@@ -23,12 +23,18 @@ export function BalanceBadge() {
   }
 
   return (
-    <div className="flex items-center gap-2">
-      <Badge variant="secondary" className="text-xs">
-        Caisse Versement: {balanceVersement.toLocaleString()} FCFA
+    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+      <Badge 
+        variant="secondary" 
+        className="text-xs bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200 transition-colors font-semibold"
+      >
+        Caisse Versement: <span className="font-bold ml-1">{balanceVersement.toLocaleString()} FCFA</span>
       </Badge>
-      <Badge variant="outline" className="text-xs">
-        Caisse Entreprise: {balanceEntreprise.toLocaleString()} FCFA
+      <Badge 
+        variant="outline" 
+        className="text-xs bg-green-100 text-green-700 border-green-200 hover:bg-green-200 transition-colors font-semibold"
+      >
+        Caisse Entreprise: <span className="font-bold ml-1">{balanceEntreprise.toLocaleString()} FCFA</span>
       </Badge>
     </div>
   );

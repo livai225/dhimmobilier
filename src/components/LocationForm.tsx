@@ -56,14 +56,17 @@ export function LocationForm({ onClose, onSuccess }: LocationFormProps) {
     enabled: true,
   });
 
-  // Fetch available properties (status = 'Libre')
+  // Fetch available properties (status = 'Libre' and usage = 'Location')
   const { data: proprietes } = useQuery({
     queryKey: ["proprietes", "libre"],
     queryFn: async () => {
       return await apiClient.select({
         table: 'proprietes',
         columns: 'id, nom, adresse, loyer_mensuel',
-        filters: [{ op: 'eq', column: 'statut', value: 'Libre' }],
+        filters: [
+          { op: 'eq', column: 'statut', value: 'Libre' },
+          { op: 'eq', column: 'usage', value: 'Location' }
+        ],
         orderBy: { column: 'nom', ascending: true }
       });
     },
@@ -102,11 +105,24 @@ export function LocationForm({ onClose, onSuccess }: LocationFormProps) {
       }
 
       // Create the location
-      const locationId = await apiClient.insert({
+      await apiClient.insert({
         table: 'locations',
         values: locationData
       });
-      const location = { id: locationId, ...locationData };
+      const latest = await apiClient.select({
+        table: 'locations',
+        filters: [
+          { op: 'eq', column: 'client_id', value: locationData.client_id },
+          { op: 'eq', column: 'propriete_id', value: locationData.propriete_id },
+          { op: 'eq', column: 'date_debut', value: locationData.date_debut }
+        ],
+        orderBy: { column: 'created_at', ascending: false },
+        limit: 1
+      });
+      const location = latest?.[0];
+      if (!location?.id) {
+        throw new Error("Impossible de récupérer la location créée.");
+      }
 
       // Update property status to 'Occupé'
       await apiClient.update({
@@ -118,7 +134,7 @@ export function LocationForm({ onClose, onSuccess }: LocationFormProps) {
       // Record caution payment in cash system (sortie de caisse)
       const cashTransaction = await apiClient.rpc('pay_caution_with_cash', {
         location_id: location.id,
-        montant: locationData.caution_totale,
+        montant: locationData.caution,
         date_paiement: locationData.date_debut,
         mode_paiement: 'Caution initiale',
         reference: `LOC-${location.id}`,
@@ -180,8 +196,8 @@ export function LocationForm({ onClose, onSuccess }: LocationFormProps) {
       client_id: clientId,
       propriete_id: proprieteId,
       loyer_mensuel: selectedLoyer,
-      date_debut: dateDebut.toISOString().split('T')[0],
-      date_fin: dateFin ? dateFin.toISOString().split('T')[0] : null,
+      date_debut: dateDebut.toISOString(),
+      date_fin: dateFin ? dateFin.toISOString() : null,
       caution: cautionBreakdown.cautionTotale,
       statut: 'active',
     };

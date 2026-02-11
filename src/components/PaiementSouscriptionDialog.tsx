@@ -26,6 +26,7 @@ import { Combobox } from "@/components/ui/combobox";
 import { useToast } from "@/hooks/use-toast";
 import { useAuditLog } from "@/hooks/useAuditLog";
 import { generateCurrentYearMonthOptions } from "@/utils/monthOptions";
+import { getInsufficientFundsMessage } from "@/utils/errorMessages";
 
 
 const paiementSchema = z.object({
@@ -112,6 +113,15 @@ export function PaiementSouscriptionDialog({
       onSuccess();
     },
     onError: (error: any) => {
+      const insufficientMessage = getInsufficientFundsMessage(error);
+      if (insufficientMessage) {
+        toast({
+          title: "Montant insuffisant",
+          description: insufficientMessage,
+          variant: "destructive",
+        });
+        return;
+      }
       toast({
         title: "Erreur",
         description: error?.message || "Une erreur est survenue lors de l'enregistrement du paiement",

@@ -15,6 +15,7 @@ import { useAuditLog } from "@/hooks/useAuditLog";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { CreditCard, FileText, Calculator } from "lucide-react";
+import { getInsufficientFundsMessage } from "@/utils/errorMessages";
 
 
 interface PaiementDroitTerreDialogProps {
@@ -116,6 +117,15 @@ export function PaiementDroitTerreDialog({ open, onOpenChange, souscription, onS
       onSuccess();
     } catch (error: any) {
       console.error("Error recording payment:", error);
+      const insufficientMessage = getInsufficientFundsMessage(error);
+      if (insufficientMessage) {
+        toast({
+          title: "Montant insuffisant",
+          description: insufficientMessage,
+          variant: "destructive",
+        });
+        return;
+      }
       toast({
         title: "Erreur",
         description: error?.message || "Une erreur est survenue lors de l'enregistrement",

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -33,9 +33,7 @@ const fournisseurSchema = z.object({
   adresse: z.string().optional(),
   secteur_id: z.string().min(1, "Veuillez sélectionner un secteur"),
   secteur_custom: z.string().optional(),
-  site_web: z.string().optional(),
   numero_tva: z.string().optional(),
-  note_performance: z.number().min(1).max(5).optional(),
 });
 
 type FournisseurFormData = z.infer<typeof fournisseurSchema>;
@@ -50,6 +48,7 @@ export function FournisseurForm({ fournisseur, onSuccess }: FournisseurFormProps
   const queryClient = useQueryClient();
   const { logCreate, logUpdate } = useAuditLog();
   const [isOtherSector, setIsOtherSector] = useState(false);
+  const [isSeedingBtp, setIsSeedingBtp] = useState(false);
   
   const form = useForm<FournisseurFormData>({
     resolver: zodResolver(fournisseurSchema),
@@ -61,9 +60,7 @@ export function FournisseurForm({ fournisseur, onSuccess }: FournisseurFormProps
       adresse: fournisseur?.adresse || "",
       secteur_id: fournisseur?.secteur_id || "",
       secteur_custom: "",
-      site_web: fournisseur?.site_web || "",
       numero_tva: fournisseur?.numero_tva || "",
-      note_performance: fournisseur?.note_performance || undefined,
     },
   });
 
@@ -78,6 +75,61 @@ export function FournisseurForm({ fournisseur, onSuccess }: FournisseurFormProps
       return data;
     },
   });
+
+  const btpSectors = [
+    "Maçonnerie",
+    "Électricité",
+    "Plomberie",
+    "Menuiserie",
+    "Peinture",
+    "Carrelage",
+    "Charpente",
+    "Couverture",
+    "Climatisation",
+    "Serrurerie",
+    "Topographie",
+    "Terrassement",
+    "Génie civil",
+    "Étanchéité",
+    "Plâtrerie",
+    "Vitrerie",
+  ];
+
+  const normalizeName = (value: string) =>
+    value
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim();
+
+  useEffect(() => {
+    const seedBtpSectors = async () => {
+      if (isSeedingBtp || !Array.isArray(secteurs)) return;
+      const existing = new Set(secteurs.map((s: any) => normalizeName(s.nom || "")));
+      const missing = btpSectors.filter((name) => !existing.has(normalizeName(name)));
+      if (missing.length === 0) return;
+
+      try {
+        setIsSeedingBtp(true);
+        await Promise.all(
+          missing.map((name) =>
+            apiClient.insert({
+              table: "secteurs_activite",
+              values: {
+                nom: name,
+                description: "Secteur BTP",
+              },
+            })
+          )
+        );
+        queryClient.invalidateQueries({ queryKey: ["secteurs"] });
+      } finally {
+        setIsSeedingBtp(false);
+      }
+    };
+
+    seedBtpSectors();
+  }, [secteurs, isSeedingBtp, queryClient]);
 
   // Create/Update mutation
   const mutation = useMutation({
@@ -108,12 +160,10 @@ export function FournisseurForm({ fournisseur, onSuccess }: FournisseurFormProps
         nom: data.nom,
         secteur_id: secteurId,
         email: data.email || null,
-        site_web: data.site_web || null,
         contact: data.contact || null,
         telephone: data.telephone || null,
         adresse: data.adresse || null,
         numero_tva: data.numero_tva || null,
-        note_performance: data.note_performance || null,
       };
 
       if (fournisseur) {
@@ -291,20 +341,6 @@ export function FournisseurForm({ fournisseur, onSuccess }: FournisseurFormProps
               </FormItem>
             )}
           />
-
-          <FormField
-            control={form.control}
-            name="site_web"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Site web</FormLabel>
-                <FormControl>
-                  <Input placeholder="https://..." {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
         </div>
 
         <FormField
@@ -331,34 +367,6 @@ export function FournisseurForm({ fournisseur, onSuccess }: FournisseurFormProps
                 <FormControl>
                   <Input {...field} />
                 </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="note_performance"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Note de performance (1-5)</FormLabel>
-                <Select 
-                  onValueChange={(value) => field.onChange(value ? parseInt(value) : undefined)}
-                  defaultValue={field.value?.toString()}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Sélectionnez une note" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="1">1 - Médiocre</SelectItem>
-                    <SelectItem value="2">2 - Insuffisant</SelectItem>
-                    <SelectItem value="3">3 - Correct</SelectItem>
-                    <SelectItem value="4">4 - Bon</SelectItem>
-                    <SelectItem value="5">5 - Excellent</SelectItem>
-                  </SelectContent>
-                </Select>
                 <FormMessage />
               </FormItem>
             )}

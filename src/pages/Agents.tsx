@@ -9,10 +9,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Combobox } from "@/components/ui/combobox";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { AgentOperationsDialog } from "@/components/AgentOperationsDialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { MobileCard } from "@/components/MobileCard";
-import { Plus, Eye, Trash2, Users, Phone, Mail, Calendar } from "lucide-react";
+import { Plus, Eye, Trash2, Users, Phone, Mail, Calendar, Pencil } from "lucide-react";
 
 export default function Agents() {
   const { toast } = useToast();
@@ -21,8 +23,12 @@ export default function Agents() {
   const [showOperationsDialog, setShowOperationsDialog] = useState(false);
   const [selectedAgentForOperations, setSelectedAgentForOperations] = useState<any>(null);
   const [form, setForm] = useState({ nom: "", prenom: "", code_agent: "", telephone: "", email: "", statut: "actif" });
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editingAgentId, setEditingAgentId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ nom: "", prenom: "", code_agent: "", telephone: "", email: "", statut: "actif" });
   const formCardRef = useRef<HTMLDivElement | null>(null);
   const firstInputRef = useRef<HTMLInputElement | null>(null);
+  const permissions = useUserPermissions();
 
   useEffect(() => {
     document.title = "Agents de recouvrement - Gestion";
@@ -81,6 +87,40 @@ export default function Agents() {
     },
     onError: (e: any) => toast({ title: "Erreur", description: e.message, variant: "destructive" }),
   });
+
+  const updateAgent = useMutation({
+    mutationFn: async (payload: { id: string; values: any }) => {
+      const { id, values } = payload;
+      if (!values.nom || !values.prenom || !values.code_agent) {
+        throw new Error("Nom, Prénom et Code agent sont requis");
+      }
+      return await apiClient.update({
+        table: 'agents_recouvrement',
+        filters: [{ op: 'eq', column: 'id', value: id }],
+        values,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["agents_recouvrement"] });
+      setShowEditDialog(false);
+      setEditingAgentId(null);
+      toast({ title: "Agent mis à jour", description: "Les informations ont été enregistrées." });
+    },
+    onError: (e: any) => toast({ title: "Erreur", description: e.message, variant: "destructive" }),
+  });
+
+  const openEdit = (agent: any) => {
+    setEditingAgentId(agent.id);
+    setEditForm({
+      nom: agent.nom || "",
+      prenom: agent.prenom || "",
+      code_agent: agent.code_agent || "",
+      telephone: agent.telephone || "",
+      email: agent.email || "",
+      statut: agent.statut || "actif",
+    });
+    setShowEditDialog(true);
+  };
 
   return (
     <div className="container mx-auto p-2 sm:p-4 space-y-4">
@@ -234,6 +274,12 @@ export default function Agents() {
                           },
                           variant: "outline"
                         },
+                        ...(permissions.canCreateAgents ? [{
+                          label: "Modifier",
+                          icon: <Pencil className="h-4 w-4" />,
+                          onClick: () => openEdit(agent),
+                          variant: "secondary"
+                        }] : []),
                         {
                           label: "Supprimer",
                           icon: <Trash2 className="h-4 w-4" />,
@@ -286,6 +332,16 @@ export default function Agents() {
                                   <Eye className="h-4 w-4 mr-1" />
                                   Fiche détaillée
                                 </Button>
+                                <ProtectedAction permission="canCreateAgents">
+                                  <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={() => openEdit(a)}
+                                  >
+                                    <Pencil className="h-4 w-4 mr-1" />
+                                    Modifier
+                                  </Button>
+                                </ProtectedAction>
                                 <AlertDialog>
                                   <AlertDialogTrigger asChild>
                                     <Button variant="destructive" size="sm">
@@ -409,6 +465,101 @@ export default function Agents() {
           }}
         />
       )}
+
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>Modifier l'agent</DialogTitle>
+            <DialogDescription>
+              Mettez à jour les informations de l'agent sélectionné.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-1 gap-3">
+            <div>
+              <label className="text-sm font-medium">Prénom</label>
+              <Input 
+                value={editForm.prenom} 
+                onChange={(e) => setEditForm({ ...editForm, prenom: e.target.value })} 
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Nom</label>
+              <Input 
+                value={editForm.nom} 
+                onChange={(e) => setEditForm({ ...editForm, nom: e.target.value })} 
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Code agent</label>
+              <Input 
+                value={editForm.code_agent} 
+                onChange={(e) => setEditForm({ ...editForm, code_agent: e.target.value })} 
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Téléphone</label>
+              <Input 
+                value={editForm.telephone} 
+                onChange={(e) => setEditForm({ ...editForm, telephone: e.target.value })} 
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Email</label>
+              <Input 
+                value={editForm.email} 
+                onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} 
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Statut</label>
+              <div className="mt-1">
+                <Combobox
+                  options={[
+                    { value: 'actif', label: 'Actif' }, 
+                    { value: 'inactif', label: 'Inactif' }, 
+                    { value: 'suspendu', label: 'Suspendu' }
+                  ]}
+                  value={editForm.statut}
+                  onChange={(v) => setEditForm({ ...editForm, statut: v })}
+                  placeholder="Sélectionner un statut"
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowEditDialog(false)}
+            >
+              Annuler
+            </Button>
+            <Button
+              onClick={() => {
+                if (!editingAgentId) return;
+                updateAgent.mutate({
+                  id: editingAgentId,
+                  values: {
+                    nom: editForm.nom,
+                    prenom: editForm.prenom,
+                    code_agent: editForm.code_agent,
+                    telephone: editForm.telephone || null,
+                    email: editForm.email || null,
+                    statut: editForm.statut,
+                  }
+                });
+              }}
+              disabled={updateAgent.isPending}
+            >
+              {updateAgent.isPending ? "Enregistrement..." : "Enregistrer"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

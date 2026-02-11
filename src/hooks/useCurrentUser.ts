@@ -63,7 +63,7 @@ export const useCurrentUser = () => {
         
         // If it's a network error and we have cached data, keep the user logged in
         const cachedUser = localStorage.getItem('cached_user_data');
-        if (cachedUser && (error?.message?.includes('network') || error?.code === 'PGRST301')) {
+        if (cachedUser && (error?.message?.includes('network') || error?.message?.includes('Failed to fetch'))) {
           console.log('Using cached user data due to network error');
           if (!isRetry && retryCountRef.current < MAX_RETRIES) {
             // Retry in background

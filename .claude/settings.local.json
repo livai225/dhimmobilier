@@ -37,7 +37,26 @@
       "Bash(# Test rapide des endpoints critiques echo \"\"=== Test API Backend ===\"\" # 1. Login pour obtenir session curl -s -c /tmp/cookies.txt -X POST \"\"http://127.0.0.1:3001/auth/login\"\" \\\\ -H \"\"Content-Type: application/json\"\" \\\\ -d ''{\"\"username\"\":\"\"admin\"\",\"\"password\"\":\"\"admin123\"\"}'' # 2. Test select locations echo \"\"1. Locations:\"\" curl -s -b /tmp/cookies.txt -X POST \"\"http://127.0.0.1:3001/db/select\"\" \\\\ -H \"\"Content-Type: application/json\"\" \\\\ -d ''{\"\"table\"\":\"\"locations\"\",\"\"limit\"\":1}'')",
       "Bash(__NEW_LINE_9266cfd6abf32c96__ echo -e \"\\\\n=== Fin tests ===\")",
       "Bash(__NEW_LINE_0b74cce4e3870415__ echo -e \"\\\\n4. Propriétés libres:\")",
-      "Bash(__NEW_LINE_bd73e2c39896cf82__ echo -e \"\\\\n=== Fin ===\")"
+      "Bash(__NEW_LINE_bd73e2c39896cf82__ echo -e \"\\\\n=== Fin ===\")",
+      "Bash(python3:*)",
+      "Bash(NODE_OPTIONS=\"--max-old-space-size=512\" npm run build:*)",
+      "Bash(NODE_OPTIONS=\"--max-old-space-size=1024\" npm run build:*)",
+      "Bash(git -C /var/www/dhimmobilier/server log --all --oneline --graph --date=short -30)",
+      "Bash(git -C /var/www/dhimmobilier/server reflog:*)",
+      "Bash(git -C /var/www/dhimmobilier/server stash list)",
+      "Bash(git -C /var/www/dhimmobilier/server branch -a)",
+      "Bash(git -C /var/www/dhimmobilier/server fsck --unreachable --no-reflogs)",
+      "Bash(git -C /var/www/dhimmobilier/server log origin/main --oneline -10)",
+      "Bash(git -C /var/www/dhimmobilier/server fetch origin)",
+      "Bash(git -C /var/www/dhimmobilier/server stash show:*)",
+      "Bash(git -C /var/www/dhimmobilier/server diff HEAD --stat)",
+      "Bash(git -C /var/www/dhimmobilier/server fetch --all)",
+      "Bash(git -C /var/www/dhimmobilier/server log --all --oneline --date=short --after=\"2026-02-01\")",
+      "Bash(sync)",
+      "Bash(sudo tee:*)",
+      "Bash(NODE_OPTIONS=\"--max-old-space-size=1536\" npx vite build:*)",
+      "Bash(ps:*)",
+      "Bash(pm2 start:*)"
     ]
   }
 }

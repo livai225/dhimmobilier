@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ExportToExcelButton } from "@/components/ExportToExcelButton";
 import { ImportRecouvrementData } from "@/components/ImportRecouvrementData";
+import { CancelRecouvrementImportDialog } from "@/components/CancelRecouvrementImportDialog";
 import { AgentRecoveryDashboard } from "@/components/AgentRecoveryDashboard";
 import { Search, TrendingUp, TrendingDown, DollarSign, Users, User, Eye } from "lucide-react";
 import { format } from "date-fns";
@@ -265,6 +266,7 @@ export default function Recouvrement() {
         </div>
         <div className="flex items-center gap-2">
           <ImportRecouvrementData />
+          <CancelRecouvrementImportDialog />
           <ExportToExcelButton
             filename={`recouvrement_${monthFilter}`}
             rows={filteredAgents}

@@ -1,10 +1,11 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import cookie from "@fastify/cookie";
-import { dbRoutes, authRoutes, cashRoutes, usersRoutes, rpcRoutes } from "./routes/index.js";
+import { dbRoutes, authRoutes, cashRoutes, healthRoutes, usersRoutes, rpcRoutes } from "./routes/index.js";
 import authPlugin from "./plugins/auth.js";
 import socketEvents from "./plugins/socket-events.js";
 import fastifyIO from "fastify-socket.io";
+import { ensureDefaultTypesProprietes } from "./utils/ensure-default-types.js";
 
 const app = Fastify({ logger: true });
 
@@ -34,8 +35,11 @@ await app.register(fastifyIO, {
 await dbRoutes(app);
 await authRoutes(app);
 await cashRoutes(app);
+await healthRoutes(app);
 await usersRoutes(app);
 await rpcRoutes(app);
+
+await ensureDefaultTypesProprietes();
 
 const port = Number(process.env.PORT || 3000);
 app.listen({ port, host: "0.0.0.0" }).then(() => {

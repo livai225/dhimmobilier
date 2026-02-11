@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Combobox } from "@/components/ui/combobox";
 import { Calendar, TrendingUp, DollarSign, Activity, Search, FileText } from "lucide-react";
-import { format, startOfYear, endOfYear, startOfMonth, endOfMonth } from "date-fns";
+import { format, startOfYear, endOfYear, startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns";
 
 interface AgentOperationsDialogProps {
   agent: any;
@@ -33,25 +33,26 @@ export function AgentOperationsDialog({ agent, isOpen, onClose }: AgentOperation
 
   const periodRange = () => {
     const now = new Date();
-    let start = new Date(2020, 0, 1); // Par défaut depuis 2020
-    let end = now;
+    let start = startOfDay(new Date(2020, 0, 1)); // Par défaut depuis 2020
+    let end = endOfDay(now);
 
     if (periodFilter === "today") {
-      start = now;
+      start = startOfDay(now);
+      end = endOfDay(now);
     } else if (periodFilter === "this_month") {
-      start = startOfMonth(now);
-      end = endOfMonth(now);
+      start = startOfDay(startOfMonth(now));
+      end = endOfDay(endOfMonth(now));
     } else if (periodFilter === "this_year") {
-      start = startOfYear(now);
-      end = endOfYear(now);
+      start = startOfDay(startOfYear(now));
+      end = endOfDay(endOfYear(now));
     } else if (periodFilter === "custom" && customStart && customEnd) {
-      start = new Date(customStart);
-      end = new Date(customEnd);
+      start = startOfDay(new Date(customStart));
+      end = endOfDay(new Date(customEnd));
     }
 
     return {
-      start: format(start, "yyyy-MM-dd"),
-      end: format(end, "yyyy-MM-dd")
+      start: start.toISOString(),
+      end: end.toISOString()
     };
   };
 

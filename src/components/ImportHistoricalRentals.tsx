@@ -49,6 +49,19 @@ export function ImportHistoricalRentals() {
   const [simulationMode, setSimulationMode] = useState(true);
   const [clearExistingClients, setClearExistingClients] = useState(false);
 
+  const parseExcelDate = (rawValue: string): Date | null => {
+    if (!rawValue) return null;
+    const numeric = Number(rawValue);
+    if (!Number.isNaN(numeric) && numeric > 0) {
+      const parsed = XLSX.SSF.parse_date_code(numeric);
+      if (parsed?.y && parsed?.m && parsed?.d) {
+        return new Date(parsed.y, parsed.m - 1, parsed.d);
+      }
+    }
+    const date = new Date(rawValue);
+    return Number.isNaN(date.getTime()) ? null : date;
+  };
+
   // Normalize string for fuzzy matching
   const normalizeString = (str: string): string => {
     return str
@@ -254,6 +267,24 @@ export function ImportHistoricalRentals() {
     setProgress(0);
 
     try {
+      // Pre-check total import amount against cash balance (only for real import)
+      if (!simulate) {
+        const totalImportAmount = previewData.reduce(
+          (sum, row) => sum + (Number(row.montantVerse) || 0),
+          0
+        );
+        if (totalImportAmount > 0) {
+          const balance = Number(await apiClient.getCashBalanceVersement());
+          if (balance < totalImportAmount) {
+            toast.error(
+              `Solde insuffisant dans la caisse versement. Solde actuel: ${balance.toLocaleString()} FCFA, Montant total import: ${totalImportAmount.toLocaleString()} FCFA`
+            );
+            setIsImporting(false);
+            return;
+          }
+        }
+      }
+
       const result: ImportResult = {
         clientsMatched: 0,
         clientsCreated: 0,
@@ -445,25 +476,17 @@ export function ImportHistoricalRentals() {
               });
 
               if (locations && locations.length > 0) {
-                // Create payment record
-                await apiClient.insert({
-                  table: 'paiements_locations',
-                  values: {
-                    location_id: locations[0].id,
-                    montant: row.montantVerse,
-                    date_paiement: new Date().toISOString().split('T')[0],
-                    mode_paiement: 'cash',
-                    reference: 'Import historique'
-                  }
-                });
+                const paymentDate = parseExcelDate(row.dateVersement) || new Date();
+                const moisConcerne = `${paymentDate.getFullYear()}-${String(paymentDate.getMonth() + 1).padStart(2, '0')}`;
 
-                // Record cash transaction
-                await apiClient.rpc('record_cash_transaction', {
-                  p_type_transaction: 'sortie',
-                  p_montant: row.montantVerse,
-                  p_type_operation: 'paiement_loyer',
-                  p_beneficiaire: row.clientL,
-                  p_description: `Paiement historique - ${row.sites}`
+                await apiClient.rpc("pay_location_with_cash", {
+                  location_id: locations[0].id,
+                  montant: row.montantVerse,
+                  date_paiement: paymentDate.toISOString().split("T")[0],
+                  mode_paiement: "cash",
+                  reference: "Import historique",
+                  description: `Paiement historique - ${row.sites}`,
+                  mois_concerne: moisConcerne,
                 });
               }
             }

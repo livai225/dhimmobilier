@@ -56,20 +56,52 @@ async function updateCashBalance(
   const current = await tx.caisse_balance.findFirst({
     orderBy: { updated_at: "desc" },
   });
-  const solde_avant = Number(current?.solde_courant || current?.balance || 0);
-  const solde_apres = type === "entree" ? solde_avant + montant : solde_avant - montant;
+  if (!current) {
+    if (type === "sortie") {
+      throw badRequest(
+        `Solde insuffisant dans la caisse versement. Solde actuel: 0 FCFA, Montant requis: ${montant.toLocaleString()} FCFA`
+      );
+    }
+    const created = await tx.caisse_balance.create({
+      data: { solde_courant: montant, balance: montant },
+    });
+    return { solde_avant: 0, solde_apres: Number(created.solde_courant || created.balance || montant) };
+  }
 
-  if (current) {
+  // Lock the current balance row to avoid concurrent negative balances
+  const lockedRows = await tx.$queryRaw<
+    Array<{ solde_courant: number | null; balance: number | null }>
+  >`SELECT solde_courant, balance FROM caisse_balance WHERE id = ${current.id} FOR UPDATE`;
+  const locked = lockedRows[0];
+
+  const solde_avant = Number(locked?.solde_courant ?? current.solde_courant ?? current.balance ?? 0);
+  if (type === "sortie" && solde_avant < montant) {
+    throw badRequest(
+      `Solde insuffisant dans la caisse versement. Solde actuel: ${solde_avant.toLocaleString()} FCFA, Montant requis: ${montant.toLocaleString()} FCFA`
+    );
+  }
+
+  if (type === "entree") {
     await tx.caisse_balance.update({
       where: { id: current.id },
-      data: { solde_courant: solde_apres, balance: solde_apres, derniere_maj: new Date() },
+      data: {
+        solde_courant: { increment: montant },
+        balance: { increment: montant },
+        derniere_maj: new Date(),
+      },
     });
   } else {
-    await tx.caisse_balance.create({
-      data: { solde_courant: solde_apres, balance: solde_apres },
+    await tx.caisse_balance.update({
+      where: { id: current.id },
+      data: {
+        solde_courant: { decrement: montant },
+        balance: { decrement: montant },
+        derniere_maj: new Date(),
+      },
     });
   }
 
+  const solde_apres = type === "entree" ? solde_avant + montant : solde_avant - montant;
   return { solde_avant, solde_apres };
 }
 
@@ -88,20 +120,42 @@ export async function rpcRoutes(app: FastifyInstance) {
         }
 
         case "get_solde_caisse_entreprise": {
-          const balance = await prisma.caisse_balance.findFirst({
-            orderBy: { updated_at: "desc" },
-          });
-          if (balance) return Number(balance.solde_courant || balance.balance || 0);
-          // Fallback: calculate from transactions
-          const entrees = await prisma.cash_transactions.aggregate({
-            _sum: { montant: true },
-            where: { type_transaction: "entree" },
-          });
-          const sorties = await prisma.cash_transactions.aggregate({
-            _sum: { montant: true },
-            where: { type_transaction: "sortie" },
-          });
-          return Number(entrees._sum.montant || 0) - Number(sorties._sum.montant || 0);
+          // Calculer le solde entreprise depuis les tables de paiement réelles
+          // REVENUS: paiements locations + souscriptions + droit terre + cautions + ventes
+          const [revLocations, revSouscriptions, revDroitTerre, revCautions, revVentes] =
+            await Promise.all([
+              prisma.paiements_locations.aggregate({ _sum: { montant: true } }),
+              prisma.paiements_souscriptions.aggregate({ _sum: { montant: true } }),
+              prisma.paiements_droit_terre.aggregate({ _sum: { montant: true } }),
+              prisma.paiements_cautions.aggregate({ _sum: { montant: true } }),
+              prisma.ventes.aggregate({ _sum: { montant: true } }),
+            ]);
+
+          // DEPENSES: factures payées + dépenses entreprise (hors factures)
+          const [depFactures, depEntreprise] = await Promise.all([
+            prisma.factures_fournisseurs.aggregate({ _sum: { montant_paye: true } }),
+            prisma.cash_transactions.aggregate({
+              _sum: { montant: true },
+              where: {
+                type_operation: { in: ["depense_entreprise", "autre", "remboursement_caution"] },
+                type_transaction: "sortie",
+                type: { not: "facture" },
+              },
+            }),
+          ]);
+
+          const totalRevenus =
+            Number(revLocations._sum.montant || 0) +
+            Number(revSouscriptions._sum.montant || 0) +
+            Number(revDroitTerre._sum.montant || 0) +
+            Number(revCautions._sum.montant || 0) +
+            Number(revVentes._sum.montant || 0);
+
+          const totalDepenses =
+            Number(depFactures._sum.montant_paye || 0) +
+            Number(depEntreprise._sum.montant || 0);
+
+          return totalRevenus - totalDepenses;
         }
 
         // ============== CASH TRANSACTIONS ==============
@@ -142,8 +196,30 @@ export async function rpcRoutes(app: FastifyInstance) {
                 mode: params.mode || null,
                 type: params.type || typeTransaction,
                 reference: params.reference || null,
+                mois_concerne: params.mois_concerne || null,
+                annee_concerne: params.annee_concerne ? Number(params.annee_concerne) : null,
               },
             });
+
+            // Create receipt for agent deposits (versement)
+            if (typeTransaction === "entree" && (params.type_operation || "autre") === "versement_agent") {
+              await tx.recus.create({
+                data: {
+                  numero: receiptNumber(),
+                  client_id: null,
+                  agent_id: agentId,
+                  reference_id: rec.id,
+                  type_operation: "versement_agent",
+                  montant_total: montant,
+                  meta: {
+                    beneficiaire: params.beneficiaire || null,
+                    description: params.description || null,
+                    mois_concerne: params.mois_concerne || null,
+                    annee_concerne: params.annee_concerne ? Number(params.annee_concerne) : null,
+                  },
+                },
+              });
+            }
             return rec.id;
           });
 
@@ -239,17 +315,19 @@ export async function rpcRoutes(app: FastifyInstance) {
                 mode_paiement: params.mode_paiement || params.mode || "cash",
                 reference: params.reference || null,
                 mois_concerne: params.mois_concerne || null,
+                annee_concerne: params.annee_concerne ? Number(params.annee_concerne) : null,
+                import_tag: params.import_tag || null,
               },
             });
 
-            // Update cash balance
-            const { solde_avant, solde_apres } = await updateCashBalance(tx, montant, "entree");
+            // Update cash balance - SORTIE de la caisse versement (argent va en comptabilité)
+            const { solde_avant, solde_apres } = await updateCashBalance(tx, montant, "sortie");
 
             // Record cash transaction
             await tx.cash_transactions.create({
               data: {
                 montant,
-                type_transaction: "entree",
+                type_transaction: "sortie",
                 type_operation: "paiement_loyer",
                 reference_operation: payment.id,
                 solde_avant,
@@ -314,6 +392,7 @@ export async function rpcRoutes(app: FastifyInstance) {
                 date_paiement: params.date_paiement ? new Date(params.date_paiement) : new Date(),
                 mode_paiement: params.mode_paiement || params.mode || "cash",
                 reference: params.reference || null,
+                import_tag: params.import_tag || null,
               },
             });
 
@@ -323,14 +402,14 @@ export async function rpcRoutes(app: FastifyInstance) {
               data: { solde_restant: { decrement: montant } },
             });
 
-            // Update cash balance
-            const { solde_avant, solde_apres } = await updateCashBalance(tx, montant, "entree");
+            // Update cash balance - SORTIE de la caisse versement
+            const { solde_avant, solde_apres } = await updateCashBalance(tx, montant, "sortie");
 
             // Record cash transaction
             await tx.cash_transactions.create({
               data: {
                 montant,
-                type_transaction: "entree",
+                type_transaction: "sortie",
                 type_operation: "paiement_souscription",
                 reference_operation: payment.id,
                 solde_avant,
@@ -347,7 +426,7 @@ export async function rpcRoutes(app: FastifyInstance) {
                 numero: receiptNumber(),
                 client_id: finalClientId || "",
                 reference_id: payment.id,
-                type_operation: "souscription",
+                type_operation: "apport_souscription",
                 montant_total: montant,
               },
             });
@@ -395,17 +474,19 @@ export async function rpcRoutes(app: FastifyInstance) {
                 date_paiement: params.date_paiement ? new Date(params.date_paiement) : new Date(),
                 mode_paiement: params.mode_paiement || params.mode || "cash",
                 reference: params.reference || null,
+                annee_concerne: params.annee_concerne ? Number(params.annee_concerne) : null,
+                import_tag: params.import_tag || null,
               },
             });
 
-            // Update cash balance
-            const { solde_avant, solde_apres } = await updateCashBalance(tx, montant, "entree");
+            // Update cash balance - SORTIE de la caisse versement
+            const { solde_avant, solde_apres } = await updateCashBalance(tx, montant, "sortie");
 
             // Record cash transaction
             await tx.cash_transactions.create({
               data: {
                 montant,
-                type_transaction: "entree",
+                type_transaction: "sortie",
                 type_operation: "paiement_droit_terre",
                 reference_operation: payment.id,
                 solde_avant,
@@ -432,6 +513,276 @@ export async function rpcRoutes(app: FastifyInstance) {
 
           app.io?.emit("db-change", { table: "paiements_droit_terre", action: "insert" });
           return recuId;
+        }
+
+        // ============== CANCEL IMPORT RECOUVREMENT ==============
+        case "cancel_recouvrement_import": {
+          const validationError = validateRequired(params, ["agent_id", "month", "year", "operation_type"]);
+          if (validationError) {
+            reply.code(400);
+            return { error: validationError };
+          }
+
+          const agentId = params.agent_id;
+          const operationType = params.operation_type;
+          const year = Number(params.year);
+          const rawMonth = Number(params.month);
+          const monthIndex = rawMonth >= 1 && rawMonth <= 12 ? rawMonth - 1 : rawMonth;
+
+          if (Number.isNaN(year) || Number.isNaN(monthIndex) || monthIndex < 0 || monthIndex > 11) {
+            reply.code(400);
+            return { error: "Mois ou année invalide" };
+          }
+
+          const startDate = new Date(year, monthIndex, 1, 0, 0, 0);
+          const endDate = new Date(year, monthIndex + 1, 0, 23, 59, 59);
+
+          const result = await prisma.$transaction(async (tx) => {
+            let totalRefund = 0;
+            let paymentsDeleted = 0;
+            let receiptsDeleted = 0;
+            let cashDeleted = 0;
+            let contractsDeleted = 0;
+            let propertiesDeleted = 0;
+            let clientsDeleted = 0;
+
+            if (operationType === "loyer") {
+              const payments = await tx.paiements_locations.findMany({
+                where: {
+                  import_tag: "import",
+                  date_paiement: { gte: startDate, lte: endDate },
+                  location: { propriete: { agent_id: agentId } },
+                },
+                select: {
+                  id: true,
+                  montant: true,
+                  location_id: true,
+                  location: { select: { propriete_id: true, client_id: true } },
+                },
+              });
+
+              const paymentIds = payments.map((p) => p.id);
+              const locationIds = Array.from(new Set(payments.map((p) => p.location_id)));
+              const propertyIds = Array.from(
+                new Set(payments.map((p) => p.location.propriete_id).filter(Boolean))
+              );
+              const clientIds = Array.from(
+                new Set(payments.map((p) => p.location.client_id).filter(Boolean))
+              );
+
+              totalRefund = payments.reduce((sum, p) => sum + Number(p.montant || 0), 0);
+
+              if (paymentIds.length > 0) {
+                const recuRes = await tx.recus.deleteMany({
+                  where: { reference_id: { in: paymentIds }, type_operation: "location" },
+                });
+                receiptsDeleted = recuRes.count;
+
+                const cashRes = await tx.cash_transactions.deleteMany({
+                  where: {
+                    reference_operation: { in: paymentIds },
+                    type_operation: "paiement_loyer",
+                  },
+                });
+                cashDeleted = cashRes.count;
+
+                const payRes = await tx.paiements_locations.deleteMany({
+                  where: { id: { in: paymentIds } },
+                });
+                paymentsDeleted = payRes.count;
+              }
+
+              if (locationIds.length > 0) {
+                const locations = await tx.locations.findMany({
+                  where: { id: { in: locationIds }, import_tag: "import" },
+                  include: { _count: { select: { paiements: true, cautions: true } } },
+                });
+                const deletableLocationIds = locations
+                  .filter((l) => l._count.paiements === 0 && l._count.cautions === 0)
+                  .map((l) => l.id);
+
+                if (deletableLocationIds.length > 0) {
+                  const delRes = await tx.locations.deleteMany({
+                    where: { id: { in: deletableLocationIds } },
+                  });
+                  contractsDeleted += delRes.count;
+                }
+              }
+
+              if (propertyIds.length > 0) {
+                const props = await tx.proprietes.findMany({
+                  where: { id: { in: propertyIds }, import_tag: "import" },
+                  include: { _count: { select: { locations: true, souscriptions: true } } },
+                });
+                const deletablePropIds = props
+                  .filter((p) => p._count.locations === 0 && p._count.souscriptions === 0)
+                  .map((p) => p.id);
+
+                if (deletablePropIds.length > 0) {
+                  const delRes = await tx.proprietes.deleteMany({
+                    where: { id: { in: deletablePropIds } },
+                  });
+                  propertiesDeleted = delRes.count;
+                }
+              }
+
+              if (clientIds.length > 0) {
+                const clients = await tx.clients.findMany({
+                  where: { id: { in: clientIds }, import_tag: "import" },
+                  include: { _count: { select: { locations: true, souscriptions: true } } },
+                });
+                const deletableClientIds = clients
+                  .filter((c) => c._count.locations === 0 && c._count.souscriptions === 0)
+                  .map((c) => c.id);
+
+                if (deletableClientIds.length > 0) {
+                  const delRes = await tx.clients.deleteMany({
+                    where: { id: { in: deletableClientIds } },
+                  });
+                  clientsDeleted = delRes.count;
+                }
+              }
+            } else if (operationType === "droit_terre") {
+              const payments = await tx.paiements_droit_terre.findMany({
+                where: {
+                  import_tag: "import",
+                  date_paiement: { gte: startDate, lte: endDate },
+                  souscription: { propriete: { agent_id: agentId } },
+                },
+                select: {
+                  id: true,
+                  montant: true,
+                  souscription_id: true,
+                  souscription: { select: { propriete_id: true, client_id: true } },
+                },
+              });
+
+              const paymentIds = payments.map((p) => p.id);
+              const souscriptionIds = Array.from(new Set(payments.map((p) => p.souscription_id)));
+              const propertyIds = Array.from(
+                new Set(payments.map((p) => p.souscription.propriete_id).filter(Boolean))
+              );
+              const clientIds = Array.from(
+                new Set(payments.map((p) => p.souscription.client_id).filter(Boolean))
+              );
+
+              totalRefund = payments.reduce((sum, p) => sum + Number(p.montant || 0), 0);
+
+              if (paymentIds.length > 0) {
+                const recuRes = await tx.recus.deleteMany({
+                  where: { reference_id: { in: paymentIds }, type_operation: "droit_terre" },
+                });
+                receiptsDeleted = recuRes.count;
+
+                const cashRes = await tx.cash_transactions.deleteMany({
+                  where: {
+                    reference_operation: { in: paymentIds },
+                    type_operation: "paiement_droit_terre",
+                  },
+                });
+                cashDeleted = cashRes.count;
+
+                const payRes = await tx.paiements_droit_terre.deleteMany({
+                  where: { id: { in: paymentIds } },
+                });
+                paymentsDeleted = payRes.count;
+              }
+
+              if (souscriptionIds.length > 0) {
+                const souscriptions = await tx.souscriptions.findMany({
+                  where: { id: { in: souscriptionIds }, import_tag: "import" },
+                  include: { _count: { select: { paiements: true, paiements_droit: true } } },
+                });
+                const deletableSouscriptionIds = souscriptions
+                  .filter((s) => s._count.paiements === 0 && s._count.paiements_droit === 0)
+                  .map((s) => s.id);
+
+                if (deletableSouscriptionIds.length > 0) {
+                  const delRes = await tx.souscriptions.deleteMany({
+                    where: { id: { in: deletableSouscriptionIds } },
+                  });
+                  contractsDeleted += delRes.count;
+                }
+              }
+
+              if (propertyIds.length > 0) {
+                const props = await tx.proprietes.findMany({
+                  where: { id: { in: propertyIds }, import_tag: "import" },
+                  include: { _count: { select: { locations: true, souscriptions: true } } },
+                });
+                const deletablePropIds = props
+                  .filter((p) => p._count.locations === 0 && p._count.souscriptions === 0)
+                  .map((p) => p.id);
+
+                if (deletablePropIds.length > 0) {
+                  const delRes = await tx.proprietes.deleteMany({
+                    where: { id: { in: deletablePropIds } },
+                  });
+                  propertiesDeleted = delRes.count;
+                }
+              }
+
+              if (clientIds.length > 0) {
+                const clients = await tx.clients.findMany({
+                  where: { id: { in: clientIds }, import_tag: "import" },
+                  include: { _count: { select: { locations: true, souscriptions: true } } },
+                });
+                const deletableClientIds = clients
+                  .filter((c) => c._count.locations === 0 && c._count.souscriptions === 0)
+                  .map((c) => c.id);
+
+                if (deletableClientIds.length > 0) {
+                  const delRes = await tx.clients.deleteMany({
+                    where: { id: { in: deletableClientIds } },
+                  });
+                  clientsDeleted = delRes.count;
+                }
+              }
+            } else {
+              throw badRequest("Type d'opération invalide");
+            }
+
+            if (totalRefund > 0) {
+              const { solde_avant, solde_apres } = await updateCashBalance(tx, totalRefund, "entree");
+              await tx.cash_transactions.create({
+                data: {
+                  montant: totalRefund,
+                  type_transaction: "entree",
+                  type_operation: "annulation_import",
+                  agent_id: agentId,
+                  reference_operation: `${operationType}_${year}_${monthIndex + 1}`,
+                  description: `Annulation import ${operationType} ${monthIndex + 1}/${year}`,
+                  solde_avant,
+                  solde_apres,
+                  mode: "system",
+                  type: "annulation_import",
+                  mois_concerne: String(monthIndex + 1).padStart(2, "0"),
+                  annee_concerne: year,
+                },
+              });
+            }
+
+            return {
+              total_refunded: totalRefund,
+              payments_deleted: paymentsDeleted,
+              receipts_deleted: receiptsDeleted,
+              cash_transactions_deleted: cashDeleted,
+              contracts_deleted: contractsDeleted,
+              properties_deleted: propertiesDeleted,
+              clients_deleted: clientsDeleted,
+            };
+          });
+
+          app.io?.emit("db-change", { table: "paiements_locations", action: "delete" });
+          app.io?.emit("db-change", { table: "paiements_droit_terre", action: "delete" });
+          app.io?.emit("db-change", { table: "locations", action: "delete" });
+          app.io?.emit("db-change", { table: "souscriptions", action: "delete" });
+          app.io?.emit("db-change", { table: "proprietes", action: "delete" });
+          app.io?.emit("db-change", { table: "clients", action: "delete" });
+          app.io?.emit("db-change", { table: "cash_transactions", action: "insert" });
+          app.io?.emit("db-change", { table: "recus", action: "delete" });
+
+          return result;
         }
 
         // ============== FACTURE PAYMENTS ==============
@@ -504,10 +855,14 @@ export async function rpcRoutes(app: FastifyInstance) {
             const recu = await tx.recus.create({
               data: {
                 numero: receiptNumber(),
-                client_id: facture.fournisseur_id,
+                client_id: null,
                 reference_id: payment.id,
-                type_operation: "facture",
+                type_operation: "paiement_facture",
                 montant_total: montant,
+                meta: {
+                  fournisseur_id: facture.fournisseur_id,
+                  facture_id: factureId,
+                },
               },
             });
 
@@ -539,17 +894,32 @@ export async function rpcRoutes(app: FastifyInstance) {
             const { solde_avant, solde_apres } = await updateCashBalance(tx, montant, "sortie");
 
             // Record cash transaction
-            await tx.cash_transactions.create({
+            const cashTransaction = await tx.cash_transactions.create({
               data: {
                 montant,
                 type_transaction: "sortie",
-                type_operation: "remboursement_caution",
+                type_operation: "paiement_caution",
                 reference_operation: payment.id,
                 solde_avant,
                 solde_apres,
                 type: "caution",
                 mode: params.mode_paiement || params.mode || "cash",
                 reference: params.reference || payment.id,
+              },
+            });
+
+            // Create receipt for caution payment
+            await tx.recus.create({
+              data: {
+                numero: receiptNumber(),
+                client_id: null,
+                reference_id: cashTransaction.id,
+                type_operation: "caution_location",
+                montant_total: montant,
+                meta: {
+                  location_id: locationId || null,
+                  reference_operation: payment.id,
+                },
               },
             });
 
@@ -563,6 +933,101 @@ export async function rpcRoutes(app: FastifyInstance) {
         // ============== UTILITIES ==============
         case "generate_facture_number": {
           return factureNumber();
+        }
+
+        // ============== MAINTENANCE ==============
+        case "clear_financial_data_only": {
+          await prisma.$transaction(async (tx) => {
+            await tx.paiements_factures.deleteMany({});
+            await tx.paiements_locations.deleteMany({});
+            await tx.paiements_souscriptions.deleteMany({});
+            await tx.paiements_droit_terre.deleteMany({});
+            await tx.echeances_droit_terre.deleteMany({});
+            await tx.cash_transactions.deleteMany({});
+            await tx.recus.deleteMany({});
+            await tx.factures_fournisseurs.deleteMany({});
+            await tx.ventes.deleteMany({});
+
+            const souscriptions = await tx.souscriptions.findMany({
+              select: { id: true, prix_total: true },
+            });
+            for (const sub of souscriptions) {
+              await tx.souscriptions.update({
+                where: { id: sub.id },
+                data: { solde_restant: Number(sub.prix_total || 0) },
+              });
+            }
+
+            await tx.locations.updateMany({
+              data: { updated_at: new Date() },
+            });
+
+            await tx.caisse_balance.deleteMany({});
+            await tx.caisse_balance.create({
+              data: { solde_courant: 0, balance: 0, derniere_maj: new Date() },
+            });
+          });
+
+          app.io?.emit("db-change", { table: "cash_transactions", action: "delete" });
+          app.io?.emit("db-change", { table: "recus", action: "delete" });
+          return { success: true };
+        }
+
+        case "clear_financial_data": {
+          await prisma.$transaction(async (tx) => {
+            await tx.paiements_factures.deleteMany({});
+            await tx.paiements_locations.deleteMany({});
+            await tx.paiements_souscriptions.deleteMany({});
+            await tx.paiements_droit_terre.deleteMany({});
+            await tx.echeances_droit_terre.deleteMany({});
+            await tx.cash_transactions.deleteMany({});
+            await tx.recus.deleteMany({});
+            await tx.factures_fournisseurs.deleteMany({});
+            await tx.locations.deleteMany({});
+            await tx.souscriptions.deleteMany({});
+
+            await tx.caisse_balance.deleteMany({});
+            await tx.caisse_balance.create({
+              data: { solde_courant: 0, balance: 0, derniere_maj: new Date() },
+            });
+          });
+
+          app.io?.emit("db-change", { table: "cash_transactions", action: "delete" });
+          app.io?.emit("db-change", { table: "recus", action: "delete" });
+          return { success: true };
+        }
+
+        case "clear_all_data": {
+          await prisma.$transaction(async (tx) => {
+            await tx.ventes.deleteMany({});
+            await tx.recus.deleteMany({});
+            await tx.paiements_factures.deleteMany({});
+            await tx.paiements_locations.deleteMany({});
+            await tx.paiements_souscriptions.deleteMany({});
+            await tx.paiements_droit_terre.deleteMany({});
+            await tx.echeances_droit_terre.deleteMany({});
+            await tx.cash_transactions.deleteMany({});
+            await tx.factures_fournisseurs.deleteMany({});
+            await tx.locations.deleteMany({});
+            await tx.souscriptions.deleteMany({});
+            await tx.clients.deleteMany({});
+            await tx.proprietes.deleteMany({});
+            await tx.fournisseurs.deleteMany({});
+            await tx.agents_recouvrement.deleteMany({});
+            await tx.articles.deleteMany({});
+            await tx.types_proprietes.deleteMany({});
+            await tx.secteurs_activite.deleteMany({});
+            await tx.bareme_droits_terre.deleteMany({});
+            await tx.receipt_counters.deleteMany({});
+            await tx.caisse_balance.deleteMany({});
+            await tx.caisse_balance.create({
+              data: { solde_courant: 0, balance: 0, derniere_maj: new Date() },
+            });
+          });
+
+          app.io?.emit("db-change", { table: "cash_transactions", action: "delete" });
+          app.io?.emit("db-change", { table: "recus", action: "delete" });
+          return { success: true };
         }
 
         // ============== STATISTICS ==============
@@ -762,6 +1227,176 @@ export async function rpcRoutes(app: FastifyInstance) {
           });
 
           return { status: "ok", count: echeances.length };
+        }
+
+        // ============== DIAGNOSTIC & RECALCULATION ==============
+        case "diagnose_caisse_versement": {
+          // Calculer les totaux d'entrées et sorties pour la caisse versement
+          const diagEntrees = await prisma.cash_transactions.aggregate({
+            _sum: { montant: true },
+            where: { type_operation: "versement_agent" },
+          });
+          // Paiements en sortie (correct)
+          const diagSortiesCorrect = await prisma.cash_transactions.aggregate({
+            _sum: { montant: true },
+            where: {
+              type_operation: {
+                in: ["paiement_loyer", "paiement_souscription", "paiement_droit_terre", "paiement_caution"],
+              },
+              type_transaction: "sortie",
+            },
+          });
+          // Paiements en entree (incorrect, avant correction)
+          const diagSortiesIncorrect = await prisma.cash_transactions.aggregate({
+            _sum: { montant: true },
+            where: {
+              type_operation: {
+                in: ["paiement_loyer", "paiement_souscription", "paiement_droit_terre", "paiement_caution"],
+              },
+              type_transaction: "entree",
+            },
+          });
+
+          const totalEntrees = Number(diagEntrees._sum.montant || 0);
+          const totalSortiesCorrectes = Number(diagSortiesCorrect._sum.montant || 0);
+          const totalSortiesIncorrectes = Number(diagSortiesIncorrect._sum.montant || 0);
+          // Le vrai total des sorties = celles déjà corrigées + celles encore mal enregistrées
+          const totalSorties = totalSortiesCorrectes + totalSortiesIncorrectes;
+
+          // Solde actuel dans la table
+          const diagBalance = await prisma.caisse_balance.findFirst({
+            orderBy: { updated_at: "desc" },
+          });
+          const soldeActuel = Number(diagBalance?.solde_courant || diagBalance?.balance || 0);
+          const soldeTheorique = totalEntrees - totalSorties;
+          const difference = soldeActuel - soldeTheorique;
+
+          // Transactions récentes (7 jours)
+          const sevenDaysAgo = new Date();
+          sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+          const [versementsRecents, sortiesRecentes] = await Promise.all([
+            prisma.cash_transactions.findMany({
+              where: { type_operation: "versement_agent", date_transaction: { gte: sevenDaysAgo } },
+              orderBy: { date_transaction: "desc" },
+              take: 10,
+              include: { agent: true },
+            }),
+            prisma.cash_transactions.findMany({
+              where: {
+                type_operation: { in: ["paiement_loyer", "paiement_souscription", "paiement_droit_terre", "paiement_caution"] },
+                date_transaction: { gte: sevenDaysAgo },
+              },
+              orderBy: { date_transaction: "desc" },
+              take: 10,
+            }),
+          ]);
+
+          const nbTransactions = await prisma.cash_transactions.count();
+
+          return {
+            solde_actuel: soldeActuel,
+            solde_theorique: soldeTheorique,
+            total_entrees: totalEntrees,
+            total_sorties: totalSorties,
+            difference,
+            transactions_analysees: nbTransactions,
+            message: totalSortiesIncorrectes > 0
+              ? `${totalSortiesIncorrectes.toLocaleString()} FCFA de paiements sont enregistrés en 'entree' au lieu de 'sortie'. Recalculation recommandée.`
+              : Math.abs(difference) > 1
+                ? `Écart de ${difference.toLocaleString()} FCFA détecté. Recalculation recommandée.`
+                : "La caisse versement est cohérente.",
+            versements_recents: versementsRecents.map((v: any) => ({
+              agent: v.agent ? `${v.agent.prenom} ${v.agent.nom}` : (v.beneficiaire || "Agent"),
+              date: v.date_transaction,
+              montant: Number(v.montant),
+              solde_apres: Number(v.solde_apres || 0),
+            })),
+            sorties_recentes: sortiesRecentes.map((s: any) => ({
+              beneficiaire: s.beneficiaire || s.type_operation?.replace("paiement_", "") || "N/A",
+              type: s.type_operation || "",
+              date: s.date_transaction,
+              montant: Number(s.montant),
+              solde_apres: Number(s.solde_apres || 0),
+            })),
+          };
+        }
+
+        case "recalculate_caisse":
+        case "recalculate_caisse_versement": {
+          // Corriger les transactions mal enregistrées (paiements en entree → sortie)
+          const wrongDirectionPayments = await prisma.cash_transactions.findMany({
+            where: {
+              type_operation: {
+                in: ["paiement_loyer", "paiement_souscription", "paiement_droit_terre", "paiement_caution"],
+              },
+              type_transaction: "entree",
+            },
+          });
+
+          // Corriger la direction
+          for (const tx of wrongDirectionPayments) {
+            await prisma.cash_transactions.update({
+              where: { id: tx.id },
+              data: { type_transaction: "sortie" },
+            });
+          }
+
+          // Recalculer le solde de la caisse versement depuis toutes les transactions
+          const allTransactions = await prisma.cash_transactions.findMany({
+            orderBy: [{ date_transaction: "asc" }, { created_at: "asc" }],
+          });
+
+          let solde = 0;
+          const OPERATIONS_CAISSE = {
+            ENTREES: ["versement_agent"],
+            SORTIES: ["paiement_loyer", "paiement_souscription", "paiement_droit_terre", "paiement_caution"],
+          };
+
+          for (const tx of allTransactions) {
+            const isEntree = OPERATIONS_CAISSE.ENTREES.includes(tx.type_operation || "");
+            const isSortie = OPERATIONS_CAISSE.SORTIES.includes(tx.type_operation || "");
+            if (!isEntree && !isSortie) continue;
+
+            const montant = Number(tx.montant || 0);
+            const solde_avant = solde;
+
+            if (isEntree) {
+              solde += montant;
+            } else {
+              solde -= montant;
+            }
+
+            await prisma.cash_transactions.update({
+              where: { id: tx.id },
+              data: { solde_avant, solde_apres: solde },
+            });
+          }
+
+          // Mettre à jour la caisse_balance
+          const currentBalance = await prisma.caisse_balance.findFirst({
+            orderBy: { updated_at: "desc" },
+          });
+          const ancienSolde = Number(currentBalance?.solde_courant || currentBalance?.balance || 0);
+
+          if (currentBalance) {
+            await prisma.caisse_balance.update({
+              where: { id: currentBalance.id },
+              data: { solde_courant: solde, balance: solde, derniere_maj: new Date() },
+            });
+          } else {
+            await prisma.caisse_balance.create({
+              data: { solde_courant: solde, balance: solde },
+            });
+          }
+
+          app.io?.emit("db-change", { table: "cash_transactions", action: "update" });
+          return {
+            ancien_solde: ancienSolde,
+            nouveau_solde: solde,
+            transactions_corrigees: wrongDirectionPayments.length,
+            transactions_processed: allTransactions.length,
+          };
         }
 
         default: {

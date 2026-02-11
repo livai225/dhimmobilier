@@ -182,34 +182,39 @@ export default function ModernDashboard() {
       const tauxOccupation = proprietesData.length ?
         Math.round((proprietesOccupees / proprietesData.length) * 100) : 0;
 
-      // Weekly performance data with realistic demo data
+      // Weekly performance data (last 7 days, real values only)
       const weeklyData = [];
-      const demoRevenus = [120000, 85000, 150000, 200000, 180000, 95000, 110000];
-      const demoTransactions = [3, 2, 4, 5, 4, 2, 3];
+      const toDate = (value: any) => {
+        const d = new Date(value);
+        return Number.isNaN(d.getTime()) ? null : d;
+      };
+      const inDayRange = (value: any, start: Date, end: Date) => {
+        const d = toDate(value);
+        return d ? d >= start && d <= end : false;
+      };
 
       for (let i = 6; i >= 0; i--) {
         const date = new Date();
         date.setDate(date.getDate() - i);
-        const dayKey = date.toISOString().slice(0, 10);
+        const start = new Date(date);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(date);
+        end.setHours(23, 59, 59, 999);
 
         const dayPaiements = [
-          ...paiementsLocationsData.filter((p: any) => p.date_paiement?.startsWith(dayKey)),
-          ...paiementsSouscriptionsData.filter((p: any) => p.date_paiement?.startsWith(dayKey)),
-          ...paiementsDroitTerreData.filter((p: any) => p.date_paiement?.startsWith(dayKey))
+          ...paiementsLocationsData.filter((p: any) => inDayRange(p.date_paiement, start, end)),
+          ...paiementsSouscriptionsData.filter((p: any) => inDayRange(p.date_paiement, start, end)),
+          ...paiementsDroitTerreData.filter((p: any) => inDayRange(p.date_paiement, start, end)),
         ];
 
-        const realRevenus = dayPaiements.reduce((sum: number, p: any) => sum + (p.montant || 0), 0);
-        const realTransactions = dayPaiements.length;
-
-        // Use real data if available, otherwise use demo data
-        const revenus = realRevenus > 0 ? realRevenus : demoRevenus[6-i];
-        const transactions = realTransactions > 0 ? realTransactions : demoTransactions[6-i];
+        const revenus = dayPaiements.reduce((sum: number, p: any) => sum + (p.montant || 0), 0);
+        const transactions = dayPaiements.length;
 
         weeklyData.push({
           day: date.toLocaleDateString('fr-FR', { weekday: 'short' }),
           dayFull: date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric' }),
-          revenus: revenus,
-          transactions: transactions
+          revenus,
+          transactions
         });
       }
 

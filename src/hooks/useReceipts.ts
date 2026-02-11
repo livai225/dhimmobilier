@@ -257,18 +257,23 @@ export const useReceipts = (filters?: {
                   is_current: pay.id === receipt.reference_id
                 }));
 
+                const droitTerreMensuel = sous?.montant_droit_terre_mensuel ?? 0;
+                const paiementActuel = Number(receipt.montant_total || 0);
+                const isComplete = droitTerreMensuel > 0 ? paiementActuel >= droitTerreMensuel : true;
+                const remaining = droitTerreMensuel > 0 ? Math.max(0, droitTerreMensuel - paiementActuel) : 0;
+
                 Object.assign(extras, {
                   details_type: 'droit_terre',
                   property_name: propriete?.nom ?? null,
                   property_address: propriete?.adresse ?? null,
                   type_bien: sous?.type_bien ?? null,
                   phase_souscription: 'droit_terre',
-                  is_payment_complete: false,
-                  remaining_balance: 0,
+                  is_payment_complete: isComplete,
+                  remaining_balance: remaining,
                   payment_history,
-                  droit_terre_mensuel: sous?.montant_droit_terre_mensuel ?? null,
+                  droit_terre_mensuel: droitTerreMensuel || null,
                   droit_terre_total_paye: total_paye,
-                  droit_terre_solde_restant: 0,
+                  droit_terre_solde_restant: remaining,
                 });
               }
               break;

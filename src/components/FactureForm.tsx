@@ -98,9 +98,8 @@ export function FactureForm({ facture, onSuccess }: FactureFormProps) {
         numero: data.numero,
         fournisseur_id: data.fournisseur_id,
         propriete_id: data.propriete_id === "none" ? null : data.propriete_id || null,
-        date_facture: data.date_facture,
+        date_facture: new Date(data.date_facture).toISOString(),
         montant_total: data.montant_total,
-        priorite: data.priorite || "normale",
         description: data.description || null,
         montant_paye: 0,
         solde: data.montant_total,
@@ -114,7 +113,6 @@ export function FactureForm({ facture, onSuccess }: FactureFormProps) {
           propriete_id: data.propriete_id === "none" ? null : data.propriete_id || null,
           date_facture: cleanData.date_facture,
           montant_total: cleanData.montant_total,
-          priorite: cleanData.priorite,
           description: cleanData.description,
         };
 

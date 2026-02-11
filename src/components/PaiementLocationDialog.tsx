@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuditLog } from "@/hooks/useAuditLog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { generateExtendedMonthOptions } from "@/utils/monthOptions";
+import { getInsufficientFundsMessage } from "@/utils/errorMessages";
 
 interface PaiementLocationDialogProps {
   location: any;
@@ -108,6 +109,15 @@ export function PaiementLocationDialog({ location, onClose, onSuccess }: Paiemen
       onSuccess();
     },
     onError: (error: any) => {
+      const insufficientMessage = getInsufficientFundsMessage(error);
+      if (insufficientMessage) {
+        toast({
+          title: "Montant insuffisant",
+          description: insufficientMessage,
+          variant: "destructive",
+        });
+        return;
+      }
       toast({
         title: "Erreur",
         description: error?.message || "Impossible d'enregistrer le paiement.",

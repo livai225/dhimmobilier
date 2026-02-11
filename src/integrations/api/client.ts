@@ -180,6 +180,10 @@ export class ApiClient {
     mode_paiement?: string;
     reference?: string;
     mois_concerne?: string;
+    date_paiement?: string;
+    periode_paiement?: string;
+    annee_concerne?: number;
+    import_tag?: string;
   }) {
     return this.rpc<string>("pay_location_with_cash", data);
   }
@@ -190,6 +194,9 @@ export class ApiClient {
     client_id?: string;
     mode_paiement?: string;
     reference?: string;
+    date_paiement?: string;
+    periode_paiement?: string;
+    import_tag?: string;
   }) {
     return this.rpc<string>("pay_souscription_with_cash", data);
   }
@@ -200,6 +207,10 @@ export class ApiClient {
     client_id?: string;
     mode_paiement?: string;
     reference?: string;
+    date_paiement?: string;
+    periode_paiement?: string;
+    annee_concerne?: number;
+    import_tag?: string;
   }) {
     return this.rpc<string>("pay_droit_terre_with_cash", data);
   }
@@ -252,6 +263,23 @@ export class ApiClient {
       moyenne_versement: number;
       dernier_versement: string | null;
     }>>("get_agent_statistics", data);
+  }
+
+  cancelRecouvrementImport(data: {
+    agent_id: string;
+    month: number;
+    year: number;
+    operation_type: "loyer" | "droit_terre";
+  }) {
+    return this.rpc<{
+      total_refunded: number;
+      payments_deleted: number;
+      receipts_deleted: number;
+      cash_transactions_deleted: number;
+      contracts_deleted: number;
+      properties_deleted: number;
+      clients_deleted: number;
+    }>("cancel_recouvrement_import", data);
   }
 
   // ============== UTILITIES ==============
@@ -404,8 +432,32 @@ export class ApiClient {
   }
 
   // Types propriétés
-  getTypesProprietes() {
-    return this.select({ table: "types_proprietes", orderBy: { column: "nom", ascending: true } });
+  async getTypesProprietes() {
+    const defaults = ["STUDIO", "MAGASIN", "2 PIECES", "3 PIECES", "4 PIECES"];
+    const data = await this.select({ table: "types_proprietes", orderBy: { column: "nom", ascending: true } });
+    const list = Array.isArray(data) ? data : [];
+    const existing = new Set(
+      list.map((t: any) => String(t?.nom || "").trim().toUpperCase()).filter((n: string) => n.length > 0)
+    );
+    const missing = defaults.filter((name) => !existing.has(name));
+
+    if (missing.length > 0) {
+      try {
+        await this.insert({
+          table: "types_proprietes",
+          values: missing.map((name) => ({ nom: name, description: null })),
+        });
+        const refreshed = await this.select({
+          table: "types_proprietes",
+          orderBy: { column: "nom", ascending: true },
+        });
+        return Array.isArray(refreshed) ? refreshed : list;
+      } catch {
+        return list;
+      }
+    }
+
+    return list;
   }
 
   // Barème droits terre

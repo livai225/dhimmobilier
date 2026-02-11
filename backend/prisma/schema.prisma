@@ -51,12 +51,17 @@ model clients {
   contact_urgence_nom       String?
   contact_urgence_telephone String?
   contact_urgence_relation  String?
+  import_tag                String?
   created_at                DateTime @default(now())
   updated_at                DateTime @updatedAt
 
   souscriptions souscriptions[]
   locations     locations[]
   recus         recus[]
+
+  @@index([email])
+  @@index([nom, prenom])
+  @@index([telephone_principal])
 }
 
 // ============== PROPRIETES ==============
@@ -84,6 +89,7 @@ model proprietes {
   loyer_mensuel  Float?   @default(0)
   montant_bail   Float?   @default(0)
   droit_terre    Float?   @default(0)
+  import_tag     String?
   created_at     DateTime @default(now())
   updated_at     DateTime @updatedAt
 
@@ -107,6 +113,7 @@ model locations {
   date_fin       DateTime?
   statut         String    @default("active")
   dette_totale   Float     @default(0)
+  import_tag     String?
   created_at     DateTime  @default(now())
   updated_at     DateTime  @updatedAt
 
@@ -127,11 +134,14 @@ model paiements_locations {
   mode_paiement  String?
   reference      String?
   mois_concerne  String?
+  annee_concerne Int?
+  import_tag     String?
   created_at     DateTime @default(now())
 
   location locations @relation(fields: [location_id], references: [id], onDelete: Cascade)
 
   @@index([location_id])
+  @@index([date_paiement])
 }
 
 model paiements_cautions {
@@ -169,6 +179,7 @@ model souscriptions {
   montant_droit_terre_mensuel Float?   @default(0)
   phase_actuelle             String    @default("souscription")
   type_bien                  String?
+  import_tag                 String?
   created_at                 DateTime  @default(now())
   updated_at                 DateTime  @updatedAt
 
@@ -189,6 +200,7 @@ model paiements_souscriptions {
   date_paiement   DateTime @default(now())
   mode_paiement   String?
   reference       String?
+  import_tag      String?
   created_at      DateTime @default(now())
 
   souscription souscriptions @relation(fields: [souscription_id], references: [id], onDelete: Cascade)
@@ -203,11 +215,14 @@ model paiements_droit_terre {
   date_paiement   DateTime @default(now())
   mode_paiement   String?
   reference       String?
+  annee_concerne  Int?
+  import_tag      String?
   created_at      DateTime @default(now())
 
   souscription souscriptions @relation(fields: [souscription_id], references: [id], onDelete: Cascade)
 
   @@index([souscription_id])
+  @@index([date_paiement])
 }
 
 model echeances_droit_terre {
@@ -321,6 +336,7 @@ model agents_recouvrement {
   updated_at             DateTime @updatedAt
 
   transactions cash_transactions[]
+  recus        recus[]
 }
 
 // ============== CAISSE ==============
@@ -344,11 +360,19 @@ model cash_transactions {
   type                String?
   created_by          String?
   created_at          DateTime  @default(now())
+  mois_concerne       String?
+  annee_concerne      Int?
 
   agent agents_recouvrement? @relation(fields: [agent_id], references: [id])
 
   @@index([agent_id])
   @@index([type_operation])
+  @@index([agent_id, date_transaction])
+  @@index([agent_id, mois_concerne, annee_concerne])
+  @@index([date_transaction])
+  @@index([mois_concerne, annee_concerne])
+  @@index([type_operation, date_transaction])
+  @@index([type_transaction, date_transaction])
 }
 
 model caisse_balance {
@@ -365,7 +389,7 @@ model caisse_balance {
 model recus {
   id              String    @id @default(uuid())
   numero          String    @unique
-  client_id       String
+  client_id       String?
   type_operation  String
   reference_id    String
   montant_total   Float
@@ -373,18 +397,33 @@ model recus {
   periode_fin     DateTime?
   date_generation DateTime  @default(now())
   created_at      DateTime  @default(now())
+  meta            Json?
+  agent_id        String?
+  created_by      String?
 
-  client clients @relation(fields: [client_id], references: [id])
+  client clients?             @relation(fields: [client_id], references: [id])
+  agent  agents_recouvrement? @relation(fields: [agent_id], references: [id])
 
   @@index([client_id])
+  @@index([agent_id])
+  @@index([agent_id, date_generation])
+  @@index([client_id, date_generation])
+  @@index([created_by])
+  @@index([date_generation])
+  @@index([type_operation])
 }
 
 model receipt_counters {
-  id         String   @id @default(uuid())
-  type       String   @unique @default("general")
-  compteur   Int      @default(0)
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
+  id          String   @id @default(uuid())
+  type        String?  @default("general")
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+  date_key    String?
+  last_number Int      @default(0)
+  prefix      String?
+
+  @@unique([date_key, prefix])
+  @@index([date_key, prefix])
 }
 
 // ============== AUDIT ==============
@@ -397,10 +436,16 @@ model audit_logs {
   record_id   String?
   description String?  @db.Text
   created_at  DateTime @default(now())
+  new_values  Json?
+  old_values  Json?
 
   user users @relation(fields: [user_id], references: [id])
 
   @@index([user_id])
+  @@index([action_type])
+  @@index([created_at])
+  @@index([table_name])
+  @@index([user_id, created_at])
 }
 
 // ============== ARTICLES & VENTES ==============

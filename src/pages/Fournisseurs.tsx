@@ -122,13 +122,6 @@ export default function Fournisseurs() {
     setIsDetailsOpen(true);
   };
 
-  const getPerformanceColor = (note) => {
-    if (!note) return "secondary";
-    if (note >= 4) return "default";
-    if (note >= 3) return "secondary";
-    return "destructive";
-  };
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -219,7 +212,6 @@ export default function Fournisseurs() {
               <TableHead>Contact</TableHead>
               <TableHead>Téléphone</TableHead>
               <TableHead>Email</TableHead>
-              <TableHead>Performance</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -228,7 +220,7 @@ export default function Fournisseurs() {
               <>
                 {Array.from({ length: 6 }).map((_, i) => (
                   <TableRow key={`skeleton-${i}`}>
-                    <TableCell colSpan={7}>
+                    <TableCell colSpan={6}>
                       <div className="h-10 w-full rounded-md bg-muted animate-pulse" />
                     </TableCell>
                   </TableRow>
@@ -236,7 +228,7 @@ export default function Fournisseurs() {
               </>
             ) : filteredFournisseurs.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                   Aucun fournisseur trouvé
                 </TableCell>
               </TableRow>
@@ -252,13 +244,6 @@ export default function Fournisseurs() {
                   <TableCell>{fournisseur.contact}</TableCell>
                   <TableCell>{fournisseur.telephone}</TableCell>
                   <TableCell>{fournisseur.email}</TableCell>
-                  <TableCell>
-                    {fournisseur.note_performance && (
-                      <Badge variant={getPerformanceColor(fournisseur.note_performance)}>
-                        {fournisseur.note_performance}/5
-                      </Badge>
-                    )}
-                  </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
                       <Button

@@ -28,19 +28,41 @@ const tableQueryMap: Record<string, string[][]> = {
 };
 
 let socket: Socket | null = null;
+let invalidationQueue: Set<string> = new Set();
+let invalidationTimer: ReturnType<typeof setTimeout> | null = null;
+
+// Débounce des invalidations pour éviter trop de refetch
+function debouncedInvalidate(queryClient: QueryClient) {
+  if (invalidationTimer) {
+    clearTimeout(invalidationTimer);
+  }
+  
+  invalidationTimer = setTimeout(() => {
+    if (invalidationQueue.size > 0) {
+      // Invalider toutes les queries en batch
+      invalidationQueue.forEach((key) => {
+        queryClient.invalidateQueries({ queryKey: [key] });
+      });
+      invalidationQueue.clear();
+    }
+  }, 300); // Débounce de 300ms - regroupe les invalidations
+}
 
 export function initRealtime(queryClient: QueryClient) {
   if (socket) return socket;
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "/api";
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "/dhimmobilier-api";
 
   // Socket.IO se connecte à l'origin mais utilise le path de l'API
   // Ex: si API = /dhimmobilier-api, alors path = /dhimmobilier-api/socket.io/
   socket = io(window.location.origin, {
     path: `${apiBaseUrl}/socket.io/`,
     withCredentials: true,
-    transports: ["websocket", "polling"],
+    transports: ["websocket", "polling"], // Préférer websocket, fallback polling
     reconnectionAttempts: 5,
     reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000,
+    timeout: 20000,
+    forceNew: false, // Réutiliser la connexion si possible
   });
 
   socket.on("connect", () => {
@@ -49,7 +71,14 @@ export function initRealtime(queryClient: QueryClient) {
 
   socket.on("db-change", (payload: { table: string; action: string }) => {
     const keys = tableQueryMap[payload.table] || [["dashboard-stats"]];
-    keys.forEach((key) => queryClient.invalidateQueries({ queryKey: key }));
+    // Ajouter toutes les clés à la queue au lieu d'invalider immédiatement
+    keys.forEach((keyArray) => {
+      keyArray.forEach((key) => {
+        invalidationQueue.add(key);
+      });
+    });
+    // Débounce l'invalidation
+    debouncedInvalidate(queryClient);
   });
 
   socket.on("disconnect", (reason) => {

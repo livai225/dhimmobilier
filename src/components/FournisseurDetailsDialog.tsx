@@ -23,9 +23,7 @@ import {
   Building, 
   Mail, 
   Phone, 
-  Globe, 
   MapPin, 
-  Star,
   FileText,
   CreditCard,
   TrendingUp,
@@ -102,12 +100,6 @@ export function FournisseurDetailsDialog({
     }
   };
 
-  const getPerformanceColor = (note: number) => {
-    if (note >= 4) return "default";
-    if (note >= 3) return "secondary";
-    return "destructive";
-  };
-
   const formatAmount = (amount: number) => {
     return new Intl.NumberFormat("fr-FR").format(amount) + " FCFA";
   };
@@ -182,31 +174,11 @@ export function FournisseurDetailsDialog({
                     </div>
                   )}
                   
-                  {fournisseur.note_performance && (
-                    <div className="flex items-center gap-2">
-                      <Star className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium">Performance:</span>
-                      <Badge variant={getPerformanceColor(fournisseur.note_performance)}>
-                        {fournisseur.note_performance}/5
-                      </Badge>
-                    </div>
-                  )}
-                  
                   {fournisseur.adresse && (
                     <div className="flex items-center gap-2">
                       <MapPin className="h-4 w-4 text-muted-foreground" />
                       <span className="font-medium">Adresse:</span>
                       <span>{fournisseur.adresse}</span>
-                    </div>
-                  )}
-                  
-                  {fournisseur.site_web && (
-                    <div className="flex items-center gap-2">
-                      <Globe className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium">Site web:</span>
-                      <a href={fournisseur.site_web} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-                        {fournisseur.site_web}
-                      </a>
                     </div>
                   )}
                   

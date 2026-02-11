@@ -27,6 +27,7 @@ import { useToast } from "@/hooks/use-toast";
 import { CreditCard, User } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
+import { getInsufficientFundsMessage } from "@/utils/errorMessages";
 
 
 const paiementSchema = z.object({
@@ -107,6 +108,15 @@ export function PaiementSouscriptionEcheanceDialog({
     },
     onError: (error: any) => {
       console.error("Erreur lors du paiement:", error);
+      const insufficientMessage = getInsufficientFundsMessage(error);
+      if (insufficientMessage) {
+        toast({
+          title: "Montant insuffisant",
+          description: insufficientMessage,
+          variant: "destructive",
+        });
+        return;
+      }
       toast({
         title: "Erreur",
         description: error?.message || "Impossible d'enregistrer le paiement.",

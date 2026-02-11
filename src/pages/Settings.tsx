@@ -104,57 +104,7 @@ export default function Settings() {
     mutationFn: async () => {
       setIsLoadingFinancialOnly(true);
 
-      const deleteFilter = [{ op: 'neq', column: 'id', value: '00000000-0000-0000-0000-000000000000' }];
-
-      // Supprimer uniquement les paiements et transactions (SANS toucher aux contrats)
-      await apiClient.delete({ table: 'paiements_factures', filters: deleteFilter });
-      await apiClient.delete({ table: 'paiements_locations', filters: deleteFilter });
-      await apiClient.delete({ table: 'paiements_souscriptions', filters: deleteFilter });
-      await apiClient.delete({ table: 'paiements_droit_terre', filters: deleteFilter });
-      await apiClient.delete({ table: 'echeances_droit_terre', filters: deleteFilter });
-      await apiClient.delete({ table: 'cash_transactions', filters: deleteFilter });
-      await apiClient.delete({ table: 'recus', filters: deleteFilter });
-      await apiClient.delete({ table: 'factures_fournisseurs', filters: deleteFilter });
-      await apiClient.delete({ table: 'ventes', filters: deleteFilter });
-
-      // Réinitialiser les soldes des souscriptions au prix total
-      const souscriptions = await apiClient.select({
-        table: 'souscriptions'
-      }) as Array<{ id: string; prix_total: number }>;
-
-      if (souscriptions && Array.isArray(souscriptions)) {
-        for (const sub of souscriptions) {
-          await apiClient.update({
-            table: 'souscriptions',
-            filters: [{ op: 'eq', column: 'id', value: sub.id }],
-            values: { solde_restant: sub.prix_total, updated_at: new Date().toISOString() }
-          });
-        }
-      }
-
-      // Déclencher le recalcul des dettes de location
-      await apiClient.update({
-        table: 'locations',
-        filters: deleteFilter,
-        values: { updated_at: new Date().toISOString() }
-      });
-
-      // CRITIQUE: Réinitialiser la caisse EN DERNIER après tous les recalculs
-      // 1. Supprimer tous les enregistrements de caisse_balance
-      await apiClient.delete({ table: 'caisse_balance', filters: deleteFilter });
-
-      // 2. Créer un nouvel enregistrement avec solde 0
-      await apiClient.insert({
-        table: 'caisse_balance',
-        values: { solde_courant: 0, derniere_maj: new Date().toISOString() }
-      });
-
-      // 3. Forcer la mise à jour à 0 pour être absolument sûr
-      await apiClient.update({
-        table: 'caisse_balance',
-        filters: deleteFilter,
-        values: { solde_courant: 0, derniere_maj: new Date().toISOString() }
-      });
+      await apiClient.rpc("clear_financial_data_only");
 
       // Invalider le cache pour forcer le rechargement
       queryClient.invalidateQueries({ queryKey: ["cash_balance"] });
@@ -183,26 +133,7 @@ export default function Settings() {
     mutationFn: async () => {
       setIsLoading(true);
 
-      const deleteFilter = [{ op: 'neq', column: 'id', value: '00000000-0000-0000-0000-000000000000' }];
-
-      // Supprimer toutes les données financières dans l'ordre correct
-      await apiClient.delete({ table: 'paiements_factures', filters: deleteFilter });
-      await apiClient.delete({ table: 'paiements_locations', filters: deleteFilter });
-      await apiClient.delete({ table: 'paiements_souscriptions', filters: deleteFilter });
-      await apiClient.delete({ table: 'paiements_droit_terre', filters: deleteFilter });
-      await apiClient.delete({ table: 'echeances_droit_terre', filters: deleteFilter });
-      await apiClient.delete({ table: 'cash_transactions', filters: deleteFilter });
-      await apiClient.delete({ table: 'recus', filters: deleteFilter });
-      await apiClient.delete({ table: 'factures_fournisseurs', filters: deleteFilter });
-      await apiClient.delete({ table: 'locations', filters: deleteFilter });
-      await apiClient.delete({ table: 'souscriptions', filters: deleteFilter });
-
-      // Réinitialiser le solde caisse
-      await apiClient.update({
-        table: 'caisse_balance',
-        filters: deleteFilter,
-        values: { solde_courant: 0, derniere_maj: new Date().toISOString() }
-      });
+      await apiClient.rpc("clear_financial_data");
     },
     onSuccess: () => {
       setConfirmText("");
@@ -227,36 +158,7 @@ export default function Settings() {
     mutationFn: async () => {
       setIsLoadingAll(true);
 
-      const deleteFilter = [{ op: 'neq', column: 'id', value: '00000000-0000-0000-0000-000000000000' }];
-
-      // Supprimer TOUTES les données dans l'ordre correct (dépendances)
-      await apiClient.delete({ table: 'ventes', filters: deleteFilter });
-      await apiClient.delete({ table: 'recus', filters: deleteFilter });
-      await apiClient.delete({ table: 'paiements_factures', filters: deleteFilter });
-      await apiClient.delete({ table: 'paiements_locations', filters: deleteFilter });
-      await apiClient.delete({ table: 'paiements_souscriptions', filters: deleteFilter });
-      await apiClient.delete({ table: 'paiements_droit_terre', filters: deleteFilter });
-      await apiClient.delete({ table: 'echeances_droit_terre', filters: deleteFilter });
-      await apiClient.delete({ table: 'cash_transactions', filters: deleteFilter });
-      await apiClient.delete({ table: 'factures_fournisseurs', filters: deleteFilter });
-      await apiClient.delete({ table: 'locations', filters: deleteFilter });
-      await apiClient.delete({ table: 'souscriptions', filters: deleteFilter });
-      await apiClient.delete({ table: 'clients', filters: deleteFilter });
-      await apiClient.delete({ table: 'proprietes', filters: deleteFilter });
-      await apiClient.delete({ table: 'fournisseurs', filters: deleteFilter });
-      await apiClient.delete({ table: 'agents_recouvrement', filters: deleteFilter });
-      await apiClient.delete({ table: 'articles', filters: deleteFilter });
-      await apiClient.delete({ table: 'types_proprietes', filters: deleteFilter });
-      await apiClient.delete({ table: 'secteurs_activite', filters: deleteFilter });
-      await apiClient.delete({ table: 'bareme_droits_terre', filters: deleteFilter });
-      await apiClient.delete({ table: 'receipt_counters', filters: [{ op: 'neq', column: 'date_key', value: '1900-01-01' }] });
-
-      // Réinitialiser le solde caisse à zéro
-      await apiClient.update({
-        table: 'caisse_balance',
-        filters: deleteFilter,
-        values: { solde_courant: 0, derniere_maj: new Date().toISOString() }
-      });
+      await apiClient.rpc("clear_all_data");
     },
     onSuccess: () => {
       setConfirmAllText("");

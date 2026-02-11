@@ -76,7 +76,7 @@ export default function Proprietes() {
       // Fetch all data in parallel then join
       const [proprietesData, typesData, agentsData] = await Promise.all([
         apiClient.select({ table: 'proprietes', orderBy: { column: 'nom', ascending: true } }),
-        apiClient.select({ table: 'types_proprietes' }),
+        apiClient.getTypesProprietes(),
         apiClient.select({ table: 'agents_recouvrement' })
       ]);
       const proprietesList = Array.isArray(proprietesData) ? proprietesData : [];
@@ -94,7 +94,7 @@ export default function Proprietes() {
   const { data: typesProprietes = [] } = useQuery({
     queryKey: ['types-proprietes'],
     queryFn: async () => {
-      const data = await apiClient.select({ table: 'types_proprietes', orderBy: { column: 'nom', ascending: true } });
+      const data = await apiClient.getTypesProprietes();
       return Array.isArray(data) ? data : [];
     },
   });

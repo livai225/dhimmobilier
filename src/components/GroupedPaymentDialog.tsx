@@ -21,6 +21,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuditLog } from "@/hooks/useAuditLog";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
+import { getInsufficientFundsMessage } from "@/utils/errorMessages";
 import { 
   Calculator, 
   CreditCard, 
@@ -353,11 +354,20 @@ export function GroupedPaymentDialog({
         onSuccess();
         onClose();
       } else {
-        toast({
-          title: "Paiements partiellement effectués",
-          description: `${results.success} succès, ${results.errors.length} erreur(s). ${results.errors.join(', ')}`,
-          variant: "destructive",
-        });
+        const insufficient = results.errors.find((msg: string) => getInsufficientFundsMessage(msg));
+        if (insufficient) {
+          toast({
+            title: "Montant insuffisant",
+            description: `${insufficient} (${results.errors.length} erreur(s))`,
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Paiements partiellement effectués",
+            description: `${results.success} succès, ${results.errors.length} erreur(s). ${results.errors.join(', ')}`,
+            variant: "destructive",
+          });
+        }
       }
     },
     onError: (error) => {

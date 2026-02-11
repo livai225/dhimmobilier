@@ -5,12 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Combobox } from "@/components/ui/combobox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { format } from "date-fns";
 import * as XLSX from 'xlsx';
 import { ReceiptDetailsDialog } from "@/components/ReceiptDetailsDialog";
@@ -18,7 +20,9 @@ import { ReceiptWithDetails } from "@/hooks/useReceipts";
 import { ArticleForm } from "@/components/ArticleForm";
 import { ProtectedAction } from "@/components/ProtectedAction";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
+import { AlertCircle, CheckCircle2, RefreshCw, Search } from "lucide-react";
 import React from "react";
+import { getInsufficientFundsMessage } from "@/utils/errorMessages";
 
 export default function Caisse() {
   const permissions = useUserPermissions();
@@ -46,6 +50,12 @@ export default function Caisse() {
   // Receipt dialog state
   const [selectedReceipt, setSelectedReceipt] = useState<ReceiptWithDetails | null>(null);
   const [isReceiptDialogOpen, setIsReceiptDialogOpen] = useState(false);
+  
+  // Diagnostic dialog state
+  const [isDiagnosticDialogOpen, setIsDiagnosticDialogOpen] = useState(false);
+  const [diagnosticData, setDiagnosticData] = useState<any>(null);
+  const [isDiagnosing, setIsDiagnosing] = useState(false);
+  const [isRecalculating, setIsRecalculating] = useState(false);
 
   useEffect(() => {
     document.title = "Caisse - Solde et opérations";
@@ -99,15 +109,46 @@ export default function Caisse() {
     } else if (period === "year") {
       start.setMonth(0, 1);
     }
-    const end = now;
-    const startStr = customStart || format(start, "yyyy-MM-dd");
-    const endStr = customEnd || format(end, "yyyy-MM-dd");
+    const end = new Date(now);
+    
+    // Si des dates personnalisées sont fournies, les utiliser
+    let startDate: Date;
+    let endDate: Date;
+    
+    if (customStart) {
+      startDate = new Date(customStart);
+      startDate.setHours(0, 0, 0, 0); // Début de journée
+    } else {
+      startDate = new Date(start);
+      startDate.setHours(0, 0, 0, 0); // Début de journée
+    }
+    
+    if (customEnd) {
+      endDate = new Date(customEnd);
+      endDate.setHours(23, 59, 59, 999); // Fin de journée
+    } else {
+      endDate = new Date(end);
+      endDate.setHours(23, 59, 59, 999); // Fin de journée
+    }
+    
+    // Convertir en format ISO pour Prisma/MySQL
+    const startStr = startDate.toISOString();
+    const endStr = endDate.toISOString();
+    
     return { start: startStr, end: endStr };
   }, [period, customStart, customEnd]);
 
   const { data: allTransactions = [], isLoading } = useQuery({
     queryKey: ["cash_transactions", periodRange],
     queryFn: async () => {
+      console.log("🔍 Récupération des transactions avec filtres:", {
+        start: periodRange.start,
+        end: periodRange.end,
+        period,
+        customStart,
+        customEnd
+      });
+      
       const data = await apiClient.select({
         table: 'cash_transactions',
         filters: [
@@ -116,7 +157,11 @@ export default function Caisse() {
         ],
         orderBy: { column: 'date_transaction', ascending: false }
       });
-      return Array.isArray(data) ? data : [];
+      
+      const transactions = Array.isArray(data) ? data : [];
+      console.log(`✅ ${transactions.length} transaction(s) récupérée(s)`);
+      
+      return transactions;
     },
   });
 
@@ -127,7 +172,9 @@ export default function Caisse() {
     let filtered = allTransactions;
     
     if (journalTab === "versement") {
-      // Caisse versement: physical cash operations
+      // Caisse versement: opérations de la caisse physique
+      // ENTREES: versement_agent (agent dépose l'argent)
+      // SORTIES: paiement_loyer, paiement_souscription, paiement_droit_terre, paiement_caution (argent sort de la caisse)
       filtered = allTransactions.filter((t: any) => 
         t.type_operation === "versement_agent" ||
         t.type_operation === "paiement_souscription" ||
@@ -136,10 +183,16 @@ export default function Caisse() {
         t.type_operation === "paiement_caution"
       );
     } else {
-      // Caisse entreprise: company operations including sales
+      // Caisse entreprise: transactions comptables de l'entreprise
+      // REVENUS: paiement_loyer, paiement_souscription, paiement_droit_terre, paiement_caution, vente
+      // DEPENSES: depense_entreprise, autre
       filtered = allTransactions.filter((t: any) => 
-        t.type_operation === "depense_entreprise" ||
+        t.type_operation === "paiement_loyer" ||
+        t.type_operation === "paiement_souscription" ||
+        t.type_operation === "paiement_droit_terre" ||
+        t.type_operation === "paiement_caution" ||
         t.type_operation === "vente" ||
+        t.type_operation === "depense_entreprise" ||
         t.type_operation === "autre"
       );
     }
@@ -164,6 +217,7 @@ export default function Caisse() {
 
   const totals = useMemo(() => {
     if (journalTab === "versement") {
+      // Caisse versement: calculer entrées et sorties
       const entrees = transactions
         .filter((t: any) => t.type_transaction === "entree")
         .reduce((s: number, t: any) => s + Number(t.montant), 0);
@@ -175,10 +229,24 @@ export default function Caisse() {
       const cloture = soldeCaisseVersement;
       return { entrees, sorties, net, ouverture, cloture };
     } else {
-      // For company expenses, only show total expenses
-      const totalDepenses = transactions
+      // Caisse entreprise: calculer revenus et dépenses
+      const revenus = transactions
+        .filter((t: any) => 
+          t.type_operation === "paiement_loyer" ||
+          t.type_operation === "paiement_souscription" ||
+          t.type_operation === "paiement_droit_terre" ||
+          t.type_operation === "paiement_caution" ||
+          t.type_operation === "vente"
+        )
         .reduce((s: number, t: any) => s + Number(t.montant), 0);
-      return { entrees: 0, sorties: totalDepenses, net: -totalDepenses, ouverture: 0, cloture: 0 };
+      const depenses = transactions
+        .filter((t: any) => 
+          t.type_operation === "depense_entreprise" ||
+          t.type_operation === "autre"
+        )
+        .reduce((s: number, t: any) => s + Number(t.montant), 0);
+      const net = revenus - depenses;
+      return { entrees: revenus, sorties: depenses, net, ouverture: 0, cloture: 0 };
     }
   }, [transactions, soldeCaisseVersement, journalTab]);
 
@@ -191,6 +259,8 @@ export default function Caisse() {
     type_operation: "versement_agent" as "versement_agent" | "depense_entreprise" | "autre",
     beneficiaire: "",
     description: "",
+    mois_concerne: String(new Date().getMonth() + 1).padStart(2, '0'), // Mois actuel (01-12)
+    annee_concerne: new Date().getFullYear().toString(), // Année actuelle
   });
 
   // Auto-fill beneficiaire when agent is selected for versement
@@ -230,6 +300,15 @@ export default function Caisse() {
       }
 
       // Regular transaction
+      // Calculer mois_concerne au format YYYY-MM pour les versements
+      let moisConcerne: string | null = null;
+      let anneeConcerne: number | null = null;
+      
+      if (tab === "entree" && entryType === "versement" && form.mois_concerne && form.annee_concerne) {
+        moisConcerne = `${form.annee_concerne}-${form.mois_concerne}`;
+        anneeConcerne = parseInt(form.annee_concerne);
+      }
+
       return await apiClient.rpc("record_cash_transaction", {
         type_transaction: tab === "entree" ? "entree" : "sortie",
         montant: montantNum,
@@ -239,6 +318,8 @@ export default function Caisse() {
         reference_operation: null,
         description: form.description || null,
         piece_justificative: uploadedPath,
+        mois_concerne: moisConcerne,
+        annee_concerne: anneeConcerne,
       });
     },
     onSuccess: async (transactionId) => {
@@ -251,6 +332,8 @@ export default function Caisse() {
         type_operation: "versement_agent",
         beneficiaire: "",
         description: "",
+        mois_concerne: String(new Date().getMonth() + 1).padStart(2, '0'),
+        annee_concerne: new Date().getFullYear().toString(),
       });
       setFile(null);
       queryClient.invalidateQueries({ queryKey: ["cash_transactions"] });
@@ -262,6 +345,15 @@ export default function Caisse() {
       });
     },
     onError: (e: any) => {
+      const insufficientMessage = getInsufficientFundsMessage(e);
+      if (insufficientMessage) {
+        toast({
+          title: "Montant insuffisant",
+          description: insufficientMessage,
+          variant: "destructive",
+        });
+        return;
+      }
       toast({ title: "Erreur", description: e.message || "Impossible d'enregistrer", variant: "destructive" });
     },
   });
@@ -352,17 +444,19 @@ export default function Caisse() {
   // Handle viewing receipt for a transaction
   const handleViewReceipt = async (transactionId: string) => {
     try {
-      // Fetch receipts and clients in parallel
-      const [recusData, clientsData] = await Promise.all([
+      // Fetch receipts, clients, and agents in parallel
+      const [recusData, clientsData, agentsData] = await Promise.all([
         apiClient.select({
           table: 'recus',
           filters: [{ op: 'eq', column: 'reference_id', value: transactionId }]
         }),
-        apiClient.select({ table: 'clients' })
+        apiClient.select({ table: 'clients' }),
+        apiClient.select({ table: 'agents_recouvrement' }) // Ajout des agents
       ]);
 
       const recusList = Array.isArray(recusData) ? recusData : [];
       const clientsList = Array.isArray(clientsData) ? clientsData : [];
+      const agentsList = Array.isArray(agentsData) ? agentsData : [];
 
       const receipts = recusList[0];
 
@@ -375,7 +469,8 @@ export default function Caisse() {
         return;
       }
 
-      const client = clientsList.find((c: any) => c.id === receipts.client_id);
+      const client = receipts.client_id ? clientsList.find((c: any) => c.id === receipts.client_id) : null;
+      const agent = receipts.agent_id ? agentsList.find((a: any) => a.id === receipts.agent_id) : null;
 
       // Transform the data to match ReceiptWithDetails interface
       const receiptWithDetails: ReceiptWithDetails = {
@@ -383,6 +478,7 @@ export default function Caisse() {
         numero: receipts.numero,
         date_generation: receipts.date_generation,
         client_id: receipts.client_id,
+        agent_id: receipts.agent_id,
         reference_id: receipts.reference_id,
         type_operation: receipts.type_operation,
         montant_total: receipts.montant_total,
@@ -393,7 +489,12 @@ export default function Caisse() {
           prenom: client.prenom,
           email: client.email,
           telephone_principal: client.telephone_principal
-        } : undefined
+        } : null,
+        agent: agent ? {
+          nom: agent.nom,
+          prenom: agent.prenom,
+          code_agent: agent.code_agent
+        } : null
       };
 
       setSelectedReceipt(receiptWithDetails);
@@ -415,8 +516,32 @@ export default function Caisse() {
         <div className="flex flex-col gap-4 flex-1">
           {/* Solde caisse versement (affiché en principal) */}
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle>Solde caisse versement</CardTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  setIsDiagnosticDialogOpen(true);
+                  setIsDiagnosing(true);
+                  try {
+                    const data = await apiClient.rpc("diagnose_caisse_versement", {});
+                    setDiagnosticData(data);
+                  } catch (error: any) {
+                    toast({
+                      title: "Erreur",
+                      description: error.message || "Impossible d'exécuter le diagnostic",
+                      variant: "destructive",
+                    });
+                  } finally {
+                    setIsDiagnosing(false);
+                  }
+                }}
+                className="flex items-center gap-2"
+              >
+                <Search className="h-4 w-4" />
+                Diagnostic
+              </Button>
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-blue-600">{soldeCaisseVersement.toLocaleString()} FCFA</div>
@@ -528,6 +653,55 @@ export default function Caisse() {
                     placeholder={entryType === "vente" ? "Vente" : "Description"}
                   />
                 </div>
+                {entryType === "versement" && (
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-sm">Mois</label>
+                        <Select 
+                          value={form.mois_concerne} 
+                          onValueChange={(v) => setForm({ ...form, mois_concerne: v })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Array.from({ length: 12 }, (_, i) => {
+                              const monthNum = String(i + 1).padStart(2, '0');
+                              const monthNames = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+                              return (
+                                <SelectItem key={monthNum} value={monthNum}>
+                                  {monthNames[i]}
+                                </SelectItem>
+                              );
+                            })}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <label className="text-sm">Année</label>
+                        <Select 
+                          value={form.annee_concerne} 
+                          onValueChange={(v) => setForm({ ...form, annee_concerne: v })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Array.from({ length: 10 }, (_, i) => {
+                              const year = new Date().getFullYear() - 5 + i;
+                              return (
+                                <SelectItem key={year} value={year.toString()}>
+                                  {year}
+                                </SelectItem>
+                              );
+                            })}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </>
+                )}
                 <div>
                   <label className="text-sm">Pièce justificative</label>
                   <Input type="file" accept="image/*,application/pdf" onChange={(e) => setFile(e.target.files?.[0] || null)} />
@@ -613,11 +787,15 @@ export default function Caisse() {
                         </>
                        ) : (
                          <>
+                           <option value="paiement_loyer">Paiement loyer</option>
+                           <option value="paiement_souscription">Paiement souscription</option>
+                           <option value="paiement_droit_terre">Paiement droit de terre</option>
+                           <option value="paiement_caution">Paiement caution</option>
                            <option value="vente">Vente</option>
                            <option value="depense_entreprise">Dépense entreprise</option>
+                           <option value="autre">Autre opération</option>
                          </>
                        )}
-                       <option value="autre">Autre opération</option>
                     </select>
                   </div>
                   <div className="flex gap-2">
@@ -660,10 +838,26 @@ export default function Caisse() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {pageTransactions.length === 0 ? (
+                      {isLoading ? (
                         <TableRow>
                           <TableCell colSpan={9} className="text-center py-6 text-muted-foreground">
-                            Aucune opération pour cette période
+                            Chargement des transactions...
+                          </TableCell>
+                        </TableRow>
+                      ) : pageTransactions.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={9} className="text-center py-6 text-muted-foreground">
+                            <div className="space-y-2">
+                              <p>Aucune opération pour cette période</p>
+                              <p className="text-xs">
+                                Période: {format(new Date(periodRange.start), "dd/MM/yyyy")} - {format(new Date(periodRange.end), "dd/MM/yyyy")}
+                              </p>
+                              {allTransactions.length > 0 && (
+                                <p className="text-xs text-blue-600">
+                                  {allTransactions.length} transaction(s) trouvée(s) au total (filtrées par type d'opération)
+                                </p>
+                              )}
+                            </div>
                           </TableCell>
                         </TableRow>
                       ) : (
@@ -784,27 +978,51 @@ export default function Caisse() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {pageTransactions.length === 0 ? (
+                      {isLoading ? (
                         <TableRow>
                           <TableCell colSpan={8} className="text-center py-6 text-muted-foreground">
-                            Aucune opération pour cette période
+                            Chargement des transactions...
+                          </TableCell>
+                        </TableRow>
+                      ) : pageTransactions.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={8} className="text-center py-6 text-muted-foreground">
+                            <div className="space-y-2">
+                              <p>Aucune opération pour cette période</p>
+                              <p className="text-xs">
+                                Période: {format(new Date(periodRange.start), "dd/MM/yyyy")} - {format(new Date(periodRange.end), "dd/MM/yyyy")}
+                              </p>
+                              {allTransactions.length > 0 && (
+                                <p className="text-xs text-blue-600">
+                                  {allTransactions.length} transaction(s) trouvée(s) au total (filtrées par type d'opération)
+                                </p>
+                              )}
+                            </div>
                           </TableCell>
                         </TableRow>
                       ) : (
                         pageTransactions.map((t: any) => {
                           const agent = agents.find(a => a.id === t.agent_id);
-                          const isVente = t.type_operation === "vente";
+                          // Revenus: paiements clients et ventes
+                          const isRevenu = t.type_operation === "paiement_loyer" ||
+                            t.type_operation === "paiement_souscription" ||
+                            t.type_operation === "paiement_droit_terre" ||
+                            t.type_operation === "paiement_caution" ||
+                            t.type_operation === "vente";
+                          // Dépenses: dépenses entreprise et autres
+                          const isDepense = t.type_operation === "depense_entreprise" ||
+                            t.type_operation === "autre";
                           return (
                             <TableRow key={t.id}>
                               <TableCell>{format(new Date(t.date_transaction), "dd/MM/yyyy")}</TableCell>
                               <TableCell>{t.heure_transaction?.toString().slice(0,5)}</TableCell>
                               <TableCell>
-                                <Badge variant={isVente ? "secondary" : "outline"}>
-                                  {isVente ? "Entrée" : "Sortie"}
+                                <Badge variant={isRevenu ? "secondary" : "outline"}>
+                                  {isRevenu ? "Revenu" : "Dépense"}
                                 </Badge>
                               </TableCell>
                               <TableCell>
-                                <Badge variant={isVente ? "default" : "outline"}>{t.type_operation}</Badge>
+                                <Badge variant={isRevenu ? "default" : "outline"}>{t.type_operation}</Badge>
                               </TableCell>
                               <TableCell>
                                 {agent ? (
@@ -818,12 +1036,12 @@ export default function Caisse() {
                                   <span className="text-xs text-muted-foreground">-</span>
                                 )}
                               </TableCell>
-                              <TableCell className={isVente ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
-                                {isVente ? "+" : "-"}{Number(t.montant).toLocaleString()} FCFA
+                              <TableCell className={isRevenu ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
+                                {isRevenu ? "+" : "-"}{Number(t.montant).toLocaleString()} FCFA
                               </TableCell>
                               <TableCell className="text-sm">{t.description || "-"}</TableCell>
                               <TableCell>
-                                {isVente && (
+                                {(isRevenu || t.type_operation === "paiement_loyer" || t.type_operation === "paiement_souscription" || t.type_operation === "paiement_droit_terre" || t.type_operation === "paiement_caution") && (
                                   <Button 
                                     variant="outline" 
                                     size="sm" 
@@ -841,6 +1059,57 @@ export default function Caisse() {
                     </TableBody>
                   </Table>
                 </div>
+                {totalPages > 1 && (
+                  <div className="mt-4 flex justify-center">
+                    <Pagination>
+                      <PaginationContent>
+                        <PaginationItem>
+                          <PaginationPrevious
+                            href="#"
+                            onClick={(e) => { e.preventDefault(); if (currentPage > 1) setCurrentPage(currentPage - 1); }}
+                            className={currentPage <= 1 ? "pointer-events-none opacity-50" : ""}
+                          />
+                        </PaginationItem>
+                        {currentPage > 3 && (
+                          <>
+                            <PaginationItem>
+                              <PaginationLink href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(1); }}>1</PaginationLink>
+                            </PaginationItem>
+                            {currentPage > 4 && (
+                              <PaginationItem><PaginationEllipsis /></PaginationItem>
+                            )}
+                          </>
+                        )}
+                        {Array.from({ length: totalPages }, (_, i) => i + 1)
+                          .filter(p => p >= Math.max(1, currentPage - 2) && p <= Math.min(totalPages, currentPage + 2))
+                          .map((p) => (
+                            <PaginationItem key={p}>
+                              <PaginationLink href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(p); }} isActive={p === currentPage}>
+                                {p}
+                              </PaginationLink>
+                            </PaginationItem>
+                          ))}
+                        {currentPage < totalPages - 2 && (
+                          <>
+                            {currentPage < totalPages - 3 && (
+                              <PaginationItem><PaginationEllipsis /></PaginationItem>
+                            )}
+                            <PaginationItem>
+                              <PaginationLink href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(totalPages); }}>{totalPages}</PaginationLink>
+                            </PaginationItem>
+                          </>
+                        )}
+                        <PaginationItem>
+                          <PaginationNext
+                            href="#"
+                            onClick={(e) => { e.preventDefault(); if (currentPage < totalPages) setCurrentPage(currentPage + 1); }}
+                            className={currentPage >= totalPages ? "pointer-events-none opacity-50" : ""}
+                          />
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
+                  </div>
+                )}
               </TabsContent>
             </Tabs>
           </CardContent>
@@ -851,30 +1120,52 @@ export default function Caisse() {
             <CardTitle>Bilan de la période</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="flex justify-between text-sm">
-              <span>Solde d'ouverture</span>
-              <span className="font-medium">{totals.ouverture.toLocaleString()} FCFA</span>
-            </div>
-            <Separator />
-            <div className="flex justify-between text-sm">
-              <span className="text-green-600">Total entrées</span>
-              <span className="font-medium text-green-600">+{totals.entrees.toLocaleString()} FCFA</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-red-600">Total sorties</span>
-              <span className="font-medium text-red-600">-{totals.sorties.toLocaleString()} FCFA</span>
-            </div>
-            <Separator />
-            <div className="flex justify-between text-sm">
-              <span>Mouvement net</span>
-              <span className={`font-medium ${totals.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {totals.net >= 0 ? '+' : ''}{totals.net.toLocaleString()} FCFA
-              </span>
-            </div>
-            <div className="flex justify-between text-sm border-t pt-2">
-              <span className="font-semibold">Solde de clôture</span>
-              <span className="font-bold text-lg">{totals.cloture.toLocaleString()} FCFA</span>
-            </div>
+            {journalTab === "versement" ? (
+              <>
+                <div className="flex justify-between text-sm">
+                  <span>Solde d'ouverture</span>
+                  <span className="font-medium">{totals.ouverture.toLocaleString()} FCFA</span>
+                </div>
+                <Separator />
+                <div className="flex justify-between text-sm">
+                  <span className="text-green-600">Total entrées</span>
+                  <span className="font-medium text-green-600">+{totals.entrees.toLocaleString()} FCFA</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-red-600">Total sorties</span>
+                  <span className="font-medium text-red-600">-{totals.sorties.toLocaleString()} FCFA</span>
+                </div>
+                <Separator />
+                <div className="flex justify-between text-sm">
+                  <span>Mouvement net</span>
+                  <span className={`font-medium ${totals.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {totals.net >= 0 ? '+' : ''}{totals.net.toLocaleString()} FCFA
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm border-t pt-2">
+                  <span className="font-semibold">Solde de clôture</span>
+                  <span className="font-bold text-lg">{totals.cloture.toLocaleString()} FCFA</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex justify-between text-sm">
+                  <span className="text-green-600">Total revenus</span>
+                  <span className="font-medium text-green-600">+{totals.entrees.toLocaleString()} FCFA</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-red-600">Total dépenses</span>
+                  <span className="font-medium text-red-600">-{totals.sorties.toLocaleString()} FCFA</span>
+                </div>
+                <Separator />
+                <div className="flex justify-between text-sm border-t pt-2">
+                  <span className="font-semibold">Résultat net</span>
+                  <span className={`font-bold text-lg ${totals.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {totals.net >= 0 ? '+' : ''}{totals.net.toLocaleString()} FCFA
+                  </span>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -884,6 +1175,199 @@ export default function Caisse() {
         open={isReceiptDialogOpen}
         onOpenChange={setIsReceiptDialogOpen}
       />
+
+      {/* Diagnostic Dialog */}
+      <Dialog open={isDiagnosticDialogOpen} onOpenChange={setIsDiagnosticDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Diagnostic de la Caisse Versement</DialogTitle>
+            <DialogDescription>
+              Analyse des transactions récentes pour identifier les problèmes de solde
+            </DialogDescription>
+          </DialogHeader>
+          
+          {isDiagnosing ? (
+            <div className="flex items-center justify-center py-8">
+              <RefreshCw className="h-6 w-6 animate-spin text-blue-600" />
+              <span className="ml-2">Analyse en cours...</span>
+            </div>
+          ) : diagnosticData ? (
+            <div className="space-y-6">
+              {/* Résumé */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Résumé</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Solde actuel</p>
+                      <p className="text-2xl font-bold text-blue-600">
+                        {diagnosticData.solde_actuel.toLocaleString()} FCFA
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Solde théorique</p>
+                      <p className="text-2xl font-bold text-green-600">
+                        {diagnosticData.solde_theorique.toLocaleString()} FCFA
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Total entrées</p>
+                      <p className="text-xl font-semibold">
+                        {diagnosticData.total_entrees.toLocaleString()} FCFA
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Total sorties</p>
+                      <p className="text-xl font-semibold text-red-600">
+                        {diagnosticData.total_sorties.toLocaleString()} FCFA
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 p-3 rounded-lg bg-muted">
+                    {Math.abs(diagnosticData.difference) > 0.01 ? (
+                      <>
+                        <AlertCircle className="h-5 w-5 text-orange-600" />
+                        <div className="flex-1">
+                          <p className="font-semibold text-orange-600">Incohérence détectée</p>
+                          <p className="text-sm text-muted-foreground">
+                            Différence: {diagnosticData.difference.toLocaleString()} FCFA
+                          </p>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {diagnosticData.message}
+                          </p>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="h-5 w-5 text-green-600" />
+                        <p className="text-sm">{diagnosticData.message}</p>
+                      </>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Versements récents */}
+              {diagnosticData.versements_recents && diagnosticData.versements_recents.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Versements récents (7 derniers jours)</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {diagnosticData.versements_recents.map((v: any, idx: number) => (
+                        <div key={idx} className="flex items-center justify-between p-3 border rounded-lg">
+                          <div className="flex-1">
+                            <p className="font-medium">{v.agent}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {format(new Date(v.date), "dd/MM/yyyy HH:mm")}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold text-green-600">
+                              +{v.montant.toLocaleString()} FCFA
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Solde après: {v.solde_apres.toLocaleString()} FCFA
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Sorties récentes */}
+              {diagnosticData.sorties_recentes && diagnosticData.sorties_recentes.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Sorties récentes (7 derniers jours)</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {diagnosticData.sorties_recentes.map((s: any, idx: number) => (
+                        <div key={idx} className="flex items-center justify-between p-3 border rounded-lg">
+                          <div className="flex-1">
+                            <p className="font-medium">{s.beneficiaire}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {s.type.replace("paiement_", "")} - {format(new Date(s.date), "dd/MM/yyyy HH:mm")}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold text-red-600">
+                              -{s.montant.toLocaleString()} FCFA
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Solde après: {s.solde_apres.toLocaleString()} FCFA
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              <div className="text-sm text-muted-foreground">
+                Transactions analysées: {diagnosticData.transactions_analysees}
+              </div>
+            </div>
+          ) : null}
+
+          <DialogFooter>
+            {diagnosticData && Math.abs(diagnosticData.difference) > 0.01 && (
+              <Button
+                variant="default"
+                onClick={async () => {
+                  setIsRecalculating(true);
+                  try {
+                    const result = await apiClient.rpc("recalculate_caisse_versement", {});
+                    toast({
+                      title: "Recalcul effectué",
+                      description: `Ancien solde: ${result.ancien_solde.toLocaleString()} FCFA → Nouveau solde: ${result.nouveau_solde.toLocaleString()} FCFA (${result.transactions_processed} transactions traitées)`,
+                    });
+                    queryClient.invalidateQueries({ queryKey: ["cash_balance"] });
+                    queryClient.invalidateQueries({ queryKey: ["cash_transactions"] });
+                    // Re-run diagnostic
+                    const newData = await apiClient.rpc("diagnose_caisse_versement", {});
+                    setDiagnosticData(newData);
+                  } catch (error: any) {
+                    toast({
+                      title: "Erreur",
+                      description: error.message || "Impossible de recalculer le solde",
+                      variant: "destructive",
+                    });
+                  } finally {
+                    setIsRecalculating(false);
+                  }
+                }}
+                disabled={isRecalculating}
+                className="flex items-center gap-2"
+              >
+                {isRecalculating ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                    Recalcul en cours...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4" />
+                    Recalculer le solde
+                  </>
+                )}
+              </Button>
+            )}
+            <Button variant="outline" onClick={() => setIsDiagnosticDialogOpen(false)}>
+              Fermer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
     </ProtectedAction>
   );

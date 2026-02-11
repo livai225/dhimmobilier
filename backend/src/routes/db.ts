@@ -9,6 +9,17 @@ const SENSITIVE_FIELDS: Record<string, string[]> = {
   users: ["password_hash"],
 };
 
+const SENSITIVE_WRITE_TABLES = new Set([
+  "cash_transactions",
+  "caisse_balance",
+  "recus",
+  "paiements_locations",
+  "paiements_souscriptions",
+  "paiements_droit_terre",
+  "paiements_factures",
+  "paiements_cautions",
+]);
+
 // Supprimer les champs sensibles des résultats
 function sanitizeResult(table: string, data: any): any {
   const sensitiveFields = SENSITIVE_FIELDS[table];
@@ -50,6 +61,11 @@ export async function dbRoutes(app: FastifyInstance) {
     }
 
     try {
+      if (action !== "select" && SENSITIVE_WRITE_TABLES.has(table)) {
+        reply.code(403);
+        return { error: `Écriture directe interdite sur ${table}. Utilisez les RPC sécurisés.` };
+      }
+
       const where = buildWhere(payload.filters);
       const orderBy = buildOrder(payload.orderBy);
 

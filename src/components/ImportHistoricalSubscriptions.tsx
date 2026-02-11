@@ -232,6 +232,26 @@ export function ImportHistoricalSubscriptions({ inline = false }: { inline?: boo
     setSimulationMode(simulate);
 
     try {
+      // Pre-check total import amount against cash balance (only for real import)
+      if (!simulate) {
+        const totalImportAmount = previewData.reduce(
+          (sum, row) => sum + (Number(row.soldeAnterieur) || 0) + (Number(row.montantVerse) || 0),
+          0
+        );
+        if (totalImportAmount > 0) {
+          const balance = Number(await apiClient.getCashBalanceVersement());
+          if (balance < totalImportAmount) {
+            toast({
+              title: "Solde insuffisant",
+              description: `Solde insuffisant dans la caisse versement. Solde actuel: ${balance.toLocaleString()} FCFA, Montant total import: ${totalImportAmount.toLocaleString()} FCFA`,
+              variant: "destructive",
+            });
+            setIsImporting(false);
+            return;
+          }
+        }
+      }
+
       const result: ImportResult = {
         clientsCreated: 0,
         clientsMatched: 0,

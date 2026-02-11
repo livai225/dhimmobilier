@@ -115,7 +115,7 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
   }
 
   const { data: proprietes = [] } = useQuery<Array<Propriete & { label: string; value: string }>>({
-    queryKey: ["proprietes", souscription?.id],
+    queryKey: ["proprietes", "bail", "libre", souscription?.id],
     queryFn: async () => {
       const filters: any[] = [{ op: 'eq', column: 'usage', value: 'Bail' }];
       if (souscription?.propriete_id) {
@@ -171,7 +171,7 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
         apport_initial: 0, // Don't store in subscription record to avoid double counting
         periode_finition_mois: parseInt(data.periode_finition_mois || "9"),
         solde_restant: data.paiement_immediat ? 0 : parseFloat(data.montant_souscris) - apportAmount,
-        date_debut: data.date_debut,
+        date_debut: new Date(data.date_debut).toISOString(),
         type_souscription: data.type_souscription,
         type_bien: data.type_bien || null,
         statut: data.statut,
@@ -200,11 +200,25 @@ export function SouscriptionForm({ souscription, onSuccess, baremes }: Souscript
         });
         resultData = { id: souscription.id };
       } else {
-        const insertedId = await apiClient.insert({
+        await apiClient.insert({
           table: 'souscriptions',
           values: processedData
         });
-        resultData = { id: insertedId };
+        const latest = await apiClient.select({
+          table: 'souscriptions',
+          filters: [
+            { op: 'eq', column: 'client_id', value: processedData.client_id },
+            { op: 'eq', column: 'propriete_id', value: processedData.propriete_id },
+            { op: 'eq', column: 'date_debut', value: processedData.date_debut }
+          ],
+          orderBy: { column: 'created_at', ascending: false },
+          limit: 1
+        });
+        const created = latest?.[0];
+        if (!created?.id) {
+          throw new Error("Impossible de récupérer la souscription créée.");
+        }
+        resultData = { id: created.id };
 
         // Enregistrer le paiement via la fonction RPC pour déduire la caisse
         if (apportAmount > 0 && resultData?.id) {

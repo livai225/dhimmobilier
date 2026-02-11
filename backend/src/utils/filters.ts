@@ -12,7 +12,8 @@ export function buildWhere(filters: Filter[] = []): Record<string, any> {
     } else if (f.op === "lte") {
       where[f.column] = { ...(where[f.column] || {}), lte: f.value };
     } else if (f.op === "ilike") {
-      where[f.column] = { contains: f.value.replace(/%/g, ""), mode: "insensitive" };
+      // MySQL is case-insensitive by default, no need for mode
+      where[f.column] = { contains: f.value.replace(/%/g, "") };
     } else if (f.op === "in") {
       where[f.column] = { in: f.values };
     }
