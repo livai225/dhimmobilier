@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -68,6 +68,7 @@ export default function Clients() {
     contact_urgence_relation: "",
   });
 
+  const tableRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -77,6 +78,13 @@ export default function Clients() {
     }, 300);
     return () => clearTimeout(handler);
   }, [searchTerm]);
+
+  // Auto-scroll to results table when search is active
+  useEffect(() => {
+    if (debouncedSearchTerm.trim() && tableRef.current) {
+      tableRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [debouncedSearchTerm]);
 
   // Advanced string normalization function
   const normalizeString = (str: string): string => {
@@ -670,7 +678,7 @@ export default function Clients() {
       />
 
       {/* Clients Table */}
-      <Card>
+      <Card ref={tableRef}>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Users className="h-5 w-5" />

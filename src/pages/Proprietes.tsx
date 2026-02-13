@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -67,8 +67,19 @@ export default function Proprietes() {
     droit_terre: "",
   });
 
+  const tableRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Auto-scroll to results table when search is active
+  useEffect(() => {
+    if (searchTerm.trim() && tableRef.current) {
+      const timer = setTimeout(() => {
+        tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [searchTerm]);
 
   const { data: proprietes, isLoading } = useQuery({
     queryKey: ['proprietes'],
@@ -253,12 +264,20 @@ export default function Proprietes() {
     }
   };
 
+  // Normalize for accent-insensitive search
+  const normalize = (str: string) =>
+    str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
   // Filter properties based on search and filters
   const filteredProprietes = proprietes?.filter((propriete) => {
-    const matchesSearch = 
-      propriete.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      propriete.adresse?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      propriete.zone?.toLowerCase().includes(searchTerm.toLowerCase());
+    const q = normalize(searchTerm);
+    const matchesSearch = !q ||
+      normalize(propriete.nom || '').includes(q) ||
+      normalize(propriete.adresse || '').includes(q) ||
+      normalize(propriete.zone || '').includes(q) ||
+      normalize((propriete as any).agents_recouvrement?.nom || '').includes(q) ||
+      normalize((propriete as any).agents_recouvrement?.prenom || '').includes(q) ||
+      normalize((propriete as any).agents_recouvrement?.code_agent || '').includes(q);
     
     const matchesStatus = !statusFilter || statusFilter === "all" || propriete.statut === statusFilter;
     const matchesUsage = !usageFilter || usageFilter === "all" || propriete.usage === usageFilter;
@@ -466,7 +485,7 @@ export default function Proprietes() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card ref={tableRef}>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Building className="h-5 w-5" />
