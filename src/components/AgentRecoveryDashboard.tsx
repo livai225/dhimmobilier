@@ -19,6 +19,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 
+function toNumber(value: unknown): number {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (value === null || value === undefined) return 0;
+  const n = Number(String(value).replace(/,/g, ".").replace(/[^\d.-]/g, ""));
+  return Number.isFinite(n) ? n : 0;
+}
+
 interface AgentDetails {
   id: string;
   nom: string;
@@ -98,8 +105,10 @@ export function AgentRecoveryDashboard({ agentId, onBack, initialMonth }: Props)
     queryFn: async () => {
       if (!selectedMonth) return { totalVerse: 0, details: [] };
 
-      const startDate = `${selectedMonth}-01`;
-      const endDate = `${selectedMonth}-31`;
+      const date = new Date(`${selectedMonth}-01`);
+      const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+      const startDate = `${selectedMonth}-01T00:00:00`;
+      const endDate = `${selectedMonth}-${String(lastDay).padStart(2, "0")}T23:59:59.999`;
 
       // Get agent's properties
       const properties = await apiClient.select({
@@ -132,27 +141,30 @@ export function AgentRecoveryDashboard({ agentId, onBack, initialMonth }: Props)
       // Get payments for locations
       const allPaiementsLoc = locationIds.length > 0 ? await apiClient.select({
         table: 'paiements_locations',
-        filters: [{ op: 'in', column: 'location_id', values: locationIds }]
+        filters: [
+          { op: 'in', column: 'location_id', values: locationIds },
+          { op: "gte", column: "date_paiement", value: startDate },
+          { op: "lte", column: "date_paiement", value: endDate },
+        ]
       }) : [];
 
-      // Filter by date in JS
-      const paiementsLoc = allPaiementsLoc.filter((p: any) =>
-        p.date_paiement >= startDate && p.date_paiement <= endDate
-      );
+      const paiementsLoc = allPaiementsLoc || [];
 
       // Get payments for souscriptions
       const allPaiementsDT = souscriptionIds.length > 0 ? await apiClient.select({
         table: 'paiements_droit_terre',
-        filters: [{ op: 'in', column: 'souscription_id', values: souscriptionIds }]
+        filters: [
+          { op: 'in', column: 'souscription_id', values: souscriptionIds },
+          { op: "gte", column: "date_paiement", value: startDate },
+          { op: "lte", column: "date_paiement", value: endDate },
+        ]
       }) : [];
 
-      const paiementsDT = allPaiementsDT.filter((p: any) =>
-        p.date_paiement >= startDate && p.date_paiement <= endDate
-      );
+      const paiementsDT = allPaiementsDT || [];
 
       const totalVerse =
-        (paiementsLoc?.reduce((sum: number, p: any) => sum + (p.montant || 0), 0) || 0) +
-        (paiementsDT?.reduce((sum: number, p: any) => sum + (p.montant || 0), 0) || 0);
+        (paiementsLoc?.reduce((sum: number, p: any) => sum + toNumber(p.montant), 0) || 0) +
+        (paiementsDT?.reduce((sum: number, p: any) => sum + toNumber(p.montant), 0) || 0);
 
       return {
         totalVerse,
@@ -305,10 +317,10 @@ export function AgentRecoveryDashboard({ agentId, onBack, initialMonth }: Props)
   const { data: clientsStatus = [] } = useQuery({
     queryKey: ['agent-clients-status', agentId, selectedMonth],
     queryFn: async () => {
-      const startOfMonthDate = `${selectedMonth}-01`;
       const date = new Date(`${selectedMonth}-01`);
       const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-      const endOfMonthDate = `${selectedMonth}-${String(lastDay).padStart(2, '0')}`;
+      const startOfMonthDateTime = `${selectedMonth}-01T00:00:00`;
+      const endOfMonthDateTime = `${selectedMonth}-${String(lastDay).padStart(2, '0')}T23:59:59.999`;
 
       // Fetch all data in parallel
       const [props, allLocations, allSouscriptions, allClients, allPaiementsLoc, allPaiementsDT] = await Promise.all([
@@ -316,19 +328,26 @@ export function AgentRecoveryDashboard({ agentId, onBack, initialMonth }: Props)
         apiClient.select({ table: 'locations' }),
         apiClient.select({ table: 'souscriptions' }),
         apiClient.select({ table: 'clients' }),
-        apiClient.select({ table: 'paiements_locations' }),
-        apiClient.select({ table: 'paiements_droit_terre' })
+        apiClient.select({
+          table: 'paiements_locations',
+          filters: [
+            { op: "gte", column: "date_paiement", value: startOfMonthDateTime },
+            { op: "lte", column: "date_paiement", value: endOfMonthDateTime },
+          ]
+        }),
+        apiClient.select({
+          table: 'paiements_droit_terre',
+          filters: [
+            { op: "gte", column: "date_paiement", value: startOfMonthDateTime },
+            { op: "lte", column: "date_paiement", value: endOfMonthDateTime },
+          ]
+        })
       ]);
 
       const propertyIds = props.map((p: any) => p.id);
 
-      // Filter payments for the month
-      const paiementsLocations = allPaiementsLoc.filter((p: any) =>
-        p.date_paiement >= startOfMonthDate && p.date_paiement <= endOfMonthDate
-      );
-      const paiementsDroitTerre = allPaiementsDT.filter((p: any) =>
-        p.date_paiement >= startOfMonthDate && p.date_paiement <= endOfMonthDate
-      );
+      const paiementsLocations = allPaiementsLoc || [];
+      const paiementsDroitTerre = allPaiementsDT || [];
 
       // Grouper par client
       const clientsMap = new Map<string, ClientRecoveryStatus>();
@@ -375,7 +394,7 @@ export function AgentRecoveryDashboard({ agentId, onBack, initialMonth }: Props)
           });
 
           const paiements = paiementsLocations.filter((p: any) => p.location_id === loc.id);
-          const totalPaiements = paiements.reduce((sum: number, p: any) => sum + (p.montant || 0), 0);
+          const totalPaiements = paiements.reduce((sum: number, p: any) => sum + toNumber(p.montant), 0);
           clientData.montant_paye_locations += totalPaiements;
         });
 
@@ -420,7 +439,7 @@ export function AgentRecoveryDashboard({ agentId, onBack, initialMonth }: Props)
           });
 
           const paiements = paiementsDroitTerre.filter((p: any) => p.souscription_id === sub.id);
-          const totalPaiements = paiements.reduce((sum: number, p: any) => sum + (p.montant || 0), 0);
+          const totalPaiements = paiements.reduce((sum: number, p: any) => sum + toNumber(p.montant), 0);
           clientData.montant_paye_droits_terre += totalPaiements;
         });
       });

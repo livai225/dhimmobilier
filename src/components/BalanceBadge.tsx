@@ -1,22 +1,46 @@
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/integrations/api/client";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export function BalanceBadge() {
-  const { data: balanceVersement = 0, isLoading: isLoadingVersement } = useQuery({
+  const [stableBalanceVersement, setStableBalanceVersement] = useState(0);
+  const [stableBalanceEntreprise, setStableBalanceEntreprise] = useState(0);
+
+  const { data: balanceVersementRaw, isLoading: isLoadingVersement } = useQuery({
     queryKey: ["cash_balance"],
     queryFn: async () => {
-      return Number(await apiClient.getCurrentCashBalance());
+      const value = Number(await apiClient.getCurrentCashBalance());
+      if (!Number.isFinite(value)) {
+        throw new Error("Solde versement invalide");
+      }
+      return value;
     },
   });
 
-  const { data: balanceEntreprise = 0, isLoading: isLoadingEntreprise } = useQuery({
+  const { data: balanceEntrepriseRaw, isLoading: isLoadingEntreprise } = useQuery({
     queryKey: ["entreprise_balance"],
     queryFn: async () => {
-      return Number(await apiClient.getSoldeCaisseEntreprise());
+      const value = Number(await apiClient.getSoldeCaisseEntreprise());
+      if (!Number.isFinite(value)) {
+        throw new Error("Solde entreprise invalide");
+      }
+      return value;
     },
   });
+
+  useEffect(() => {
+    if (Number.isFinite(balanceVersementRaw)) {
+      setStableBalanceVersement(Number(balanceVersementRaw));
+    }
+  }, [balanceVersementRaw]);
+
+  useEffect(() => {
+    if (Number.isFinite(balanceEntrepriseRaw)) {
+      setStableBalanceEntreprise(Number(balanceEntrepriseRaw));
+    }
+  }, [balanceEntrepriseRaw]);
 
   if (isLoadingVersement || isLoadingEntreprise) {
     return <Skeleton className="h-6 w-48" />;
@@ -28,13 +52,13 @@ export function BalanceBadge() {
         variant="secondary" 
         className="text-xs bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200 transition-colors font-semibold"
       >
-        Caisse Versement: <span className="font-bold ml-1">{balanceVersement.toLocaleString()} FCFA</span>
+        Caisse Versement: <span className="font-bold ml-1">{stableBalanceVersement.toLocaleString()} FCFA</span>
       </Badge>
       <Badge 
         variant="outline" 
         className="text-xs bg-green-100 text-green-700 border-green-200 hover:bg-green-200 transition-colors font-semibold"
       >
-        Caisse Entreprise: <span className="font-bold ml-1">{balanceEntreprise.toLocaleString()} FCFA</span>
+        Caisse Entreprise: <span className="font-bold ml-1">{stableBalanceEntreprise.toLocaleString()} FCFA</span>
       </Badge>
     </div>
   );

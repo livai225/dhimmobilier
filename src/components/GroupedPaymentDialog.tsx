@@ -5,6 +5,7 @@ import { apiClient } from "@/integrations/api/client";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -248,6 +249,22 @@ export function GroupedPaymentDialog({
         errors: [] as string[]
       };
 
+      const [targetYear, targetMonth] = periodePaiement.split('-').map(Number);
+      if (!targetYear || !targetMonth) {
+        throw new Error("Période de paiement invalide");
+      }
+
+      // Bloquer tout le traitement si la caisse versement est insuffisante
+      const requiredTotal = selectedClients.reduce((sum, client) => {
+        return sum + client.contracts.reduce((contractsSum, contract) => contractsSum + Number(contract.montant || 0), 0);
+      }, 0);
+      const currentCashBalance = await apiClient.getCurrentCashBalance();
+      if (currentCashBalance < requiredTotal) {
+        throw new Error(
+          `Solde insuffisant dans la caisse versement. Solde actuel: ${currentCashBalance.toLocaleString()} FCFA, Montant requis: ${requiredTotal.toLocaleString()} FCFA`
+        );
+      }
+
       setIsProcessing(true);
 
       for (let i = 0; i < selectedClients.length; i++) {
@@ -261,12 +278,19 @@ export function GroupedPaymentDialog({
             
             if (contract.type === 'location') {
               // Vérifier s'il existe déjà un paiement pour ce mois
-              const existingPayments = await apiClient.select({
+              const existingPaymentsRaw = await apiClient.select({
                 table: 'paiements_locations',
                 filters: [
-                  { op: 'eq', column: 'location_id', value: contract.id },
-                  { op: 'eq', column: 'periode_paiement', value: `${periodePaiement}-01` }
+                  { op: 'eq', column: 'location_id', value: contract.id }
                 ]
+              });
+              const existingPayments = (existingPaymentsRaw || []).filter((p: any) => {
+                if (p.mois_concerne === periodePaiement || p.mois_concerne === `${periodePaiement}-01`) {
+                  return true;
+                }
+                if (!p.date_paiement) return false;
+                const d = new Date(p.date_paiement);
+                return d.getFullYear() === targetYear && d.getMonth() + 1 === targetMonth;
               });
 
               if (existingPayments && existingPayments.length > 0) {
@@ -283,12 +307,21 @@ export function GroupedPaymentDialog({
               });
             } else if (contract.type === 'souscription') {
               // Vérifier s'il existe déjà un paiement pour ce mois
-              const existingPayments = await apiClient.select({
+              const existingPaymentsRaw = await apiClient.select({
                 table: 'paiements_droit_terre',
                 filters: [
-                  { op: 'eq', column: 'souscription_id', value: contract.id },
-                  { op: 'eq', column: 'periode_paiement', value: `${periodePaiement}-01` }
+                  { op: 'eq', column: 'souscription_id', value: contract.id }
                 ]
+              });
+              const existingPayments = (existingPaymentsRaw || []).filter((p: any) => {
+                if (p.date_paiement) {
+                  const d = new Date(p.date_paiement);
+                  if (d.getFullYear() === targetYear && d.getMonth() + 1 === targetMonth) {
+                    return true;
+                  }
+                }
+                // fallback historique si la date est absente mais année concernée renseignée
+                return Number(p.annee_concerne) === targetYear;
               });
 
               if (existingPayments && existingPayments.length > 0) {
@@ -393,6 +426,9 @@ export function GroupedPaymentDialog({
             <CreditCard className="h-5 w-5" />
             Paiement groupé - {paymentType === 'location' ? 'Locations' : 'Droits de terre'}
           </DialogTitle>
+          <DialogDescription>
+            Validez les clients et le montant total avant exécution.
+          </DialogDescription>
           <div className="space-y-1">
             <p className="text-sm text-muted-foreground">
               Recouvrement du mois: {format(new Date(`${selectedMonth}-01`), 'MMMM yyyy', { locale: fr })}

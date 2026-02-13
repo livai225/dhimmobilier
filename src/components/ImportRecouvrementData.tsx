@@ -97,10 +97,15 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [simulationCompleted, setSimulationCompleted] = useState(false);
   const [clearExistingClients, setClearExistingClients] = useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [currentCashBalance, setCurrentCashBalance] = useState<number | null>(null);
+  const [isCheckingCash, setIsCheckingCash] = useState(false);
+  const [cashCheckError, setCashCheckError] = useState<string | null>(null);
   
   // États pour la pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(100);
+  const [previewSearch, setPreviewSearch] = useState('');
 
   // Load agents on component mount
   useEffect(() => {
@@ -120,6 +125,44 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
 
     loadAgents();
   }, []);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [previewSearch]);
+
+  useEffect(() => {
+    if (!showPreview || previewData.length === 0) {
+      setCurrentCashBalance(null);
+      setCashCheckError(null);
+      return;
+    }
+
+    let isCancelled = false;
+    const checkCash = async () => {
+      setIsCheckingCash(true);
+      setCashCheckError(null);
+      try {
+        const balance = await apiClient.getCurrentCashBalance();
+        if (!isCancelled) {
+          setCurrentCashBalance(balance);
+        }
+      } catch (error) {
+        if (!isCancelled) {
+          setCurrentCashBalance(null);
+          setCashCheckError(error instanceof Error ? error.message : "Impossible de vérifier le solde de caisse");
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsCheckingCash(false);
+        }
+      }
+    };
+
+    checkCash();
+    return () => {
+      isCancelled = true;
+    };
+  }, [showPreview, previewData, selectedMonth]);
 
   // Normalize string for matching
   const normalizeString = (str: string): string => {
@@ -203,10 +246,10 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
     const totalArrears = data.reduce((sum, d) => sum + d.arrieres, 0);
     const totalPaid = data.reduce((sum, d) => sum + d.totalPaye, 0);
     
-    // Calcul amélioré du total dû : arriérés + loyers pour la période
+    // Base mensuelle: le taux de recouvrement compare versements du mois vs du du mois
     const monthlyTotals = calculateMonthlyTotals(data);
     const totalDueForPeriod = monthlyTotals.reduce((sum, m) => sum + m.totalDue, 0);
-    const totalDue = totalArrears + totalDueForPeriod;
+    const totalDue = totalDueForPeriod;
     
     return {
       isValid: true, // Ne jamais bloquer l'import - les problèmes sont des warnings
@@ -217,7 +260,7 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
         clientsCount: data.length,
         totalDu: totalDue,
         totalVerse: totalPaid,
-        ecart: totalArrears // Arriérés seulement
+        ecart: totalDue - totalPaid
       }],
       duplicateClients,
       errors, // Toujours vide maintenant (pas de blocage)
@@ -861,6 +904,43 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
         throw new Error("Agent introuvable");
       }
 
+      if (!simulate) {
+        const selectedMonthIndex = parseInt(selectedMonth, 10);
+        const totalToPay = previewData.reduce((sum, row) => {
+          const amount = row.paiementsMensuels[selectedMonthIndex] || 0;
+          return sum + amount;
+        }, 0);
+
+        const currentCashBalance = await apiClient.getCurrentCashBalance();
+        if (currentCashBalance < totalToPay) {
+          toast({
+            title: "Solde de caisse insuffisant",
+            description: `Import bloqué. Solde disponible: ${formatCurrency(currentCashBalance)} | Montant total à payer: ${formatCurrency(totalToPay)}. Veuillez approvisionner la caisse ou annuler l'import existant.`,
+            variant: "destructive",
+          });
+          return;
+        }
+
+        const conflict = await apiClient.checkRecouvrementImportConflict({
+          agent_id: selectedAgent,
+          month: parseInt(selectedMonth, 10),
+          year: selectedYear,
+          operation_type: operationType,
+          month_base: "zero_indexed",
+        });
+
+        if (conflict.has_conflict) {
+          const monthLabels = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+          const monthLabel = monthLabels[parseInt(selectedMonth, 10)] || selectedMonth;
+          toast({
+            title: "Importation déjà existante",
+            description: `Il existe déjà une importation pour ${operationType === 'loyer' ? 'Loyer' : operationType === 'droit_terre' ? 'Droit de terre' : 'Souscription'} - ${monthLabel} ${selectedYear} (${conflict.existing_count} paiement(s)). Pour la remplacer, utilisez d'abord "Annuler import".`,
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
       console.log(`Début de l'import ${simulate ? '(simulation)' : ''} pour ${previewData.length} lignes`);
 
       // Traitement séquentiel : Client → Propriété → Contrat → Paiement → Reçu (automatique)
@@ -883,10 +963,18 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
           description: `${results.clientsCreated + results.clientsMatched} clients, ${results.paymentsImported} paiements, ${results.receiptsGenerated} reçus simulés`,
         });
       } else {
-        toast({
-          title: "Import terminé avec succès !",
-          description: `${results.locationsCreated + results.souscriptionsCreated} contrats créés avec leurs paiements et reçus`,
-        });
+        if (results.errors.length > 0) {
+          toast({
+            title: "Import terminé avec erreurs",
+            description: `${results.errors.length} erreur(s) détectée(s). ${results.locationsCreated + results.souscriptionsCreated} contrat(s) traité(s), ${results.paymentsImported} paiement(s).`,
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Import terminé avec succès",
+            description: `${results.locationsCreated + results.souscriptionsCreated} contrat(s) créé(s), ${results.paymentsImported} paiement(s), ${results.receiptsGenerated} reçu(s).`,
+          });
+        }
       }
 
       console.log("Import terminé avec succès", results);
@@ -906,6 +994,14 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
     } finally {
       setIsImporting(false);
       setProgress(100);
+      if (!simulate) {
+        setSimulationCompleted(false);
+        if (!inline) {
+          setTimeout(() => {
+            setIsDialogOpen(false);
+          }, 1000);
+        }
+      }
     }
   };
 
@@ -918,16 +1014,16 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
   };
 
   const renderContent = () => (
-    <div className="flex-1 overflow-y-auto pr-4">
-      <div className="space-y-6">
+    <div className="flex-1 overflow-y-auto pr-2 md:pr-3">
+      <div className="space-y-5 pb-1">
         {/* Step 1: Agent and Operation Type Selection */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
+        <Card className="border-blue-100 shadow-sm">
+          <CardHeader className="pb-4 bg-gradient-to-r from-blue-50/80 to-cyan-50/40 rounded-t-lg border-b">
+            <CardTitle className="flex items-center gap-2 text-lg text-blue-900">
               <Users className="w-4 h-4" />
               Étape 1: Configuration de l'import
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-blue-800/80">
               Sélectionnez l'agent responsable et le type d'opération
             </CardDescription>
           </CardHeader>
@@ -936,7 +1032,7 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
               <div className="space-y-2">
                 <Label htmlFor="agent-select">Agent de recouvrement</Label>
                 <Select value={selectedAgent} onValueChange={setSelectedAgent}>
-                  <SelectTrigger>
+                  <SelectTrigger className="bg-white">
                     <SelectValue placeholder="Sélectionner un agent" />
                   </SelectTrigger>
                   <SelectContent>
@@ -952,7 +1048,7 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
               <div className="space-y-2">
                 <Label htmlFor="operation-type">Type d'opération</Label>
                 <Select value={operationType} onValueChange={(value: 'loyer' | 'droit_terre' | 'souscription') => setOperationType(value)}>
-                  <SelectTrigger>
+                  <SelectTrigger className="bg-white">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -969,7 +1065,7 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
               <div className="space-y-2">
                 <Label htmlFor="year-select">Année</Label>
                 <Select value={selectedYear.toString()} onValueChange={(value) => setSelectedYear(parseInt(value))}>
-                  <SelectTrigger>
+                  <SelectTrigger className="bg-white">
                     <SelectValue placeholder="Sélectionner l'année" />
                   </SelectTrigger>
                   <SelectContent>
@@ -985,7 +1081,7 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
               <div className="space-y-2">
                 <Label htmlFor="month-select">Mois à importer</Label>
                 <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                  <SelectTrigger>
+                  <SelectTrigger className="bg-white">
                     <SelectValue placeholder="Sélectionner un mois" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1006,7 +1102,7 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
               </div>
             </div>
 
-            <Alert>
+            <Alert className="border-blue-200 bg-blue-50/70">
               <Info className="h-4 w-4" />
               <AlertDescription>
                 L'agent sélectionné sera automatiquement assigné à toutes les propriétés importées.
@@ -1019,13 +1115,13 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
         </Card>
 
         {/* Step 2: File Selection */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
+        <Card className="border-emerald-100 shadow-sm">
+          <CardHeader className="pb-4 bg-gradient-to-r from-emerald-50/80 to-teal-50/40 rounded-t-lg border-b">
+            <CardTitle className="flex items-center gap-2 text-lg text-emerald-900">
               <Upload className="w-4 h-4" />
               Étape 2: Sélection du fichier Excel
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-emerald-800/80">
               Importez votre fichier Excel contenant les données de situation de recouvrement
             </CardDescription>
           </CardHeader>
@@ -1048,7 +1144,7 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
               </div>
             )}
 
-            <Alert>
+            <Alert className="border-emerald-200 bg-emerald-50/70">
               <Info className="h-4 w-4" />
               <AlertDescription>
                 <strong>Format attendu:</strong> NOM ET PRENOMS, LOYER, SITES, NUMERO TELEPHONE, 
@@ -1071,28 +1167,28 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
 
         {/* Step 3: Data Preview & Validation */}
         {showPreview && validation && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
+          <Card className="border-violet-100 shadow-sm">
+            <CardHeader className="pb-4 bg-gradient-to-r from-violet-50/80 to-sky-50/40 rounded-t-lg border-b">
+              <CardTitle className="flex items-center gap-2 text-lg text-violet-900">
                 <CheckCircle className="w-4 h-4" />
                 Étape 3: Aperçu et validation des données
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-violet-900/80">
                 Vérifiez vos données avant de procéder à l'import - Agent: {agents.find(a => a.id === selectedAgent)?.prenom} {agents.find(a => a.id === selectedAgent)?.nom} - Type: {operationType === 'loyer' ? 'Loyer' : 'Droit de terre'} - Année: {selectedYear} - Période: {selectedMonth === 'all' ? 'Tous les mois' : ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'][parseInt(selectedMonth)]}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Summary Stats */}
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                <div className="flex flex-col items-center p-3 border rounded-lg">
+                <div className="flex flex-col items-center p-3 border rounded-lg bg-white">
                   <div className="text-2xl font-bold text-primary">{validation.totalClients}</div>
                   <div className="text-sm text-muted-foreground">Clients</div>
                 </div>
-                <div className="flex flex-col items-center p-3 border rounded-lg">
+                <div className="flex flex-col items-center p-3 border rounded-lg bg-white">
                   <div className="text-2xl font-bold text-primary">{validation.agentStats.length}</div>
                   <div className="text-sm text-muted-foreground">Agents</div>
                 </div>
-                <div className="flex flex-col items-center p-3 border rounded-lg">
+                <div className="flex flex-col items-center p-3 border rounded-lg bg-white">
                   <div className="text-2xl font-bold text-primary">{formatCurrency(validation.totalAmount)}</div>
                   <div className="text-sm text-muted-foreground">Montant total</div>
                 </div>
@@ -1142,6 +1238,12 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
                     Aperçu des données ({previewData.length} clients au total)
                   </h4>
                   <div className="flex items-center gap-2">
+                    <Input
+                      value={previewSearch}
+                      onChange={(e) => setPreviewSearch(e.target.value)}
+                      placeholder="Rechercher un nom..."
+                      className="w-52 md:w-64"
+                    />
                     <Label htmlFor="items-per-page" className="text-sm">Afficher:</Label>
                     <Select value={itemsPerPage.toString()} onValueChange={(value) => {
                       setItemsPerPage(parseInt(value));
@@ -1162,17 +1264,25 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
 
                 {/* Calcul de la pagination */}
                 {(() => {
-                  const totalPages = Math.ceil(previewData.length / itemsPerPage);
+                  const normalizedSearch = normalizeString(previewSearch || '');
+                  const filteredData = normalizedSearch
+                    ? previewData.filter((row) =>
+                        normalizeString(`${row.nomEtPrenoms} ${row.site} ${row.numeroTelephone}`).includes(normalizedSearch)
+                      )
+                    : previewData;
+                  const totalPages = Math.max(1, Math.ceil(filteredData.length / itemsPerPage));
                   const startIndex = (currentPage - 1) * itemsPerPage;
-                  const endIndex = Math.min(startIndex + itemsPerPage, previewData.length);
-                  const paginatedData = previewData.slice(startIndex, endIndex);
+                  const endIndex = Math.min(startIndex + itemsPerPage, filteredData.length);
+                  const paginatedData = filteredData.slice(startIndex, endIndex);
 
                   return (
                     <>
                       {/* Info pagination */}
                       <div className="flex items-center justify-between mb-2 text-sm text-muted-foreground">
                         <span>
-                          Affichage de {startIndex + 1} à {endIndex} sur {previewData.length} clients
+                          {filteredData.length === 0
+                            ? 'Aucun résultat'
+                            : `Affichage de ${startIndex + 1} à ${endIndex} sur ${filteredData.length} clients`}
                         </span>
                         <span>
                           Page {currentPage} sur {totalPages}
@@ -1180,7 +1290,7 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
                       </div>
 
                       {/* Table avec hauteur augmentée */}
-                      <ScrollArea className="h-[600px] border rounded">
+                      <ScrollArea className="h-[560px] border rounded-md bg-white">
                         <Table>
                           <TableHeader>
                             <TableRow>
@@ -1213,13 +1323,20 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
                                 </TableCell>
                               </TableRow>
                             ))}
+                            {paginatedData.length === 0 && (
+                              <TableRow>
+                                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                                  Aucun client trouvé pour cette recherche
+                                </TableCell>
+                              </TableRow>
+                            )}
                           </TableBody>
                         </Table>
                       </ScrollArea>
 
                       {/* Contrôles de pagination */}
                       {totalPages > 1 && (
-                        <div className="flex items-center justify-center gap-2 mt-4">
+                        <div className="flex items-center justify-center gap-2 mt-4 pt-1">
                           <Button
                             variant="outline"
                             size="sm"
@@ -1300,65 +1417,105 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
               {/* Summary Statistics - Amélioration avec plus de détails */}
               <div>
                 <h4 className="font-semibold mb-2">Résumé financier pour l'agent sélectionné:</h4>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                  <div className="text-center p-3 border rounded-lg">
-                    <div className="text-2xl font-bold text-primary">{validation.agentStats[0]?.clientsCount || 0}</div>
-                    <div className="text-sm text-muted-foreground">Clients</div>
+                {(() => {
+                  const stats = validation.agentStats[0];
+                  const totalDu = stats?.totalDu || 0;
+                  const totalVerse = stats?.totalVerse || 0;
+                  const arrieres = Math.abs(validation.totalArrears || 0);
+                  // Ecart global attendu: ce qui devrait etre verse moins ce qui a ete verse
+                  const ecartGlobal = totalDu - totalVerse;
+                  const ecartLabel = ecartGlobal > 0 ? 'A recouvrer' : ecartGlobal < 0 ? 'Excédent' : 'Équilibre';
+                  const ecartClass =
+                    ecartGlobal > 0 ? 'text-red-600' : ecartGlobal < 0 ? 'text-emerald-600' : 'text-slate-700';
+                  const taux = validation.globalRecoveryRate || 0;
+
+                  return (
+                    <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <div className="rounded-xl border bg-gradient-to-b from-white to-slate-50 p-4 shadow-sm">
+                    <div className="text-xs uppercase tracking-wide text-muted-foreground">Clients</div>
+                    <div className="mt-2 text-2xl font-bold text-primary">{stats?.clientsCount || 0}</div>
                   </div>
-                  <div className="text-center p-3 border rounded-lg">
-                    <div className="text-2xl font-bold text-blue-600">{formatCurrency(validation.agentStats[0]?.totalDu || 0)}</div>
-                    <div className="text-sm text-muted-foreground">Total dû</div>
+                  <div className="rounded-xl border bg-gradient-to-b from-white to-slate-50 p-4 shadow-sm">
+                    <div className="text-xs uppercase tracking-wide text-muted-foreground">Total dû (mois)</div>
+                    <div className="mt-2 text-2xl font-bold text-blue-600">{formatCurrency(totalDu)}</div>
                   </div>
-                  <div className="text-center p-3 border rounded-lg">
-                    <div className="text-2xl font-bold text-green-600">{formatCurrency(validation.agentStats[0]?.totalVerse || 0)}</div>
-                    <div className="text-sm text-muted-foreground">Total versé</div>
+                  <div className="rounded-xl border bg-gradient-to-b from-white to-slate-50 p-4 shadow-sm">
+                    <div className="text-xs uppercase tracking-wide text-muted-foreground">Total versé (mois)</div>
+                    <div className="mt-2 text-2xl font-bold text-green-600">{formatCurrency(totalVerse)}</div>
                   </div>
-                  <div className="text-center p-3 border rounded-lg">
-                    <div className={`text-2xl font-bold ${(validation.agentStats[0]?.ecart || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                      {formatCurrency(Math.abs(validation.agentStats[0]?.ecart || 0))}
+                  <div className="rounded-xl border bg-gradient-to-b from-white to-slate-50 p-4 shadow-sm">
+                    <div className="text-xs uppercase tracking-wide text-muted-foreground">Arriérés totaux</div>
+                    <div className="mt-2 text-2xl font-bold text-amber-600">{formatCurrency(arrieres)}</div>
+                  </div>
+                  <div className="rounded-xl border bg-gradient-to-b from-white to-slate-50 p-4 shadow-sm">
+                    <div className="text-xs uppercase tracking-wide text-muted-foreground">Taux recouvrement</div>
+                    <div className={`mt-2 text-2xl font-bold ${taux > 80 ? 'text-green-600' : taux > 50 ? 'text-yellow-600' : 'text-red-600'}`}>
+                      {taux.toFixed(1)}%
                     </div>
-                    <div className="text-sm text-muted-foreground">Arriérés totaux</div>
-                  </div>
-                  <div className="text-center p-3 border rounded-lg">
-                    <div className={`text-2xl font-bold ${(validation.globalRecoveryRate || 0) > 80 ? 'text-green-600' : (validation.globalRecoveryRate || 0) > 50 ? 'text-yellow-600' : 'text-red-600'}`}>
-                      {(validation.globalRecoveryRate || 0).toFixed(1)}%
-                    </div>
-                    <div className="text-sm text-muted-foreground">Taux recouvrement</div>
                   </div>
                 </div>
+                <div className="mt-3 rounded-xl border p-4 shadow-sm bg-gradient-to-r from-white via-slate-50 to-white">
+                  <div className="flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
+                    <div>
+                      <div className="text-xs uppercase tracking-wide text-muted-foreground">Écart global</div>
+                      <div className="text-sm text-muted-foreground">{ecartLabel}</div>
+                    </div>
+                    <div className={`text-3xl font-bold ${ecartClass}`}>
+                      {formatCurrency(Math.abs(ecartGlobal))}
+                    </div>
+                  </div>
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    Calcul: Total dû ({formatCurrency(totalDu)}) - Total versé ({formatCurrency(totalVerse)})
+                  </div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    Arriérés affichés séparément: {formatCurrency(arrieres)}
+                  </div>
+                </div>
+                    </>
+                  );
+                })()}
                 
-                {/* Totaux mensuels agrégés */}
-                <div className="mt-4 p-4 bg-muted rounded-lg">
-                  <h5 className="font-medium mb-2">Totaux par période (Janvier à Décembre):</h5>
-                  <div className="grid grid-cols-3 gap-4 text-sm">
-                    <div>
-                      <span className="font-medium">Total loyers mensuels dûs:</span>
-                      <div className="text-lg font-bold text-blue-600">
-                        {formatCurrency(validation.monthlyStats?.reduce((sum, m) => sum + m.totalDue, 0) || 0)}
-                      </div>
-                    </div>
-                    <div>
-                      <span className="font-medium">Total paiements reçus:</span>
-                      <div className="text-lg font-bold text-green-600">
-                        {formatCurrency(validation.monthlyStats?.reduce((sum, m) => sum + m.totalPaid, 0) || 0)}
-                      </div>
-                    </div>
-                    <div>
-                      <span className="font-medium">Moyenne mensuelle:</span>
-                      <div className="text-lg font-bold">
-                        {formatCurrency((validation.monthlyStats?.reduce((sum, m) => sum + m.totalPaid, 0) || 0) / 12)}
-                      </div>
-                    </div>
-                  </div>
-                </div>
               </div>
 
               {/* Action Buttons */}
+              {(() => {
+                const selectedMonthIndex = parseInt(selectedMonth, 10);
+                const totalRequired = previewData.reduce((sum, row) => {
+                  if (Number.isNaN(selectedMonthIndex) || selectedMonthIndex < 0 || selectedMonthIndex > 11) return sum;
+                  return sum + (row.paiementsMensuels[selectedMonthIndex] || 0);
+                }, 0);
+                const isCashInsufficient =
+                  currentCashBalance !== null && currentCashBalance < totalRequired;
+
+                return (
+                  <Alert className={isCashInsufficient ? "border-red-300 bg-red-50" : "border-emerald-300 bg-emerald-50"}>
+                    <AlertDescription className="text-sm">
+                      <div>
+                        <span className="font-medium">Solde caisse versement:</span>{" "}
+                        {isCheckingCash ? "Vérification..." : currentCashBalance !== null ? formatCurrency(currentCashBalance) : "N/A"}
+                      </div>
+                      <div>
+                        <span className="font-medium">Montant requis pour l'import:</span> {formatCurrency(totalRequired)}
+                      </div>
+                      {cashCheckError && (
+                        <div className="text-red-600 mt-1">{cashCheckError}</div>
+                      )}
+                      {isCashInsufficient && (
+                        <div className="text-red-700 font-medium mt-1">
+                          Solde insuffisant: l'import réel sera bloqué tant que la caisse n'est pas approvisionnée.
+                        </div>
+                      )}
+                    </AlertDescription>
+                  </Alert>
+                );
+              })()}
               <div className="flex gap-2 pt-4">
                 <Button
                   onClick={() => importRecouvrementData(true)}
                   disabled={isImporting || validation.errors.length > 0}
                   variant="outline"
+                  className="min-w-40"
                 >
                   {isImporting && simulationMode ? (
                     <>
@@ -1373,8 +1530,15 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
                 {simulationCompleted && (
                   <Button
                     onClick={() => importRecouvrementData(false)}
-                    disabled={isImporting}
-                    className="bg-primary hover:bg-primary/90"
+                    disabled={(() => {
+                      const selectedMonthIndex = parseInt(selectedMonth, 10);
+                      const totalRequired = previewData.reduce((sum, row) => {
+                        if (Number.isNaN(selectedMonthIndex) || selectedMonthIndex < 0 || selectedMonthIndex > 11) return sum;
+                        return sum + (row.paiementsMensuels[selectedMonthIndex] || 0);
+                      }, 0);
+                      return isImporting || isCheckingCash || currentCashBalance === null || currentCashBalance < totalRequired;
+                    })()}
+                    className="bg-primary hover:bg-primary/90 min-w-40"
                   >
                     {isImporting && !simulationMode ? (
                       <>
@@ -1393,9 +1557,9 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
 
         {/* Step 3: Import Progress */}
         {isImporting && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
+          <Card className="border-amber-200 shadow-sm">
+            <CardHeader className="pb-3 bg-gradient-to-r from-amber-50/70 to-orange-50/30 rounded-t-lg border-b">
+              <CardTitle className="flex items-center gap-2 text-lg text-amber-900">
                 <div className="animate-spin w-4 h-4 border-2 border-primary border-t-transparent rounded-full" />
                 {simulationMode ? 'Simulation en cours...' : 'Import en cours...'}
               </CardTitle>
@@ -1411,44 +1575,44 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
 
         {/* Step 4: Results */}
         {results && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
+          <Card className="border-indigo-100 shadow-sm">
+            <CardHeader className="pb-4 bg-gradient-to-r from-indigo-50/80 to-blue-50/40 rounded-t-lg border-b">
+              <CardTitle className="flex items-center gap-2 text-lg text-indigo-900">
                 <Receipt className="w-4 h-4" />
                 Résultats de l'{simulationMode ? 'simulation' : 'import'}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                <div className="text-center p-3 border rounded-lg">
+                <div className="text-center p-3 border rounded-lg bg-white">
                   <div className="text-2xl font-bold text-primary">{results.agentsCreated + results.agentsMatched}</div>
                   <div className="text-sm text-muted-foreground">Agents</div>
                   <div className="text-xs text-muted-foreground">
                     {results.agentsCreated} créés, {results.agentsMatched} existants
                   </div>
                 </div>
-                <div className="text-center p-3 border rounded-lg">
+                <div className="text-center p-3 border rounded-lg bg-white">
                   <div className="text-2xl font-bold text-primary">{results.clientsCreated + results.clientsMatched}</div>
                   <div className="text-sm text-muted-foreground">Clients</div>
                   <div className="text-xs text-muted-foreground">
                     {results.clientsCreated} créés, {results.clientsMatched} existants
                   </div>
                 </div>
-                <div className="text-center p-3 border rounded-lg">
+                <div className="text-center p-3 border rounded-lg bg-white">
                   <div className="text-2xl font-bold text-primary">{results.locationsCreated + results.souscriptionsCreated}</div>
                   <div className="text-sm text-muted-foreground">Contrats</div>
                   <div className="text-xs text-muted-foreground">
                     {results.locationsCreated} locations, {results.souscriptionsCreated} souscriptions
                   </div>
                 </div>
-                <div className="text-center p-3 border rounded-lg">
+                <div className="text-center p-3 border rounded-lg bg-white">
                   <div className="text-2xl font-bold text-primary">{results.paymentsImported}</div>
                   <div className="text-sm text-muted-foreground">Paiements</div>
                   <div className="text-xs text-muted-foreground">
                     {formatCurrency(results.totalAmount)}
                   </div>
                 </div>
-                <div className="text-center p-3 border rounded-lg">
+                <div className="text-center p-3 border rounded-lg bg-white">
                   <div className="text-2xl font-bold text-primary">{results.receiptsGenerated}</div>
                   <div className="text-sm text-muted-foreground">Reçus</div>
                   <div className="text-xs text-muted-foreground">
@@ -1486,20 +1650,20 @@ export function ImportRecouvrementData({ inline = false }: { inline?: boolean } 
   }
 
   return (
-    <Dialog>
+    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="gap-2">
+        <Button variant="outline" className="gap-2 border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700">
           <Upload className="w-4 h-4" />
           Importer données de recouvrement
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+      <DialogContent className="max-w-5xl max-h-[92vh] flex flex-col border-indigo-200 shadow-2xl">
+        <DialogHeader className="pb-3 border-b bg-gradient-to-r from-indigo-50/80 via-blue-50/40 to-cyan-50/70 -mx-6 px-6 -mt-6 pt-6 rounded-t-lg">
+          <DialogTitle className="flex items-center gap-2 text-indigo-950">
             <FileSpreadsheet className="w-5 h-5" />
             Import des données de recouvrement
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-indigo-900/80">
             Importez les données de situation de recouvrement depuis votre fichier Excel
           </DialogDescription>
         </DialogHeader>

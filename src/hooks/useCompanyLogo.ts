@@ -13,7 +13,10 @@ export function useCompanyLogo() {
 
         return data?.[0]?.logo_url || null;
       } catch (error) {
-        console.error("Error fetching company logo:", error);
+        const message = error instanceof Error ? error.message : String(error);
+        if (!message.includes("Unknown table company_settings")) {
+          console.error("Error fetching company logo:", error);
+        }
         return null;
       }
     },

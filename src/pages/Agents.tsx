@@ -15,6 +15,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { MobileCard } from "@/components/MobileCard";
 import { Plus, Eye, Trash2, Users, Phone, Mail, Calendar, Pencil } from "lucide-react";
+import { formatFCFA } from "@/lib/format";
 
 export default function Agents() {
   const { toast } = useToast();
@@ -168,7 +169,7 @@ export default function Agents() {
               <CardTitle className="text-sm font-medium">Total versé</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-xl font-bold">{Number(stats.total_verse || 0).toLocaleString()} FCFA</div>
+              <div className="text-xl font-bold">{formatFCFA(stats.total_verse)}</div>
             </CardContent>
           </Card>
           <Card>
@@ -184,7 +185,7 @@ export default function Agents() {
               <CardTitle className="text-sm font-medium">Moyenne</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-xl font-bold">{Number(stats.moyenne_versement || 0).toLocaleString()} FCFA</div>
+              <div className="text-xl font-bold">{formatFCFA(stats.moyenne_versement)}</div>
             </CardContent>
           </Card>
           <Card>

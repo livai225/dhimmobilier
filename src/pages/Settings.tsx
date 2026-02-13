@@ -49,11 +49,19 @@ export default function Settings() {
   const { data: companySettings } = useQuery({
     queryKey: ['company_settings'],
     queryFn: async () => {
-      const data = await apiClient.select({
-        table: 'company_settings',
-        single: true
-      });
-      return data;
+      try {
+        const data = await apiClient.select({
+          table: 'company_settings',
+          single: true
+        });
+        return data;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (!message.includes("Unknown table company_settings")) {
+          throw error;
+        }
+        return null;
+      }
     }
   });
 

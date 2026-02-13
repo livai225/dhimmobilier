@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiClient } from "@/integrations/api/client";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,7 @@ export function LocationForm({ onClose, onSuccess }: LocationFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedLoyer, setSelectedLoyer] = useState(0);
   const [clientSearchTerm, setClientSearchTerm] = useState("");
+  const [stableCashBalance, setStableCashBalance] = useState(0);
   const { toast } = useToast();
   const { logCreate } = useAuditLog();
 
@@ -73,14 +74,26 @@ export function LocationForm({ onClose, onSuccess }: LocationFormProps) {
   });
 
   // Solde de caisse actuel
-  const { data: cashBalance } = useQuery({
+  const { data: cashBalanceRaw } = useQuery({
     queryKey: ["cash_balance"],
     queryFn: async () => {
       const data = await apiClient.rpc("get_current_cash_balance");
-      return Number(data || 0);
+      const value = Number(data);
+      if (!Number.isFinite(value)) {
+        throw new Error("Solde caisse invalide");
+      }
+      return value;
     },
     refetchOnWindowFocus: false,
   });
+
+  useEffect(() => {
+    if (Number.isFinite(cashBalanceRaw)) {
+      setStableCashBalance(Number(cashBalanceRaw));
+    }
+  }, [cashBalanceRaw]);
+
+  const cashBalance = stableCashBalance;
 
   // Calculate deposit breakdown
   const calculateCautionBreakdown = (loyerMensuel: number) => {

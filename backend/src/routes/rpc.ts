@@ -18,6 +18,8 @@ class BusinessError extends Error {
 // Helpers pour créer des erreurs métier
 const notFound = (resource: string) => new BusinessError(`${resource} introuvable`, 404);
 const badRequest = (message: string) => new BusinessError(message, 400);
+const DUPLICATE_WRITE_WINDOW_MS = 8000;
+const recentWriteFingerprints = new Map<string, number>();
 
 // Helper to normalize params (remove p_ prefix used by frontend)
 function normalizeParams(params: Record<string, any>): Record<string, any> {
@@ -37,6 +39,62 @@ function validateRequired(params: Record<string, any>, required: string[]): stri
     }
   }
   return null;
+}
+
+function cleanupRecentWrites(now: number) {
+  for (const [key, ts] of recentWriteFingerprints.entries()) {
+    if (now - ts > DUPLICATE_WRITE_WINDOW_MS) {
+      recentWriteFingerprints.delete(key);
+    }
+  }
+}
+
+function buildWriteFingerprint(fn: string, userId: string | undefined, params: Record<string, any>): string {
+  const fields = [
+    "location_id",
+    "souscription_id",
+    "facture_id",
+    "agent_id",
+    "montant",
+    "type_transaction",
+    "type_operation",
+    "mode_paiement",
+    "mode",
+    "reference",
+    "date_paiement",
+    "mois_concerne",
+    "annee_concerne",
+    "import_tag",
+  ];
+
+  const reduced = fields.reduce<Record<string, any>>((acc, field) => {
+    if (params[field] !== undefined && params[field] !== null && params[field] !== "") {
+      acc[field] = params[field];
+    }
+    return acc;
+  }, {});
+
+  return `${fn}:${userId || "anonymous"}:${JSON.stringify(reduced)}`;
+}
+
+function rejectDuplicateWrite(
+  fn: string,
+  req: any,
+  reply: any,
+  params: Record<string, any>,
+): boolean {
+  const now = Date.now();
+  cleanupRecentWrites(now);
+
+  const fingerprint = buildWriteFingerprint(fn, req.user?.id, params);
+  const previousTs = recentWriteFingerprints.get(fingerprint);
+  if (previousTs && now - previousTs <= DUPLICATE_WRITE_WINDOW_MS) {
+    reply.code(409);
+    return true;
+  }
+
+  recentWriteFingerprints.set(fingerprint, now);
+  return false;
 }
 
 // Helper to get current cash balance
@@ -169,6 +227,9 @@ export async function rpcRoutes(app: FastifyInstance) {
 
           const typeTransaction = params.type_transaction || "entree";
           const agentId = params.agent_id || null;
+          if (rejectDuplicateWrite(fn, req, reply, params)) {
+            return { error: "Opération déjà en cours ou envoyée en double. Réessayez dans quelques secondes." };
+          }
 
           const result = await prisma.$transaction(async (tx) => {
             // Vérifier que l'agent existe si fourni
@@ -295,6 +356,9 @@ export async function rpcRoutes(app: FastifyInstance) {
 
           const locationId = params.location_id;
           const clientId = params.client_id;
+          if (rejectDuplicateWrite(fn, req, reply, params)) {
+            return { error: "Paiement dupliqué détecté. Vérifiez le reçu avant de réessayer." };
+          }
 
           const recuId = await prisma.$transaction(async (tx) => {
             // Vérifier que la location existe
@@ -373,6 +437,9 @@ export async function rpcRoutes(app: FastifyInstance) {
 
           const souscriptionId = params.souscription_id;
           const clientId = params.client_id;
+          if (rejectDuplicateWrite(fn, req, reply, params)) {
+            return { error: "Paiement dupliqué détecté. Vérifiez le reçu avant de réessayer." };
+          }
 
           const recuId = await prisma.$transaction(async (tx) => {
             // Vérifier que la souscription existe
@@ -455,6 +522,9 @@ export async function rpcRoutes(app: FastifyInstance) {
 
           const souscriptionId = params.souscription_id;
           const clientId = params.client_id;
+          if (rejectDuplicateWrite(fn, req, reply, params)) {
+            return { error: "Paiement dupliqué détecté. Vérifiez le reçu avant de réessayer." };
+          }
 
           const recuId = await prisma.$transaction(async (tx) => {
             // Vérifier que la souscription existe
@@ -515,6 +585,281 @@ export async function rpcRoutes(app: FastifyInstance) {
           return recuId;
         }
 
+        // ============== PREVIEW CANCEL IMPORT RECOUVREMENT ==============
+        case "check_recouvrement_import_conflict": {
+          const validationError = validateRequired(params, ["agent_id", "month", "year", "operation_type"]);
+          if (validationError) {
+            reply.code(400);
+            return { error: validationError };
+          }
+
+          const agentId = params.agent_id;
+          const operationType = params.operation_type;
+          const year = Number(params.year);
+          const rawMonth = Number(params.month);
+          const monthBase = params.month_base === "one_indexed" ? "one_indexed" : "zero_indexed";
+          const monthIndex = monthBase === "one_indexed" ? rawMonth - 1 : rawMonth;
+          const targetMonth = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+
+          if (Number.isNaN(year) || Number.isNaN(monthIndex) || monthIndex < 0 || monthIndex > 11) {
+            reply.code(400);
+            return { error: "Mois ou année invalide" };
+          }
+
+          const startDate = new Date(year, monthIndex, 1, 0, 0, 0);
+          const endDate = new Date(year, monthIndex + 1, 0, 23, 59, 59);
+
+          let existingCount = 0;
+
+          if (operationType === "loyer") {
+            existingCount = await prisma.paiements_locations.count({
+              where: {
+                import_tag: { startsWith: "import" },
+                OR: [
+                  { date_paiement: { gte: startDate, lte: endDate } },
+                  { mois_concerne: targetMonth },
+                ],
+                location: { propriete: { agent_id: agentId } },
+              },
+            });
+          } else if (operationType === "droit_terre") {
+            existingCount = await prisma.paiements_droit_terre.count({
+              where: {
+                import_tag: { startsWith: "import" },
+                date_paiement: { gte: startDate, lte: endDate },
+                souscription: { propriete: { agent_id: agentId } },
+              },
+            });
+          } else if (operationType === "souscription") {
+            existingCount = await prisma.paiements_souscriptions.count({
+              where: {
+                import_tag: { startsWith: "import" },
+                date_paiement: { gte: startDate, lte: endDate },
+                souscription: { propriete: { agent_id: agentId } },
+              },
+            });
+          } else {
+            reply.code(400);
+            return { error: "Type d'opération invalide" };
+          }
+
+          const hasConflict = existingCount > 0;
+          return {
+            has_conflict: hasConflict,
+            existing_count: existingCount,
+            message: hasConflict
+              ? `Une importation existe déjà pour cette période (${existingCount} paiement(s) importé(s)). Utilisez d'abord "Annuler import".`
+              : "Aucun conflit détecté.",
+          };
+        }
+
+        // ============== PREVIEW CANCEL IMPORT RECOUVREMENT ==============
+        case "preview_cancel_recouvrement_import": {
+          const validationError = validateRequired(params, ["agent_id", "month", "year", "operation_type"]);
+          if (validationError) {
+            reply.code(400);
+            return { error: validationError };
+          }
+
+          const agentId = params.agent_id;
+          const operationType = params.operation_type;
+          const year = Number(params.year);
+          const rawMonth = Number(params.month);
+          const monthBase = params.month_base === "one_indexed" ? "one_indexed" : "zero_indexed";
+          const monthIndex = monthBase === "one_indexed" ? rawMonth - 1 : rawMonth;
+          const targetMonth = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+
+          if (Number.isNaN(year) || Number.isNaN(monthIndex) || monthIndex < 0 || monthIndex > 11) {
+            reply.code(400);
+            return { error: "Mois ou année invalide" };
+          }
+
+          const startDate = new Date(year, monthIndex, 1, 0, 0, 0);
+          const endDate = new Date(year, monthIndex + 1, 0, 23, 59, 59);
+
+          let totalRefund = 0;
+          let paymentsToDelete = 0;
+          let receiptsToDelete = 0;
+          let cashToDelete = 0;
+          let contractsToDelete = 0;
+          let propertiesToDelete = 0;
+          let clientsToDelete = 0;
+
+          if (operationType === "loyer") {
+            const payments = await prisma.paiements_locations.findMany({
+              where: {
+                import_tag: { startsWith: "import" },
+                OR: [
+                  { date_paiement: { gte: startDate, lte: endDate } },
+                  { mois_concerne: targetMonth },
+                ],
+                location: { propriete: { agent_id: agentId } },
+              },
+              select: {
+                id: true,
+                montant: true,
+                location_id: true,
+                location: { select: { propriete_id: true, client_id: true } },
+              },
+            });
+
+            const paymentIds = payments.map((p) => p.id);
+            const selectedPaymentsByLocation = new Map<string, number>();
+            payments.forEach((p) => {
+              selectedPaymentsByLocation.set(
+                p.location_id,
+                (selectedPaymentsByLocation.get(p.location_id) || 0) + 1
+              );
+            });
+
+            totalRefund = payments.reduce((sum, p) => sum + Number(p.montant || 0), 0);
+            paymentsToDelete = paymentIds.length;
+
+            if (paymentIds.length > 0) {
+              receiptsToDelete = await prisma.recus.count({
+                where: { reference_id: { in: paymentIds }, type_operation: "location" },
+              });
+              cashToDelete = await prisma.cash_transactions.count({
+                where: {
+                  reference_operation: { in: paymentIds },
+                  type_operation: "paiement_loyer",
+                },
+              });
+            }
+
+            const importLocations = await prisma.locations.findMany({
+              where: {
+                import_tag: { startsWith: "import" },
+                propriete: { agent_id: agentId },
+              },
+              select: {
+                id: true,
+                client_id: true,
+                propriete_id: true,
+                _count: { select: { paiements: true, cautions: true } },
+              },
+            });
+
+            const deletableLocations = importLocations.filter((l) => {
+              const selectedCount = selectedPaymentsByLocation.get(l.id) || 0;
+              const remainingPaymentsAfterCancel = l._count.paiements - selectedCount;
+              return remainingPaymentsAfterCancel === 0 && l._count.cautions === 0;
+            });
+            contractsToDelete = deletableLocations.length;
+
+            const propertyDeletionCounts = new Map<string, number>();
+            const clientDeletionCounts = new Map<string, number>();
+            deletableLocations.forEach((l) => {
+              propertyDeletionCounts.set(
+                l.propriete_id,
+                (propertyDeletionCounts.get(l.propriete_id) || 0) + 1
+              );
+              clientDeletionCounts.set(l.client_id, (clientDeletionCounts.get(l.client_id) || 0) + 1);
+            });
+
+            if (propertyDeletionCounts.size > 0) {
+              const props = await prisma.proprietes.findMany({
+                where: {
+                  id: { in: Array.from(propertyDeletionCounts.keys()) },
+                  import_tag: { startsWith: "import" },
+                  agent_id: agentId,
+                },
+                include: { _count: { select: { locations: true, souscriptions: true } } },
+              });
+              propertiesToDelete = props.filter((p) => {
+                const deletedLocationsForProp = propertyDeletionCounts.get(p.id) || 0;
+                return p._count.souscriptions === 0 && p._count.locations === deletedLocationsForProp;
+              }).length;
+            }
+
+            if (clientDeletionCounts.size > 0) {
+              const clients = await prisma.clients.findMany({
+                where: { id: { in: Array.from(clientDeletionCounts.keys()) }, import_tag: { startsWith: "import" } },
+                include: { _count: { select: { locations: true, souscriptions: true } } },
+              });
+              clientsToDelete = clients.filter((c) => {
+                const deletedLocationsForClient = clientDeletionCounts.get(c.id) || 0;
+                return c._count.souscriptions === 0 && c._count.locations === deletedLocationsForClient;
+              }).length;
+            }
+          } else if (operationType === "droit_terre") {
+            const payments = await prisma.paiements_droit_terre.findMany({
+              where: {
+                import_tag: { startsWith: "import" },
+                date_paiement: { gte: startDate, lte: endDate },
+                souscription: { propriete: { agent_id: agentId } },
+              },
+              select: {
+                id: true,
+                montant: true,
+                souscription_id: true,
+                souscription: { select: { propriete_id: true, client_id: true } },
+              },
+            });
+
+            const paymentIds = payments.map((p) => p.id);
+            const souscriptionIds = Array.from(new Set(payments.map((p) => p.souscription_id)));
+            const propertyIds = Array.from(
+              new Set(payments.map((p) => p.souscription.propriete_id).filter(Boolean))
+            );
+            const clientIds = Array.from(
+              new Set(payments.map((p) => p.souscription.client_id).filter(Boolean))
+            );
+
+            totalRefund = payments.reduce((sum, p) => sum + Number(p.montant || 0), 0);
+            paymentsToDelete = paymentIds.length;
+
+            if (paymentIds.length > 0) {
+              receiptsToDelete = await prisma.recus.count({
+                where: { reference_id: { in: paymentIds }, type_operation: "droit_terre" },
+              });
+              cashToDelete = await prisma.cash_transactions.count({
+                where: {
+                  reference_operation: { in: paymentIds },
+                  type_operation: "paiement_droit_terre",
+                },
+              });
+            }
+
+            if (souscriptionIds.length > 0) {
+              const souscriptions = await prisma.souscriptions.findMany({
+                where: { id: { in: souscriptionIds }, import_tag: { startsWith: "import" } },
+                include: { _count: { select: { paiements: true, paiements_droit: true } } },
+              });
+              contractsToDelete = souscriptions.filter((s) => s._count.paiements === 0 && s._count.paiements_droit === 0).length;
+            }
+
+            if (propertyIds.length > 0) {
+              const props = await prisma.proprietes.findMany({
+                where: { id: { in: propertyIds }, import_tag: { startsWith: "import" } },
+                include: { _count: { select: { locations: true, souscriptions: true } } },
+              });
+              propertiesToDelete = props.filter((p) => p._count.locations === 0 && p._count.souscriptions === 0).length;
+            }
+
+            if (clientIds.length > 0) {
+              const clients = await prisma.clients.findMany({
+                where: { id: { in: clientIds }, import_tag: { startsWith: "import" } },
+                include: { _count: { select: { locations: true, souscriptions: true } } },
+              });
+              clientsToDelete = clients.filter((c) => c._count.locations === 0 && c._count.souscriptions === 0).length;
+            }
+          } else {
+            reply.code(400);
+            return { error: "Type d'opération invalide" };
+          }
+
+          return {
+            total_refunded: totalRefund,
+            payments_to_delete: paymentsToDelete,
+            receipts_to_delete: receiptsToDelete,
+            cash_transactions_to_delete: cashToDelete,
+            contracts_to_delete: contractsToDelete,
+            properties_to_delete: propertiesToDelete,
+            clients_to_delete: clientsToDelete,
+          };
+        }
+
         // ============== CANCEL IMPORT RECOUVREMENT ==============
         case "cancel_recouvrement_import": {
           const validationError = validateRequired(params, ["agent_id", "month", "year", "operation_type"]);
@@ -527,7 +872,9 @@ export async function rpcRoutes(app: FastifyInstance) {
           const operationType = params.operation_type;
           const year = Number(params.year);
           const rawMonth = Number(params.month);
-          const monthIndex = rawMonth >= 1 && rawMonth <= 12 ? rawMonth - 1 : rawMonth;
+          const monthBase = params.month_base === "one_indexed" ? "one_indexed" : "zero_indexed";
+          const monthIndex = monthBase === "one_indexed" ? rawMonth - 1 : rawMonth;
+          const targetMonth = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
 
           if (Number.isNaN(year) || Number.isNaN(monthIndex) || monthIndex < 0 || monthIndex > 11) {
             reply.code(400);
@@ -549,26 +896,22 @@ export async function rpcRoutes(app: FastifyInstance) {
             if (operationType === "loyer") {
               const payments = await tx.paiements_locations.findMany({
                 where: {
-                  import_tag: "import",
-                  date_paiement: { gte: startDate, lte: endDate },
+                  import_tag: { startsWith: "import" },
+                  OR: [
+                    { date_paiement: { gte: startDate, lte: endDate } },
+                    { mois_concerne: targetMonth },
+                  ],
                   location: { propriete: { agent_id: agentId } },
                 },
                 select: {
                   id: true,
                   montant: true,
                   location_id: true,
-                  location: { select: { propriete_id: true, client_id: true } },
+                  location: { select: { propriete_id: true } },
                 },
               });
 
               const paymentIds = payments.map((p) => p.id);
-              const locationIds = Array.from(new Set(payments.map((p) => p.location_id)));
-              const propertyIds = Array.from(
-                new Set(payments.map((p) => p.location.propriete_id).filter(Boolean))
-              );
-              const clientIds = Array.from(
-                new Set(payments.map((p) => p.location.client_id).filter(Boolean))
-              );
 
               totalRefund = payments.reduce((sum, p) => sum + Number(p.montant || 0), 0);
 
@@ -592,60 +935,63 @@ export async function rpcRoutes(app: FastifyInstance) {
                 paymentsDeleted = payRes.count;
               }
 
-              if (locationIds.length > 0) {
-                const locations = await tx.locations.findMany({
-                  where: { id: { in: locationIds }, import_tag: "import" },
-                  include: { _count: { select: { paiements: true, cautions: true } } },
-                });
-                const deletableLocationIds = locations
-                  .filter((l) => l._count.paiements === 0 && l._count.cautions === 0)
-                  .map((l) => l.id);
+              const importLocations = await tx.locations.findMany({
+                where: {
+                  import_tag: { startsWith: "import" },
+                  propriete: { agent_id: agentId },
+                },
+                include: { _count: { select: { paiements: true, cautions: true } } },
+              });
+              const deletableLocationIds = importLocations
+                .filter((l) => l._count.paiements === 0 && l._count.cautions === 0)
+                .map((l) => l.id);
 
-                if (deletableLocationIds.length > 0) {
-                  const delRes = await tx.locations.deleteMany({
-                    where: { id: { in: deletableLocationIds } },
-                  });
-                  contractsDeleted += delRes.count;
-                }
+              if (deletableLocationIds.length > 0) {
+                const delRes = await tx.locations.deleteMany({
+                  where: { id: { in: deletableLocationIds } },
+                });
+                contractsDeleted += delRes.count;
               }
 
-              if (propertyIds.length > 0) {
-                const props = await tx.proprietes.findMany({
-                  where: { id: { in: propertyIds }, import_tag: "import" },
-                  include: { _count: { select: { locations: true, souscriptions: true } } },
-                });
-                const deletablePropIds = props
-                  .filter((p) => p._count.locations === 0 && p._count.souscriptions === 0)
-                  .map((p) => p.id);
+              const importProperties = await tx.proprietes.findMany({
+                where: { agent_id: agentId, import_tag: { startsWith: "import" } },
+                include: { _count: { select: { locations: true, souscriptions: true } } },
+              });
+              const deletablePropIds = importProperties
+                .filter((p) => p._count.locations === 0 && p._count.souscriptions === 0)
+                .map((p) => p.id);
 
-                if (deletablePropIds.length > 0) {
-                  const delRes = await tx.proprietes.deleteMany({
-                    where: { id: { in: deletablePropIds } },
-                  });
-                  propertiesDeleted = delRes.count;
-                }
+              if (deletablePropIds.length > 0) {
+                const delRes = await tx.proprietes.deleteMany({
+                  where: { id: { in: deletablePropIds } },
+                });
+                propertiesDeleted = delRes.count;
               }
 
-              if (clientIds.length > 0) {
-                const clients = await tx.clients.findMany({
-                  where: { id: { in: clientIds }, import_tag: "import" },
-                  include: { _count: { select: { locations: true, souscriptions: true } } },
-                });
-                const deletableClientIds = clients
-                  .filter((c) => c._count.locations === 0 && c._count.souscriptions === 0)
-                  .map((c) => c.id);
+              const importClients = await tx.clients.findMany({
+                where: { import_tag: { startsWith: "import" } },
+                include: { _count: { select: { locations: true, souscriptions: true } } },
+              });
+              const deletableClientIds = importClients
+                .filter((c) => c._count.locations === 0 && c._count.souscriptions === 0)
+                .map((c) => c.id);
 
-                if (deletableClientIds.length > 0) {
-                  const delRes = await tx.clients.deleteMany({
-                    where: { id: { in: deletableClientIds } },
-                  });
-                  clientsDeleted = delRes.count;
-                }
+              if (deletableClientIds.length > 0) {
+                const delRes = await tx.clients.deleteMany({
+                  where: { id: { in: deletableClientIds } },
+                });
+                clientsDeleted = delRes.count;
+              }
+
+              if (paymentsDeleted === 0 && contractsDeleted === 0) {
+                throw badRequest(
+                  `Aucun paiement importé trouvé pour cet agent en ${String(monthIndex + 1).padStart(2, "0")}/${year}`
+                );
               }
             } else if (operationType === "droit_terre") {
               const payments = await tx.paiements_droit_terre.findMany({
                 where: {
-                  import_tag: "import",
+                  import_tag: { startsWith: "import" },
                   date_paiement: { gte: startDate, lte: endDate },
                   souscription: { propriete: { agent_id: agentId } },
                 },
@@ -656,6 +1002,11 @@ export async function rpcRoutes(app: FastifyInstance) {
                   souscription: { select: { propriete_id: true, client_id: true } },
                 },
               });
+              if (payments.length === 0) {
+                throw badRequest(
+                  `Aucun paiement importé trouvé pour cet agent en ${String(monthIndex + 1).padStart(2, "0")}/${year}`
+                );
+              }
 
               const paymentIds = payments.map((p) => p.id);
               const souscriptionIds = Array.from(new Set(payments.map((p) => p.souscription_id)));
@@ -690,7 +1041,7 @@ export async function rpcRoutes(app: FastifyInstance) {
 
               if (souscriptionIds.length > 0) {
                 const souscriptions = await tx.souscriptions.findMany({
-                  where: { id: { in: souscriptionIds }, import_tag: "import" },
+                  where: { id: { in: souscriptionIds }, import_tag: { startsWith: "import" } },
                   include: { _count: { select: { paiements: true, paiements_droit: true } } },
                 });
                 const deletableSouscriptionIds = souscriptions
@@ -707,7 +1058,7 @@ export async function rpcRoutes(app: FastifyInstance) {
 
               if (propertyIds.length > 0) {
                 const props = await tx.proprietes.findMany({
-                  where: { id: { in: propertyIds }, import_tag: "import" },
+                  where: { id: { in: propertyIds }, import_tag: { startsWith: "import" } },
                   include: { _count: { select: { locations: true, souscriptions: true } } },
                 });
                 const deletablePropIds = props
@@ -724,7 +1075,7 @@ export async function rpcRoutes(app: FastifyInstance) {
 
               if (clientIds.length > 0) {
                 const clients = await tx.clients.findMany({
-                  where: { id: { in: clientIds }, import_tag: "import" },
+                  where: { id: { in: clientIds }, import_tag: { startsWith: "import" } },
                   include: { _count: { select: { locations: true, souscriptions: true } } },
                 });
                 const deletableClientIds = clients
@@ -801,6 +1152,9 @@ export async function rpcRoutes(app: FastifyInstance) {
           }
 
           const factureId = params.facture_id;
+          if (rejectDuplicateWrite(fn, req, reply, params)) {
+            return { error: "Paiement dupliqué détecté. Vérifiez le reçu avant de réessayer." };
+          }
 
           const recuId = await prisma.$transaction(async (tx) => {
             // Vérifier que la facture existe
@@ -877,6 +1231,9 @@ export async function rpcRoutes(app: FastifyInstance) {
         case "pay_caution_with_cash": {
           const montant = Number(params.montant || 0);
           const locationId = params.location_id;
+          if (rejectDuplicateWrite(fn, req, reply, params)) {
+            return { error: "Paiement dupliqué détecté. Vérifiez le reçu avant de réessayer." };
+          }
 
           const result = await prisma.$transaction(async (tx) => {
             // Create caution payment

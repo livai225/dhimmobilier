@@ -60,6 +60,7 @@ export default function ModernDashboard() {
   // Main dashboard data
   const { data: stats } = useQuery({
     queryKey: ['dashboard-stats'],
+    placeholderData: (previousData) => previousData,
     queryFn: async () => {
       const [
         clients,
@@ -101,8 +102,12 @@ export default function ModernDashboard() {
       const paiementsSouscriptionsData = Array.isArray(paiementsSouscriptions) ? paiementsSouscriptions : [];
       const paiementsDroitTerreData = Array.isArray(paiementsDroitTerre) ? paiementsDroitTerre : [];
       const echeancesData = Array.isArray(echeances) ? echeances : [];
-      const soldeCaisseEntrepriseValue = Number(soldeCaisseEntreprise) || 0;
-      const soldeCaisseVersementValue = Number(soldeCaisseVersement) || 0;
+      const soldeCaisseEntrepriseValue = Number.isFinite(Number(soldeCaisseEntreprise))
+        ? Number(soldeCaisseEntreprise)
+        : 0;
+      const soldeCaisseVersementValue = Number.isFinite(Number(soldeCaisseVersement))
+        ? Number(soldeCaisseVersement)
+        : 0;
       const depensesEntrepriseData = Array.isArray(depensesEntreprise) ? depensesEntreprise : [];
 
       // Calculate main KPIs

@@ -23,6 +23,7 @@ import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { AlertCircle, CheckCircle2, RefreshCw, Search } from "lucide-react";
 import React from "react";
 import { getInsufficientFundsMessage } from "@/utils/errorMessages";
+import { formatFCFA, formatNumberFR } from "@/lib/format";
 
 export default function Caisse() {
   const permissions = useUserPermissions();
@@ -56,28 +57,53 @@ export default function Caisse() {
   const [diagnosticData, setDiagnosticData] = useState<any>(null);
   const [isDiagnosing, setIsDiagnosing] = useState(false);
   const [isRecalculating, setIsRecalculating] = useState(false);
+  const [stableSoldeCaisseVersement, setStableSoldeCaisseVersement] = useState(0);
+  const [stableSoldeCaisseEntreprise, setStableSoldeCaisseEntreprise] = useState(0);
 
   useEffect(() => {
     document.title = "Caisse - Solde et opérations";
   }, []);
 
   // Solde caisse versement (pour les versements agents)
-  const { data: soldeCaisseVersement = 0 } = useQuery({
+  const { data: soldeCaisseVersementRaw } = useQuery({
     queryKey: ["cash_balance"],
     queryFn: async () => {
       const data = await apiClient.rpc("get_current_cash_balance");
-      return Number(data || 0);
+      const value = Number(data);
+      if (!Number.isFinite(value)) {
+        throw new Error("Solde caisse versement invalide");
+      }
+      return value;
     },
   });
 
   // Solde de caisse entreprise (revenus - dépenses)
-  const { data: soldeCaisseEntreprise = 0 } = useQuery({
+  const { data: soldeCaisseEntrepriseRaw } = useQuery({
     queryKey: ["solde_caisse_entreprise"],
     queryFn: async () => {
       const data = await apiClient.rpc("get_solde_caisse_entreprise");
-      return Number(data || 0);
+      const value = Number(data);
+      if (!Number.isFinite(value)) {
+        throw new Error("Solde caisse entreprise invalide");
+      }
+      return value;
     },
   });
+
+  useEffect(() => {
+    if (Number.isFinite(soldeCaisseVersementRaw)) {
+      setStableSoldeCaisseVersement(Number(soldeCaisseVersementRaw));
+    }
+  }, [soldeCaisseVersementRaw]);
+
+  useEffect(() => {
+    if (Number.isFinite(soldeCaisseEntrepriseRaw)) {
+      setStableSoldeCaisseEntreprise(Number(soldeCaisseEntrepriseRaw));
+    }
+  }, [soldeCaisseEntrepriseRaw]);
+
+  const soldeCaisseVersement = stableSoldeCaisseVersement;
+  const soldeCaisseEntreprise = stableSoldeCaisseEntreprise;
 
   const { data: agents = [] } = useQuery({
     queryKey: ["agents_recouvrement"],
@@ -371,7 +397,7 @@ export default function Caisse() {
           'Heure': t.heure_transaction?.toString().slice(0,5) || '',
           'Type': t.type_transaction === 'entree' ? 'Entrée' : 'Sortie',
           'Opération': t.type_operation,
-          'Montant (FCFA)': Number(t.montant).toLocaleString(),
+          'Montant (FCFA)': formatNumberFR(t.montant),
           'Bénéficiaire': t.beneficiaire || '',
           'Description': t.description || '',
           'Agent': t.agent_nom || ''
@@ -381,8 +407,8 @@ export default function Caisse() {
         if (journalTab === "versement") {
           return {
             ...baseData,
-            'Solde avant': Number(t.solde_avant).toLocaleString(),
-            'Solde après': Number(t.solde_apres).toLocaleString(),
+            'Solde avant': formatNumberFR(t.solde_avant),
+            'Solde après': formatNumberFR(t.solde_apres),
           };
         }
         
@@ -544,7 +570,7 @@ export default function Caisse() {
               </Button>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-blue-600">{soldeCaisseVersement.toLocaleString()} FCFA</div>
+              <div className="text-3xl font-bold text-blue-600">{formatFCFA(soldeCaisseVersement)}</div>
               <p className="text-sm text-muted-foreground">Versements agents - paiements effectués</p>
             </CardContent>
           </Card>
@@ -556,7 +582,7 @@ export default function Caisse() {
                 <CardTitle>Solde de caisse entreprise</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-green-600">{soldeCaisseEntreprise.toLocaleString()} FCFA</div>
+                <div className="text-2xl font-bold text-green-600">{formatFCFA(soldeCaisseEntreprise)}</div>
                 <p className="text-sm text-muted-foreground">Revenus totaux - dépenses entreprise</p>
               </CardContent>
             </Card>
@@ -888,7 +914,7 @@ export default function Caisse() {
                                 )}
                               </TableCell>
                               <TableCell className={t.type_transaction === "entree" ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
-                                {t.type_transaction === "entree" ? "+" : "-"}{Number(t.montant).toLocaleString()} FCFA
+                                {t.type_transaction === "entree" ? "+" : "-"}{formatFCFA(t.montant)}
                               </TableCell>
                               <TableCell>
                                 <Button 
@@ -900,8 +926,8 @@ export default function Caisse() {
                                   📄 Voir reçu
                                 </Button>
                               </TableCell>
-                              <TableCell className="text-sm">{Number(t.solde_avant).toLocaleString()}</TableCell>
-                              <TableCell className="text-sm font-medium">{Number(t.solde_apres).toLocaleString()}</TableCell>
+                              <TableCell className="text-sm">{formatNumberFR(t.solde_avant)}</TableCell>
+                              <TableCell className="text-sm font-medium">{formatNumberFR(t.solde_apres)}</TableCell>
                             </TableRow>
                           );
                         })
@@ -1037,7 +1063,7 @@ export default function Caisse() {
                                 )}
                               </TableCell>
                               <TableCell className={isRevenu ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
-                                {isRevenu ? "+" : "-"}{Number(t.montant).toLocaleString()} FCFA
+                                {isRevenu ? "+" : "-"}{formatFCFA(t.montant)}
                               </TableCell>
                               <TableCell className="text-sm">{t.description || "-"}</TableCell>
                               <TableCell>
@@ -1124,44 +1150,44 @@ export default function Caisse() {
               <>
                 <div className="flex justify-between text-sm">
                   <span>Solde d'ouverture</span>
-                  <span className="font-medium">{totals.ouverture.toLocaleString()} FCFA</span>
+                  <span className="font-medium">{formatFCFA(totals.ouverture)}</span>
                 </div>
                 <Separator />
                 <div className="flex justify-between text-sm">
                   <span className="text-green-600">Total entrées</span>
-                  <span className="font-medium text-green-600">+{totals.entrees.toLocaleString()} FCFA</span>
+                  <span className="font-medium text-green-600">+{formatFCFA(totals.entrees)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-red-600">Total sorties</span>
-                  <span className="font-medium text-red-600">-{totals.sorties.toLocaleString()} FCFA</span>
+                  <span className="font-medium text-red-600">-{formatFCFA(totals.sorties)}</span>
                 </div>
                 <Separator />
                 <div className="flex justify-between text-sm">
                   <span>Mouvement net</span>
                   <span className={`font-medium ${totals.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {totals.net >= 0 ? '+' : ''}{totals.net.toLocaleString()} FCFA
+                    {totals.net >= 0 ? '+' : ''}{formatFCFA(totals.net)}
                   </span>
                 </div>
                 <div className="flex justify-between text-sm border-t pt-2">
                   <span className="font-semibold">Solde de clôture</span>
-                  <span className="font-bold text-lg">{totals.cloture.toLocaleString()} FCFA</span>
+                  <span className="font-bold text-lg">{formatFCFA(totals.cloture)}</span>
                 </div>
               </>
             ) : (
               <>
                 <div className="flex justify-between text-sm">
                   <span className="text-green-600">Total revenus</span>
-                  <span className="font-medium text-green-600">+{totals.entrees.toLocaleString()} FCFA</span>
+                  <span className="font-medium text-green-600">+{formatFCFA(totals.entrees)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-red-600">Total dépenses</span>
-                  <span className="font-medium text-red-600">-{totals.sorties.toLocaleString()} FCFA</span>
+                  <span className="font-medium text-red-600">-{formatFCFA(totals.sorties)}</span>
                 </div>
                 <Separator />
                 <div className="flex justify-between text-sm border-t pt-2">
                   <span className="font-semibold">Résultat net</span>
                   <span className={`font-bold text-lg ${totals.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {totals.net >= 0 ? '+' : ''}{totals.net.toLocaleString()} FCFA
+                    {totals.net >= 0 ? '+' : ''}{formatFCFA(totals.net)}
                   </span>
                 </div>
               </>
@@ -1203,13 +1229,13 @@ export default function Caisse() {
                     <div>
                       <p className="text-sm text-muted-foreground">Solde actuel</p>
                       <p className="text-2xl font-bold text-blue-600">
-                        {diagnosticData.solde_actuel.toLocaleString()} FCFA
+                        {formatFCFA(diagnosticData.solde_actuel)}
                       </p>
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Solde théorique</p>
                       <p className="text-2xl font-bold text-green-600">
-                        {diagnosticData.solde_theorique.toLocaleString()} FCFA
+                          {formatFCFA(diagnosticData.solde_theorique)}
                       </p>
                     </div>
                   </div>
@@ -1217,13 +1243,13 @@ export default function Caisse() {
                     <div>
                       <p className="text-sm text-muted-foreground">Total entrées</p>
                       <p className="text-xl font-semibold">
-                        {diagnosticData.total_entrees.toLocaleString()} FCFA
+                          {formatFCFA(diagnosticData.total_entrees)}
                       </p>
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Total sorties</p>
                       <p className="text-xl font-semibold text-red-600">
-                        {diagnosticData.total_sorties.toLocaleString()} FCFA
+                          {formatFCFA(diagnosticData.total_sorties)}
                       </p>
                     </div>
                   </div>
@@ -1234,7 +1260,7 @@ export default function Caisse() {
                         <div className="flex-1">
                           <p className="font-semibold text-orange-600">Incohérence détectée</p>
                           <p className="text-sm text-muted-foreground">
-                            Différence: {diagnosticData.difference.toLocaleString()} FCFA
+                            Différence: {formatFCFA(diagnosticData.difference)}
                           </p>
                           <p className="text-sm text-muted-foreground mt-1">
                             {diagnosticData.message}
@@ -1269,10 +1295,10 @@ export default function Caisse() {
                           </div>
                           <div className="text-right">
                             <p className="font-bold text-green-600">
-                              +{v.montant.toLocaleString()} FCFA
+                              +{formatFCFA(v.montant)}
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              Solde après: {v.solde_apres.toLocaleString()} FCFA
+                              Solde après: {formatFCFA(v.solde_apres)}
                             </p>
                           </div>
                         </div>
@@ -1300,10 +1326,10 @@ export default function Caisse() {
                           </div>
                           <div className="text-right">
                             <p className="font-bold text-red-600">
-                              -{s.montant.toLocaleString()} FCFA
+                              -{formatFCFA(s.montant)}
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              Solde après: {s.solde_apres.toLocaleString()} FCFA
+                              Solde après: {formatFCFA(s.solde_apres)}
                             </p>
                           </div>
                         </div>
@@ -1329,7 +1355,7 @@ export default function Caisse() {
                     const result = await apiClient.rpc("recalculate_caisse_versement", {});
                     toast({
                       title: "Recalcul effectué",
-                      description: `Ancien solde: ${result.ancien_solde.toLocaleString()} FCFA → Nouveau solde: ${result.nouveau_solde.toLocaleString()} FCFA (${result.transactions_processed} transactions traitées)`,
+                      description: `Ancien solde: ${formatFCFA(result.ancien_solde)} → Nouveau solde: ${formatFCFA(result.nouveau_solde)} (${result.transactions_processed} transactions traitées)`,
                     });
                     queryClient.invalidateQueries({ queryKey: ["cash_balance"] });
                     queryClient.invalidateQueries({ queryKey: ["cash_transactions"] });

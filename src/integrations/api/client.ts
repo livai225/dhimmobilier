@@ -37,6 +37,7 @@ const defaultBaseUrl =
 export class ApiClient {
   baseUrl: string;
   authCookieName: string;
+  private inFlightRequests = new Map<string, Promise<unknown>>();
 
   constructor(options: ApiClientOptions = {}) {
     this.baseUrl = options.baseUrl || defaultBaseUrl;
@@ -77,6 +78,18 @@ export class ApiClient {
     return undefined as T;
   }
 
+  private dedupeInFlight<T>(key: string, factory: () => Promise<T>): Promise<T> {
+    const existing = this.inFlightRequests.get(key) as Promise<T> | undefined;
+    if (existing) return existing;
+
+    const promise = factory().finally(() => {
+      this.inFlightRequests.delete(key);
+    });
+
+    this.inFlightRequests.set(key, promise as Promise<unknown>);
+    return promise;
+  }
+
   // ============== AUTH ==============
   login(data: { username: string; password: string }) {
     return this.request<{ user: any }>("/auth/login", {
@@ -86,7 +99,8 @@ export class ApiClient {
   }
 
   currentUser() {
-    return this.request<{ user: any }>("/auth/me");
+    const key = "GET:/auth/me";
+    return this.dedupeInFlight(key, () => this.request<{ user: any }>("/auth/me"));
   }
 
   logout() {
@@ -101,10 +115,14 @@ export class ApiClient {
 
   // ============== GENERIC DB OPERATIONS ==============
   select<T = any>(options: DbSelectOptions): Promise<T> {
-    return this.request<T>("/db/select", {
-      method: "POST",
-      body: JSON.stringify(options),
-    });
+    const body = JSON.stringify(options);
+    const key = `POST:/db/select:${body}`;
+    return this.dedupeInFlight(key, () =>
+      this.request<T>("/db/select", {
+        method: "POST",
+        body,
+      }),
+    );
   }
 
   insert(options: DbInsertOptions): Promise<{ count: number }> {
@@ -270,6 +288,7 @@ export class ApiClient {
     month: number;
     year: number;
     operation_type: "loyer" | "droit_terre";
+    month_base?: "zero_indexed" | "one_indexed";
   }) {
     return this.rpc<{
       total_refunded: number;
@@ -280,6 +299,38 @@ export class ApiClient {
       properties_deleted: number;
       clients_deleted: number;
     }>("cancel_recouvrement_import", data);
+  }
+
+  previewCancelRecouvrementImport(data: {
+    agent_id: string;
+    month: number;
+    year: number;
+    operation_type: "loyer" | "droit_terre";
+    month_base?: "zero_indexed" | "one_indexed";
+  }) {
+    return this.rpc<{
+      total_refunded: number;
+      payments_to_delete: number;
+      receipts_to_delete: number;
+      cash_transactions_to_delete: number;
+      contracts_to_delete: number;
+      properties_to_delete: number;
+      clients_to_delete: number;
+    }>("preview_cancel_recouvrement_import", data);
+  }
+
+  checkRecouvrementImportConflict(data: {
+    agent_id: string;
+    month: number;
+    year: number;
+    operation_type: "loyer" | "droit_terre" | "souscription";
+    month_base?: "zero_indexed" | "one_indexed";
+  }) {
+    return this.rpc<{
+      has_conflict: boolean;
+      existing_count: number;
+      message: string;
+    }>("check_recouvrement_import_conflict", data);
   }
 
   // ============== UTILITIES ==============

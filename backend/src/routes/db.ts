@@ -43,10 +43,47 @@ interface DbPayload {
   action: Action;
   filters?: any[];
   orderBy?: { column: string; ascending?: boolean };
-  columns?: string; // ignored for now
+  columns?: string | string[];
   values?: any;
   single?: boolean;
   limit?: number;
+}
+
+function normalizeLegacyFilters(table: string, filters: any[] = []): any[] {
+  if (!Array.isArray(filters) || filters.length === 0) return [];
+
+  return filters
+    .map((f) => {
+      // Compat legacy frontend: "periode_paiement" n'existe plus dans MySQL
+      if (table === "paiements_locations" && f?.column === "periode_paiement") {
+        const raw = typeof f.value === "string" ? f.value : "";
+        // "2025-12-01" -> "2025-12" pour matcher mois_concerne import
+        const normalizedMonth = raw.match(/^\d{4}-\d{2}-\d{2}$/) ? raw.slice(0, 7) : raw;
+        return {
+          op: "in",
+          column: "mois_concerne",
+          values: Array.from(new Set([raw, normalizedMonth].filter(Boolean))),
+        };
+      }
+      return f;
+    })
+    .filter((f) => f && f.column);
+}
+
+function buildSelect(columns?: string | string[]): Record<string, true> | undefined {
+  if (!columns) return undefined;
+
+  const rawColumns = Array.isArray(columns) ? columns : columns.split(",");
+  const normalized = rawColumns
+    .map((column) => String(column).trim())
+    .filter((column) => column.length > 0 && /^[a-zA-Z0-9_]+$/.test(column));
+
+  if (normalized.length === 0) return undefined;
+
+  return normalized.reduce<Record<string, true>>((acc, column) => {
+    acc[column] = true;
+    return acc;
+  }, {});
 }
 
 export async function dbRoutes(app: FastifyInstance) {
@@ -66,14 +103,16 @@ export async function dbRoutes(app: FastifyInstance) {
         return { error: `Écriture directe interdite sur ${table}. Utilisez les RPC sécurisés.` };
       }
 
-      const where = buildWhere(payload.filters);
+      const where = buildWhere(normalizeLegacyFilters(table, payload.filters));
       const orderBy = buildOrder(payload.orderBy);
 
       if (action === "select") {
+        const select = buildSelect(payload.columns);
         const data = await model.findMany({
           where,
           orderBy,
-          take: payload.limit,
+          select,
+          take: payload.limit || 500,
         });
         const result = payload.single ? data[0] ?? null : data;
         return sanitizeResult(table, result);

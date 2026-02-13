@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
@@ -9,13 +10,27 @@ import { apiClient } from '@/integrations/api/client';
 import { toast } from '@/hooks/use-toast';
 import { AlertTriangle, Trash2 } from 'lucide-react';
 
+interface CancelImportPreview {
+  total_refunded: number;
+  payments_to_delete: number;
+  receipts_to_delete: number;
+  cash_transactions_to_delete: number;
+  contracts_to_delete: number;
+  properties_to_delete: number;
+  clients_to_delete: number;
+}
+
 export function CancelRecouvrementImportDialog(): React.ReactElement {
+  const queryClient = useQueryClient();
   const [agents, setAgents] = useState<any[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<string>('');
   const [selectedMonth, setSelectedMonth] = useState<string>('');
   const [selectedYear, setSelectedYear] = useState<string>('');
   const [operationType, setOperationType] = useState<'loyer' | 'droit_terre'>('loyer');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [preview, setPreview] = useState<CancelImportPreview | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadAgents = async () => {
@@ -40,7 +55,50 @@ export function CancelRecouvrementImportDialog(): React.ReactElement {
     setSelectedMonth('');
     setSelectedYear('');
     setOperationType('loyer');
+    setPreview(null);
+    setPreviewError(null);
   };
+
+  useEffect(() => {
+    const hasRequiredFields = selectedAgent && selectedMonth !== '' && selectedYear !== '';
+    if (!hasRequiredFields) {
+      setPreview(null);
+      setPreviewError(null);
+      return;
+    }
+
+    let isCancelled = false;
+    const timer = setTimeout(async () => {
+      setIsPreviewLoading(true);
+      setPreviewError(null);
+      try {
+        const data = await apiClient.previewCancelRecouvrementImport({
+          agent_id: selectedAgent,
+          month: parseInt(selectedMonth, 10),
+          year: parseInt(selectedYear, 10),
+          operation_type: operationType,
+          month_base: "zero_indexed",
+        });
+        if (!isCancelled) {
+          setPreview(data);
+        }
+      } catch (error) {
+        if (!isCancelled) {
+          setPreview(null);
+          setPreviewError(error instanceof Error ? error.message : "Impossible d'analyser les données à supprimer");
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsPreviewLoading(false);
+        }
+      }
+    }, 350);
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(timer);
+    };
+  }, [selectedAgent, selectedMonth, selectedYear, operationType]);
 
   const handleCancelImport = async () => {
     if (!selectedAgent || selectedMonth === '' || selectedYear === '') {
@@ -59,12 +117,23 @@ export function CancelRecouvrementImportDialog(): React.ReactElement {
         month: parseInt(selectedMonth, 10),
         year: parseInt(selectedYear, 10),
         operation_type: operationType,
+        month_base: "zero_indexed",
       });
 
       toast({
         title: 'Annulation terminée',
         description: `${result.payments_deleted} paiements, ${result.receipts_deleted} reçus, ${result.contracts_deleted} contrats supprimés. Remboursé: ${result.total_refunded.toLocaleString()} FCFA.`,
       });
+
+      queryClient.invalidateQueries({ queryKey: ['agents-recovery'] });
+      queryClient.invalidateQueries({ queryKey: ['paiements_locations'] });
+      queryClient.invalidateQueries({ queryKey: ['paiements_droit_terre'] });
+      queryClient.invalidateQueries({ queryKey: ['locations'] });
+      queryClient.invalidateQueries({ queryKey: ['souscriptions'] });
+      queryClient.invalidateQueries({ queryKey: ['proprietes'] });
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
+      queryClient.invalidateQueries({ queryKey: ['cash_transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['recus'] });
 
       resetForm();
     } catch (error) {
@@ -80,6 +149,22 @@ export function CancelRecouvrementImportDialog(): React.ReactElement {
 
   const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
   const monthLabels = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+  const selectedAgentData = agents.find((agent) => agent.id === selectedAgent);
+  const selectedAgentName = selectedAgentData
+    ? `${selectedAgentData.prenom || ''} ${selectedAgentData.nom || ''}`.trim()
+    : 'Non sélectionné';
+  const selectedMonthLabel = selectedMonth !== '' ? monthLabels[parseInt(selectedMonth, 10)] : 'Non sélectionné';
+  const selectedOperationLabel = operationType === 'loyer' ? 'Loyer' : 'Droit de terre';
+  const totalItemsToDelete = preview
+    ? (
+        preview.payments_to_delete +
+        preview.receipts_to_delete +
+        preview.cash_transactions_to_delete +
+        preview.contracts_to_delete +
+        preview.properties_to_delete +
+        preview.clients_to_delete
+      )
+    : 0;
 
   return (
     <Dialog>
@@ -168,9 +253,63 @@ export function CancelRecouvrementImportDialog(): React.ReactElement {
             </AlertDescription>
           </Alert>
 
+          {(isPreviewLoading || preview || previewError) && (
+            <Alert className="border-blue-300 bg-blue-50">
+              <AlertDescription className="text-blue-900 space-y-1">
+                {isPreviewLoading && <div>Analyse en cours des éléments à supprimer...</div>}
+                {previewError && <div>{previewError}</div>}
+                {preview && (
+                  <>
+                    <div className="font-semibold">Point avant suppression</div>
+                    <div className="text-sm rounded-md border border-blue-200 bg-blue-100/40 px-3 py-2">
+                      <span className="font-medium">Agent:</span> {selectedAgentName} |{" "}
+                      <span className="font-medium">Mois:</span> {selectedMonthLabel} {selectedYear || ''} |{" "}
+                      <span className="font-medium">Type:</span> {selectedOperationLabel}
+                    </div>
+                    <div className="rounded-md border border-blue-200 bg-white overflow-hidden">
+                      <div className="grid grid-cols-2 text-sm">
+                        <div className="px-3 py-2 border-b border-r border-blue-100 font-medium">Paiements</div>
+                        <div className="px-3 py-2 border-b text-right tabular-nums">{preview.payments_to_delete}</div>
+
+                        <div className="px-3 py-2 border-b border-r border-blue-100 font-medium">Reçus</div>
+                        <div className="px-3 py-2 border-b text-right tabular-nums">{preview.receipts_to_delete}</div>
+
+                        <div className="px-3 py-2 border-b border-r border-blue-100 font-medium">Écritures caisse</div>
+                        <div className="px-3 py-2 border-b text-right tabular-nums">{preview.cash_transactions_to_delete}</div>
+
+                        <div className="px-3 py-2 border-b border-r border-blue-100 font-medium">Contrats</div>
+                        <div className="px-3 py-2 border-b text-right tabular-nums">{preview.contracts_to_delete}</div>
+
+                        <div className="px-3 py-2 border-b border-r border-blue-100 font-medium">Propriétés</div>
+                        <div className="px-3 py-2 border-b text-right tabular-nums">{preview.properties_to_delete}</div>
+
+                        <div className="px-3 py-2 border-r border-blue-100 font-medium">Clients</div>
+                        <div className="px-3 py-2 text-right tabular-nums">{preview.clients_to_delete}</div>
+                      </div>
+                    </div>
+                    <div className="text-sm font-medium">
+                      Total éléments supprimés:{" "}
+                      <span className="tabular-nums">
+                        {totalItemsToDelete.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="text-sm font-semibold">
+                      Montant remboursé en caisse:{" "}
+                      <span className="tabular-nums">{preview.total_refunded.toLocaleString()} FCFA</span>
+                    </div>
+                  </>
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
+
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="destructive" disabled={isSubmitting} className="w-full">
+              <Button
+                variant="destructive"
+                disabled={isSubmitting || isPreviewLoading || !preview || totalItemsToDelete === 0}
+                className="w-full"
+              >
                 {isSubmitting ? 'Annulation en cours...' : "Confirmer l'annulation"}
               </Button>
             </AlertDialogTrigger>
@@ -179,6 +318,7 @@ export function CancelRecouvrementImportDialog(): React.ReactElement {
                 <AlertDialogTitle>Confirmer l'annulation</AlertDialogTitle>
                 <AlertDialogDescription>
                   Voulez-vous annuler cet import pour l'agent sélectionné et la période choisie ?
+                  {preview ? ` ${totalItemsToDelete} élément(s) seront supprimés.` : ''}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
