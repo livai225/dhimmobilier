@@ -11,7 +11,7 @@ export function useCompanyLogo() {
           limit: 1
         });
 
-        return data?.[0]?.logo_url || null;
+        return data?.[0]?.logo_base64 || null;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         if (!message.includes("Unknown table company_settings")) {

@@ -45,16 +45,25 @@ const generateSingleReceipt = (
   doc.text(`N° ${receipt.numero}`, 7, yOffset + 28);
   doc.text(`${new Date(receipt.date_generation).toLocaleDateString("fr-FR")}`, 120, yOffset + 28);
   
-  // Client info (compact)
+  // Bénéficiaire info (compact)
+  doc.setFontSize(7);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor('#6b7280');
+  doc.text("Bénéficiaire:", 7, yOffset + 34);
+  doc.setTextColor('#000000');
   doc.setFontSize(10);
   doc.setFont("helvetica", "bold");
-  const clientName = `${receipt.client?.nom || ""} ${receipt.client?.prenom || ""}`.trim();
-  doc.text(clientName, 7, yOffset + 38);
-  
-  if (receipt.client?.telephone_principal) {
+  const clientName = receipt.type_operation === "versement_agent"
+    ? ((receipt as any).meta?.beneficiaire || `${receipt.client?.nom || ""} ${receipt.client?.prenom || ""}`.trim() || "Agent")
+    : receipt.type_operation === "paiement_facture"
+    ? ((receipt as any).meta?.fournisseur_nom || "Fournisseur")
+    : `${receipt.client?.nom || ""} ${receipt.client?.prenom || ""}`.trim();
+  doc.text(clientName, 7, yOffset + 40);
+
+  if (receipt.client?.telephone_principal && receipt.type_operation !== "versement_agent" && receipt.type_operation !== "paiement_facture") {
     doc.setFontSize(8);
     doc.setFont("helvetica", "normal");
-    doc.text(receipt.client.telephone_principal, 7, yOffset + 45);
+    doc.text(receipt.client.telephone_principal, 7, yOffset + 46);
   }
   
   // Property info (if applicable)
@@ -182,6 +191,10 @@ export const generateReceiptPDF = (receipt: ReceiptWithDetails, logoDataUrl?: st
 
 // Load image as DataURL for jsPDF
 const loadImageAsDataURL = async (url: string): Promise<string> => {
+  // Si c'est déjà un data URL (base64), le retourner directement
+  if (url.startsWith('data:')) {
+    return url;
+  }
   try {
     const res = await fetch(url);
     if (!res.ok) {

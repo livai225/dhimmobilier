@@ -75,7 +75,8 @@ export default function ModernDashboard() {
         echeances,
         soldeCaisseEntreprise,
         soldeCaisseVersement,
-        depensesEntreprise
+        depensesEntreprise,
+        allCashTransactions
       ] = await Promise.all([
         apiClient.select({ table: 'clients' }),
         apiClient.select({ table: 'proprietes' }),
@@ -89,7 +90,8 @@ export default function ModernDashboard() {
         apiClient.select({ table: 'echeances_droit_terre' }),
         apiClient.rpc('get_solde_caisse_entreprise'),
         apiClient.rpc('get_current_cash_balance'),
-        apiClient.select({ table: 'cash_transactions', filters: [{ op: 'eq', column: 'type_operation', value: 'depense_entreprise' }] })
+        apiClient.select({ table: 'cash_transactions', filters: [{ op: 'eq', column: 'type_operation', value: 'depense_entreprise' }] }),
+        apiClient.select({ table: 'cash_transactions' })
       ]);
 
       const clientsData = Array.isArray(clients) ? clients : [];
@@ -102,6 +104,7 @@ export default function ModernDashboard() {
       const paiementsSouscriptionsData = Array.isArray(paiementsSouscriptions) ? paiementsSouscriptions : [];
       const paiementsDroitTerreData = Array.isArray(paiementsDroitTerre) ? paiementsDroitTerre : [];
       const echeancesData = Array.isArray(echeances) ? echeances : [];
+      const allCashTransactionsData = Array.isArray(allCashTransactions) ? allCashTransactions : [];
       const soldeCaisseEntrepriseValue = Number.isFinite(Number(soldeCaisseEntreprise))
         ? Number(soldeCaisseEntreprise)
         : 0;
@@ -187,7 +190,9 @@ export default function ModernDashboard() {
       const tauxOccupation = proprietesData.length ?
         Math.round((proprietesOccupees / proprietesData.length) * 100) : 0;
 
-      // Weekly performance data (last 7 days, real values only)
+      // Weekly performance data (last 7 days) based on cash_transactions
+      // cash_transactions.date_transaction reflects the actual operation date,
+      // unlike payment tables where date_paiement is the concerned period.
       const weeklyData = [];
       const toDate = (value: any) => {
         const d = new Date(value);
@@ -206,14 +211,15 @@ export default function ModernDashboard() {
         const end = new Date(date);
         end.setHours(23, 59, 59, 999);
 
-        const dayPaiements = [
-          ...paiementsLocationsData.filter((p: any) => inDayRange(p.date_paiement, start, end)),
-          ...paiementsSouscriptionsData.filter((p: any) => inDayRange(p.date_paiement, start, end)),
-          ...paiementsDroitTerreData.filter((p: any) => inDayRange(p.date_paiement, start, end)),
-        ];
+        const dayTransactions = allCashTransactionsData.filter(
+          (t: any) => inDayRange(t.date_transaction, start, end)
+        );
 
-        const revenus = dayPaiements.reduce((sum: number, p: any) => sum + (p.montant || 0), 0);
-        const transactions = dayPaiements.length;
+        const revenus = dayTransactions
+          .filter((t: any) => t.type_transaction === 'entree' && t.type_operation !== 'annulation_import')
+          .reduce((sum: number, t: any) => sum + (t.montant || 0), 0);
+        const transactions = dayTransactions
+          .filter((t: any) => t.type_operation !== 'annulation_import').length;
 
         weeklyData.push({
           day: date.toLocaleDateString('fr-FR', { weekday: 'short' }),

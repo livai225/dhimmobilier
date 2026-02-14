@@ -99,6 +99,7 @@ model proprietes {
   factures       factures_fournisseurs[]
 
   @@index([type_id])
+  @@index([agent_id])
 }
 
 // ============== LOCATIONS ==============
@@ -471,4 +472,14 @@ model ventes {
   article articles @relation(fields: [article_id], references: [id])
 
   @@index([article_id])
+}
+
+// ============== PARAMÈTRES ENTREPRISE ==============
+
+model company_settings {
+  id          String   @id @default(uuid())
+  logo_base64 String?  @db.LongText
+  nom         String?
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
 }

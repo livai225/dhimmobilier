@@ -112,7 +112,7 @@ export async function dbRoutes(app: FastifyInstance) {
           where,
           orderBy,
           select,
-          take: payload.limit || 500,
+          take: payload.limit || 10000,
         });
         const result = payload.single ? data[0] ?? null : data;
         return sanitizeResult(table, result);

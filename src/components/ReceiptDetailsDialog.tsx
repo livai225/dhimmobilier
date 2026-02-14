@@ -103,19 +103,20 @@ export function ReceiptDetailsDialog({
             </p>
           </div>
 
-          {/* Client Info, Agent Info, or Supplier Info */}
+          {/* Bénéficiaire + Client/Agent/Supplier Info */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-2">
-                {receipt.type_operation === "versement_agent" ? "Informations Agent" : 
-                 receipt.type_operation === "paiement_facture" ? "Informations Fournisseur" : 
+                {receipt.type_operation === "versement_agent" ? "Informations Agent" :
+                 receipt.type_operation === "paiement_facture" ? "Informations Fournisseur" :
                  "Informations Client"}
               </h3>
               <div className="space-y-1">
                 {receipt.type_operation === "versement_agent" && agentDetails?.agents_recouvrement ? (
                   <>
+                    <p className="text-xs text-muted-foreground uppercase">Bénéficiaire</p>
                     <p className="font-medium">
-                      {agentDetails.agents_recouvrement.prenom} {agentDetails.agents_recouvrement.nom}
+                      {(receipt as any).meta?.beneficiaire || `${agentDetails.agents_recouvrement.prenom} ${agentDetails.agents_recouvrement.nom}`}
                     </p>
                     <p className="text-sm text-muted-foreground">
                       Code: {agentDetails.agents_recouvrement.code_agent}
@@ -129,6 +130,7 @@ export function ReceiptDetailsDialog({
                   </>
                 ) : receipt.type_operation === "paiement_facture" ? (
                   <>
+                    <p className="text-xs text-muted-foreground uppercase">Bénéficiaire</p>
                     <p className="font-medium">{(receipt as any).meta?.fournisseur_nom || 'N/A'}</p>
                     {(receipt as any).meta?.fournisseur_contact && (
                       <p className="text-sm text-muted-foreground">Contact: {(receipt as any).meta.fournisseur_contact}</p>
@@ -145,6 +147,7 @@ export function ReceiptDetailsDialog({
                   </>
                 ) : (
                   <>
+                    <p className="text-xs text-muted-foreground uppercase">Bénéficiaire</p>
                     <p className="font-medium">{clientName}</p>
                     {receipt.client?.email && (
                       <p className="text-sm text-muted-foreground">{receipt.client.email}</p>

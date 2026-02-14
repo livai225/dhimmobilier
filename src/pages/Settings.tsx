@@ -65,15 +65,45 @@ export default function Settings() {
     }
   });
 
-  // Upload logo mutation (storage non supporté pour l'instant)
+  // Upload logo mutation - stocke en base64 dans company_settings
   const uploadLogoMutation = useMutation({
     mutationFn: async (file: File) => {
-      // Pour l'instant, on ne supporte pas l'upload de fichiers
-      // TODO: Ajouter une route /upload pour le logo
-      throw new Error("L'upload de logo n'est pas encore supporté avec l'API MySQL");
+      // Vérifier la taille (max 500 Ko)
+      if (file.size > 500 * 1024) {
+        throw new Error("Le fichier est trop volumineux (max 500 Ko)");
+      }
+
+      // Convertir en base64
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error("Erreur de lecture du fichier"));
+        reader.readAsDataURL(file);
+      });
+
+      // Vérifier si un enregistrement existe déjà
+      let existing: any = null;
+      try {
+        const data = await apiClient.select({ table: 'company_settings', limit: 1 });
+        existing = data?.[0] || null;
+      } catch { /* table vide */ }
+
+      if (existing) {
+        await apiClient.update({
+          table: 'company_settings',
+          values: { logo_base64: base64 },
+          filters: [{ op: 'eq', column: 'id', value: existing.id }]
+        });
+      } else {
+        await apiClient.insert({
+          table: 'company_settings',
+          values: { logo_base64: base64 }
+        });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['company_settings'] });
+      queryClient.invalidateQueries({ queryKey: ['company-logo'] });
       setLogoFile(null);
       setLogoPreview(null);
       toast({
@@ -353,12 +383,12 @@ export default function Settings() {
                 Le logo apparaîtra sur tous les reçus PDF générés
               </p>
               
-              {companySettings?.logo_url && !logoPreview && (
+              {companySettings?.logo_base64 && !logoPreview && (
                 <div className="mb-3 p-3 border rounded-lg bg-muted/50">
                   <p className="text-sm font-medium mb-2">Logo actuel :</p>
-                  <img 
-                    src={companySettings.logo_url} 
-                    alt="Logo entreprise" 
+                  <img
+                    src={companySettings.logo_base64}
+                    alt="Logo entreprise"
                     className="h-20 object-contain"
                   />
                 </div>

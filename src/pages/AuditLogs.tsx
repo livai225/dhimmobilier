@@ -26,7 +26,7 @@ interface AuditLog {
   description?: string;
   old_values?: any;
   new_values?: any;
-  timestamp: string;
+  created_at: string;
   users?: { nom: string; prenom: string };
 }
 
@@ -79,13 +79,13 @@ export default function AuditLogs() {
         const days = parseInt(dateRange);
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - days);
-        filters.push({ op: 'gte', column: 'timestamp', value: startDate.toISOString() });
+        filters.push({ op: 'gte', column: 'created_at', value: startDate.toISOString() });
       }
 
       const data = await apiClient.select({
         table: 'audit_logs',
         filters: filters.length > 0 ? filters : undefined,
-        orderBy: { column: 'timestamp', ascending: false },
+        orderBy: { column: 'created_at', ascending: false },
         limit: 1000
       });
 
@@ -151,7 +151,7 @@ export default function AuditLogs() {
     const csvContent = [
       ['Date/Heure', 'Utilisateur', 'Action', 'Table', 'Description'].join(','),
       ...filteredLogs.map(log => [
-        format(new Date(log.timestamp), 'yyyy-MM-dd HH:mm:ss'),
+        format(new Date(log.created_at), 'yyyy-MM-dd HH:mm:ss'),
         log.users ? `${log.users.prenom} ${log.users.nom}` : 'Système',
         log.action_type,
         log.table_name,
@@ -348,7 +348,7 @@ export default function AuditLogs() {
                   {filteredLogs.map((log) => (
                     <TableRow key={log.id}>
                       <TableCell className="font-mono text-sm">
-                        {format(new Date(log.timestamp), 'dd/MM/yyyy HH:mm:ss', { locale: fr })}
+                        {format(new Date(log.created_at), 'dd/MM/yyyy HH:mm:ss', { locale: fr })}
                       </TableCell>
                       <TableCell>
                         {log.users ? `${log.users.prenom} ${log.users.nom}` : 'Système'}

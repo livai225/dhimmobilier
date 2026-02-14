@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/integrations/api/client";
 
@@ -192,6 +192,7 @@ export function AgentRecoveryDashboard({ agentId, onBack, initialMonth }: Props)
   // Fetch agent performance over last 6 months
   const { data: performance = [] } = useQuery({
     queryKey: ['agent-performance', agentId],
+    staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       const results: AgentPerformance[] = [];
 
@@ -204,46 +205,45 @@ export function AgentRecoveryDashboard({ agentId, onBack, initialMonth }: Props)
         apiClient.select({ table: 'paiements_droit_terre' })
       ]);
 
-      const propertyIds = allProperties?.map((p: any) => p.id) || [];
+      const propMap = new Map((allProperties || []).map((p: any) => [p.id, p]));
+      const propertyIdSet = new Set(propMap.keys());
+
+      // Pre-filter once outside the loop
+      const agentLocations = allLocations.filter((l: any) => propertyIdSet.has(l.propriete_id));
+      const agentSouscriptions = allSouscriptions.filter((s: any) => propertyIdSet.has(s.propriete_id));
+      const locationIds = new Set(agentLocations.filter((l: any) => l.statut === 'active').map((l: any) => l.id));
+      const souscriptionIds = new Set(agentSouscriptions.filter((s: any) => s.statut === 'active').map((s: any) => s.id));
 
       for (let i = 0; i < 6; i++) {
         const targetDate = subMonths(new Date(), i);
-        const monthKey = format(targetDate, 'yyyy-MM');
         const startDate = format(startOfMonth(targetDate), 'yyyy-MM-dd');
         const endDate = format(new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0), 'yyyy-MM-dd');
 
         let du_loyers = 0;
         let du_droits_terre = 0;
 
-        // Filter locations and souscriptions for this agent's properties
-        const agentLocations = allLocations.filter((l: any) => propertyIds.includes(l.propriete_id));
-        const agentSouscriptions = allSouscriptions.filter((s: any) => propertyIds.includes(s.propriete_id));
-
-        // Calculate dues
+        // Calculate dues using Map lookup instead of .find()
         agentLocations.forEach((loc: any) => {
-          const prop = allProperties.find((p: any) => p.id === loc.propriete_id);
+          const prop = propMap.get(loc.propriete_id);
           du_loyers += loc.loyer_mensuel || prop?.loyer_mensuel || 0;
         });
 
         agentSouscriptions.forEach((sub: any) => {
           if (sub.phase_actuelle === 'droit_terre' && sub.statut === 'active') {
-            const prop = allProperties.find((p: any) => p.id === sub.propriete_id);
+            const prop = propMap.get(sub.propriete_id);
             du_droits_terre += sub.montant_droit_terre_mensuel || prop?.droit_terre || 0;
           }
         });
 
-        const locationIds = agentLocations.filter((l: any) => l.statut === 'active').map((l: any) => l.id);
-        const souscriptionIds = agentSouscriptions.filter((s: any) => s.statut === 'active').map((s: any) => s.id);
-
         // Filter payments for this month
         const paiementsLocations = allPaiementsLoc.filter((p: any) =>
-          locationIds.includes(p.location_id) &&
+          locationIds.has(p.location_id) &&
           p.date_paiement >= startDate &&
           p.date_paiement <= endDate
         );
 
         const paiementsDroitTerre = allPaiementsDT.filter((p: any) =>
-          souscriptionIds.includes(p.souscription_id) &&
+          souscriptionIds.has(p.souscription_id) &&
           p.date_paiement >= startDate &&
           p.date_paiement <= endDate
         );
@@ -274,6 +274,7 @@ export function AgentRecoveryDashboard({ agentId, onBack, initialMonth }: Props)
   // Fetch assigned properties with detailed status
   const { data: properties = [] } = useQuery({
     queryKey: ['agent-properties', agentId],
+    staleTime: 2 * 60 * 1000,
     queryFn: async () => {
       const [props, allLocations, allSouscriptions] = await Promise.all([
         apiClient.select({ table: 'proprietes', filters: [{ op: 'eq', column: 'agent_id', value: agentId }] }),
@@ -344,10 +345,11 @@ export function AgentRecoveryDashboard({ agentId, onBack, initialMonth }: Props)
         })
       ]);
 
-      const propertyIds = props.map((p: any) => p.id);
-
       const paiementsLocations = allPaiementsLoc || [];
       const paiementsDroitTerre = allPaiementsDT || [];
+
+      // Build client lookup Map for O(1) access instead of .find()
+      const clientMap = new Map((allClients || []).map((c: any) => [c.id, c]));
 
       // Grouper par client
       const clientsMap = new Map<string, ClientRecoveryStatus>();
@@ -358,7 +360,7 @@ export function AgentRecoveryDashboard({ agentId, onBack, initialMonth }: Props)
         propLocations.forEach((loc: any) => {
           if (loc.statut !== 'active') return;
 
-          const client = allClients.find((c: any) => c.id === loc.client_id);
+          const client = clientMap.get(loc.client_id);
           if (!client) return;
 
           const clientKey = client.id;
@@ -403,7 +405,7 @@ export function AgentRecoveryDashboard({ agentId, onBack, initialMonth }: Props)
         propSouscriptions.forEach((sub: any) => {
           if (sub.phase_actuelle !== 'droit_terre' || sub.statut !== 'active') return;
 
-          const client = allClients.find((c: any) => c.id === sub.client_id);
+          const client = clientMap.get(sub.client_id);
           if (!client) return;
 
           const clientKey = client.id;
@@ -466,56 +468,42 @@ export function AgentRecoveryDashboard({ agentId, onBack, initialMonth }: Props)
     return <div>Chargement...</div>;
   }
 
-  const filteredClients = clientsStatus.filter(client => {
-    const matchesSearch = 
+  const filteredClients = useMemo(() => clientsStatus.filter(client => {
+    const matchesSearch =
       client.client_nom.toLowerCase().includes(clientSearchTerm.toLowerCase()) ||
       client.client_prenom.toLowerCase().includes(clientSearchTerm.toLowerCase());
-    
+
     const matchesStatus = clientStatusFilter === 'all' || client.statut === clientStatusFilter;
-    
-    const matchesContract = 
-      clientContractFilter === 'all' || 
+
+    const matchesContract =
+      clientContractFilter === 'all' ||
       client.contract_types.includes(clientContractFilter);
-    
+
     return matchesSearch && matchesStatus && matchesContract;
-  });
+  }), [clientsStatus, clientSearchTerm, clientStatusFilter, clientContractFilter]);
 
-  // Debug: afficher les statistiques des clients
-  const clientsAvecLocations = clientsStatus.filter(c => c.contract_types.includes('location'));
-  const clientsAvecLocationsDettes = clientsStatus.filter(c => c.contract_types.includes('location') && c.montant_du_locations > c.montant_paye_locations);
-  const clientsAvecSouscriptions = clientsStatus.filter(c => c.contract_types.includes('souscription'));
-  const clientsAvecSouscriptionsDettes = clientsStatus.filter(c => c.contract_types.includes('souscription') && c.montant_du_droits_terre > c.montant_paye_droits_terre);
-  
-  console.log('Debug clientsStatus:', {
-    total: clientsStatus.length,
-    payes: clientsStatus.filter(c => c.statut === 'paye').length,
-    partiels: clientsStatus.filter(c => c.statut === 'partiel').length,
-    impayes: clientsStatus.filter(c => c.statut === 'impaye').length,
-    souscriptions: clientsAvecSouscriptions.length,
-    locations: clientsAvecLocations.length,
-    souscriptionsAvecDettes: clientsAvecSouscriptionsDettes.length,
-    locationsAvecDettes: clientsAvecLocationsDettes.length,
-    filteredClients: filteredClients.length,
-    clientStatusFilter,
-    clientContractFilter,
-    // Détails des clients avec locations
-    clientsAvecLocations: clientsAvecLocations.map(c => ({
-      nom: `${c.client_prenom} ${c.client_nom}`,
-      montantDu: c.montant_du_locations,
-      montantPaye: c.montant_paye_locations,
-      reste: c.montant_du_locations - c.montant_paye_locations
-    }))
-  });
+  const clientStats = useMemo(() => {
+    const payes = clientsStatus.filter(c => c.statut === 'paye').length;
+    return {
+      total: clientsStatus.length,
+      payes,
+      partiels: clientsStatus.filter(c => c.statut === 'partiel').length,
+      impayes: clientsStatus.filter(c => c.statut === 'impaye').length,
+      taux_paiement: clientsStatus.length > 0
+        ? (payes / clientsStatus.length) * 100
+        : 0,
+    };
+  }, [clientsStatus]);
 
-  const clientStats = {
-    total: clientsStatus.length,
-    payes: clientsStatus.filter(c => c.statut === 'paye').length,
-    partiels: clientsStatus.filter(c => c.statut === 'partiel').length,
-    impayes: clientsStatus.filter(c => c.statut === 'impaye').length,
-    taux_paiement: clientsStatus.length > 0 
-      ? (clientsStatus.filter(c => c.statut === 'paye').length / clientsStatus.length) * 100 
-      : 0,
-  };
+  const clientsWithLocationDebt = useMemo(() =>
+    clientsStatus.filter(c => c.contract_types.includes('location') && c.montant_du_locations > c.montant_paye_locations).length,
+    [clientsStatus]
+  );
+
+  const clientsWithDroitTerreDebt = useMemo(() =>
+    clientsStatus.filter(c => c.contract_types.includes('souscription') && c.montant_du_droits_terre > c.montant_paye_droits_terre).length,
+    [clientsStatus]
+  );
 
   const currentMonthData = performance[performance.length - 1] || {
     du_loyers: 0,
@@ -992,28 +980,28 @@ export function AgentRecoveryDashboard({ agentId, onBack, initialMonth }: Props)
                         variant="outline"
                         size="sm"
                         onClick={() => handleGroupedPayment('location')}
-                        disabled={clientsStatus.filter(c => c.contract_types.includes('location') && c.montant_du_locations > c.montant_paye_locations).length === 0}
+                        disabled={clientsWithLocationDebt === 0}
                         className="flex items-center gap-2"
-                        title={`Clients avec dettes de location: ${clientsStatus.filter(c => c.contract_types.includes('location') && c.montant_du_locations > c.montant_paye_locations).length}`}
+                        title={`Clients avec dettes de location: ${clientsWithLocationDebt}`}
                       >
                         <CreditCard className="h-4 w-4" />
                         Paiement Locations
                         <span className="text-xs ml-1">
-                          ({clientsStatus.filter(c => c.contract_types.includes('location') && c.montant_du_locations > c.montant_paye_locations).length})
+                          ({clientsWithLocationDebt})
                         </span>
                       </Button>
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => handleGroupedPayment('souscription')}
-                        disabled={clientsStatus.filter(c => c.contract_types.includes('souscription') && c.montant_du_droits_terre > c.montant_paye_droits_terre).length === 0}
+                        disabled={clientsWithDroitTerreDebt === 0}
                         className="flex items-center gap-2"
-                        title={`Clients avec dettes de droits de terre: ${clientsStatus.filter(c => c.contract_types.includes('souscription') && c.montant_du_droits_terre > c.montant_paye_droits_terre).length}`}
+                        title={`Clients avec dettes de droits de terre: ${clientsWithDroitTerreDebt}`}
                       >
                         <CreditCard className="h-4 w-4" />
                         Paiement Droits Terre
                         <span className="text-xs ml-1">
-                          ({clientsStatus.filter(c => c.contract_types.includes('souscription') && c.montant_du_droits_terre > c.montant_paye_droits_terre).length})
+                          ({clientsWithDroitTerreDebt})
                         </span>
                       </Button>
                     </div>
@@ -1072,6 +1060,7 @@ export function AgentRecoveryDashboard({ agentId, onBack, initialMonth }: Props)
                       <TableHead>Client</TableHead>
                       <TableHead>Téléphone</TableHead>
                       <TableHead>Type de contrat</TableHead>
+                      <TableHead>Détail contrats</TableHead>
                       <TableHead className="text-right">Montant Dû</TableHead>
                       <TableHead className="text-right">Montant Payé</TableHead>
                       <TableHead>Statut</TableHead>
@@ -1105,6 +1094,42 @@ export function AgentRecoveryDashboard({ agentId, onBack, initialMonth }: Props)
                             )}
                             {client.contract_types.includes('souscription') && (
                               <Badge variant="outline" className="bg-orange-50">Souscription</Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1 text-xs">
+                            {client.locations.length > 0 && (
+                              <div>
+                                <span className="font-medium text-blue-700">
+                                  {client.locations.length} location{client.locations.length > 1 ? 's' : ''} :
+                                </span>{' '}
+                                <span className="text-blue-600">
+                                  {client.locations.length > 1 && client.locations.every((l: any) => l.loyer_mensuel === client.locations[0].loyer_mensuel)
+                                    ? `${client.locations.length} x ${client.locations[0].loyer_mensuel.toLocaleString()}`
+                                    : client.locations.map((l: any) => l.loyer_mensuel.toLocaleString()).join(' + ')
+                                  }
+                                </span>
+                                <div className="text-muted-foreground mt-0.5">
+                                  {client.locations.map((l: any) => `${l.propriete_nom}: ${l.loyer_mensuel.toLocaleString()}`).join(' | ')}
+                                </div>
+                              </div>
+                            )}
+                            {client.souscriptions.length > 0 && (
+                              <div>
+                                <span className="font-medium text-orange-700">
+                                  {client.souscriptions.length} souscription{client.souscriptions.length > 1 ? 's' : ''} :
+                                </span>{' '}
+                                <span className="text-orange-600">
+                                  {client.souscriptions.length > 1 && client.souscriptions.every((s: any) => s.montant_mensuel === client.souscriptions[0].montant_mensuel)
+                                    ? `${client.souscriptions.length} x ${client.souscriptions[0].montant_mensuel.toLocaleString()}`
+                                    : client.souscriptions.map((s: any) => s.montant_mensuel.toLocaleString()).join(' + ')
+                                  }
+                                </span>
+                                <div className="text-muted-foreground mt-0.5">
+                                  {client.souscriptions.map((s: any) => `${s.propriete_nom}: ${s.montant_mensuel.toLocaleString()}`).join(' | ')}
+                                </div>
+                              </div>
                             )}
                           </div>
                         </TableCell>
